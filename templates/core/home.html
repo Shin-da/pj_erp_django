@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Perfect Jewel ERP</h1>
+  <p>Signed in as <strong>{{ user.employee_code }}</strong> ({{ user.get_full_name }}).</p>
+  <p>Rebuild scaffold — <code>inventory</code> and <code>tracker</code> apps are live in Django admin.</p>
+  <p><a href="{% url 'admin:index' %}">Open admin</a> &middot; <a href="{% url 'accounts:logout' %}">Log out</a></p>
+</div>
+{% endblock %}
