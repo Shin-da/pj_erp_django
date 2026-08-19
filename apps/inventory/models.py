@@ -51,7 +51,7 @@ class StockStatus(models.TextChoices):
 # Extend this as `assignment`/`returns`/`transfers` get built out.
 VALID_TRANSITIONS = {
     StockStatus.PENDING: {StockStatus.ASSIGNED, StockStatus.RESERVED, StockStatus.IN_TRANSIT},
-    StockStatus.ASSIGNED: {StockStatus.SOLD, StockStatus.PENDING},
+    StockStatus.ASSIGNED: {StockStatus.SOLD, StockStatus.PENDING, StockStatus.RESERVED},
     StockStatus.RESERVED: {StockStatus.ASSIGNED, StockStatus.PENDING},
     StockStatus.SOLD: {StockStatus.PENDING},  # invoice cancel / return path
     StockStatus.IN_TRANSIT: {StockStatus.PENDING},
@@ -117,4 +117,32 @@ class ProductItem(TimeStampedModel):
             obj=self,
             summary=f"{old_status} -> {target}" + (f" ({reason})" if reason else ""),
             changes={"from": old_status, "to": str(target)},
+        )
+
+    def move_to_location(self, new_location, *, actor=None, transfer=None):
+        """
+        Real per-item location move, always. Replaces
+        `sp_product_transfer_management`'s `update_product_location`,
+        which only ever wrote `tblproduct_master.company_locationid` — the
+        shared *design* record, not the physical item — which is exactly
+        why one barcode's transfer could silently "move" every sibling
+        barcode sharing that design (INVENTORY-AND-INVOICING.md §9a.1,
+        §9b.3). There is no master-level location here to keep in sync;
+        this is the only location record for the item.
+        """
+        old_location = self.location
+        if old_location.pk == new_location.pk:
+            return
+        self.location = new_location
+        self.save(update_fields=["location", "updated_at"])
+        AuditLogEntry.record(
+            actor=actor,
+            action="location_transfer",
+            obj=self,
+            summary=f"{old_location.code} -> {new_location.code}" + (f" (transfer #{transfer.pk})" if transfer else ""),
+            changes={
+                "from_location": old_location.code,
+                "to_location": new_location.code,
+                "transfer_id": transfer.pk if transfer else None,
+            },
         )
