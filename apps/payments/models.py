@@ -96,9 +96,19 @@ class InvoiceCancellation(TimeStampedModel):
         Exactly one inventory return per item — the legacy version ran
         this in addition to whatever ProductReturn.aspx had already done
         for the same barcodes, a real double-return bug.
+
+        Both SOLD and ASSIGNED lines come back. Only SOLD was handled
+        before, which meant cancelling an invoice whose pieces were still
+        out with the reseller marked the invoice CANCELLED while leaving
+        every piece ASSIGNED — stock permanently out against a document
+        that no longer exists. RESERVED is included for the same reason.
+        Anything already PENDING is skipped rather than transitioned,
+        since `transition_status` rejects PENDING -> PENDING and a
+        partially-returned invoice must still be cancellable.
         """
+        returnable = {StockStatus.SOLD, StockStatus.ASSIGNED, StockStatus.RESERVED}
         for line in self.assignment.lines.select_related("item").all():
-            if line.item.status == StockStatus.SOLD:
+            if line.item.status in returnable:
                 line.item.transition_status(StockStatus.PENDING, actor=actor, reason=f"invoice {self.assignment.invoice_number} cancelled")
         self.assignment.invoice_status = InvoiceStatus.CANCELLED
         self.assignment.save(update_fields=["invoice_status", "updated_at"])
