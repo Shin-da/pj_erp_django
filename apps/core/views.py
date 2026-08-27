@@ -1,13 +1,282 @@
+from decimal import Decimal
+
 from django.contrib.auth.decorators import login_required
+from django.db.models import (
+    Count,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
 from django.shortcuts import render
+from django.utils import timezone
+
+from apps.assignment.models import AssignmentLine, AssignmentMaster, InvoiceStatus, Reseller
+from apps.catalogue.labels import subcategory_label
+from apps.catalogue.models import Category, ProductMaster
+from apps.inventory.models import ProductItem, StockStatus
+from apps.locations.models import Location
+from apps.payments.models import ResellerPayment
+from apps.returns.models import ReserveAlert
+from apps.tracker.models import TrackerSession
+from apps.transfers.models import Transfer, TransferStatus
+
+
+def _pct(part, whole):
+    if not whole:
+        return 0
+    return round(100.0 * part / whole, 1)
+
+
+def _money(qs_filter):
+    return (
+        ProductItem.objects.filter(qs_filter).aggregate(total=Sum("product__selling_price"))["total"]
+        or Decimal("0")
+    )
+
+
+def _zero_money():
+    return Value(Decimal("0.00"), output_field=DecimalField(max_digits=14, decimal_places=2))
+
+
+def _net_line(prefix=""):
+    """
+    The SQL form of `AssignmentLine.calculate_line_total()` — unit price
+    less the line's discount.
+
+    Every money figure on this page used to be `Sum(unit_price)`, which
+    silently ignored discounts: an invoice discounted 20% still showed at
+    full price, so "invoiced" was overstated and the unpaid balance showed
+    money outstanding that was never owed. `calculate_line_total()` stays
+    the single source of truth for one line; this is the same arithmetic
+    pushed into the database so a whole dashboard doesn't need a Python
+    loop over every line.
+
+    `prefix` is the relation path to AssignmentLine from whatever model is
+    being annotated (e.g. "assignments__lines__" from Reseller).
+    """
+    return ExpressionWrapper(
+        F(f"{prefix}unit_price")
+        * (Value(Decimal("100")) - F(f"{prefix}discount_percent"))
+        / Value(Decimal("100")),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
 
 
 @login_required
 def home(request):
     """
-    Placeholder landing page. The legacy system routed post-login into one
-    of nine role-scoped master pages (sitemaster/stockmaster/reportsmaster/
-    etc.) — this will grow into an equivalent role-aware dashboard once
-    more apps are built out. For now it just proves auth + routing work.
+    Operational home — stock mix, collections, who has been invoiced.
+    Numbers come from whichever local catalog DJANGO_DB_PROFILE points at.
+
+    This FTP snapshot has almost no pieces currently ASSIGNED (they are
+    company stock or already sold). The sales band and reseller ranking
+    use invoice/payment history rather than live holdings.
     """
-    return render(request, "core/home.html")
+    now = timezone.localtime()
+    hour = now.hour
+    if hour < 12:
+        greeting = "Good morning"
+    elif hour < 17:
+        greeting = "Good afternoon"
+    else:
+        greeting = "Good evening"
+
+    today = now.date()
+    month_start = today.replace(day=1)
+
+    status_rows = ProductItem.objects.values("status").annotate(n=Count("id"))
+    status_counts = {row["status"]: row["n"] for row in status_rows}
+
+    total_items = sum(status_counts.values())
+    pending = status_counts.get(StockStatus.PENDING, 0)
+    assigned = status_counts.get(StockStatus.ASSIGNED, 0)
+    sold = status_counts.get(StockStatus.SOLD, 0)
+    reserved = status_counts.get(StockStatus.RESERVED, 0)
+    in_transit = status_counts.get(StockStatus.IN_TRANSIT, 0)
+
+    available_value = _money(Q(status=StockStatus.PENDING))
+    assigned_value = _money(Q(status=StockStatus.ASSIGNED))
+    sold_value = _money(Q(status=StockStatus.SOLD))
+
+    locations = list(
+        Location.objects.annotate(
+            item_count=Count("items"),
+            available_count=Count("items", filter=Q(items__status=StockStatus.PENDING)),
+            assigned_count=Count("items", filter=Q(items__status=StockStatus.ASSIGNED)),
+            sold_count=Count("items", filter=Q(items__status=StockStatus.SOLD)),
+        ).order_by("-item_count", "name")
+    )
+    loc_max = max((loc.item_count for loc in locations), default=0)
+    for loc in locations:
+        loc.bar_pct = _pct(loc.item_count, loc_max) if loc_max else 0
+    locations_stocked = [loc for loc in locations if loc.item_count]
+    locations_empty = [loc for loc in locations if not loc.item_count]
+
+    categories = (
+        Category.objects.annotate(item_count=Count("products__items"))
+        .filter(item_count__gt=0)
+        .order_by("-item_count")[:8]
+    )
+
+    subcategories = []
+    for row in (
+        ProductMaster.objects.exclude(subcategory="")
+        .values("subcategory")
+        .annotate(item_count=Count("items"))
+        .order_by("-item_count")[:8]
+    ):
+        row["label"] = subcategory_label(row["subcategory"])
+        subcategories.append(row)
+
+    holders = list(
+        Reseller.objects.annotate(
+            items_held=Count(
+                "assignments__lines__item",
+                filter=Q(assignments__lines__item__status=StockStatus.ASSIGNED),
+                distinct=True,
+            )
+        )
+        .filter(items_held__gt=0)
+        .order_by("-items_held", "name")[:8]
+    )
+
+    top_resellers = list(
+        Reseller.objects.annotate(
+            billed_lines=Count("assignments__lines"),
+            billed_value=Sum(_net_line("assignments__lines__")),
+        )
+        .filter(billed_lines__gt=0)
+        .order_by("-billed_value", "name")[:8]
+    )
+
+    money = DecimalField(max_digits=14, decimal_places=2)
+    billed_sq = Subquery(
+        AssignmentLine.objects.filter(master_id=OuterRef("pk"))
+        .values("master_id")
+        .annotate(t=Sum(_net_line()))
+        .values("t")[:1],
+        output_field=money,
+    )
+    paid_sq = Subquery(
+        ResellerPayment.objects.filter(assignment_id=OuterRef("pk"))
+        .values("assignment_id")
+        .annotate(t=Sum("amount"))
+        .values("t")[:1],
+        output_field=money,
+    )
+    zero = _zero_money()
+
+    recent_invoices = list(
+        AssignmentMaster.objects.select_related("reseller")
+        .annotate(
+            line_count=Count("lines", distinct=True),
+            billed=Coalesce(billed_sq, zero),
+        )
+        .order_by("-pk")[:8]
+    )
+
+    complete = AssignmentMaster.objects.filter(invoice_status=InvoiceStatus.COMPLETE).annotate(
+        billed=Coalesce(billed_sq, zero),
+        paid=Coalesce(paid_sq, zero),
+    )
+    unpaid_count = 0
+    unpaid_balance = Decimal("0.00")
+    for billed, paid in complete.values_list("billed", "paid"):
+        billed = billed or Decimal("0")
+        paid = paid or Decimal("0")
+        if paid < billed:
+            unpaid_count += 1
+            unpaid_balance += billed - paid
+
+    invoiced_value = (
+        AssignmentLine.objects.filter(master__invoice_status=InvoiceStatus.COMPLETE).aggregate(
+            total=Sum(_net_line())
+        )["total"]
+        or Decimal("0")
+    )
+    collected = ResellerPayment.objects.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    collected_month = (
+        ResellerPayment.objects.filter(paid_on__gte=month_start).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
+
+    invoice_rows = AssignmentMaster.objects.values("invoice_status").annotate(n=Count("id"))
+    invoice_counts = {row["invoice_status"]: row["n"] for row in invoice_rows}
+
+    # ---- Floor activity ------------------------------------------------
+    # Scan sessions are written on every real tracker submit, so this is
+    # the closest thing the system has to "what happened today". Shown
+    # here because the tracker page only lists its own recent scans and
+    # nothing else surfaces them.
+    recent_scans = list(
+        TrackerSession.objects.select_related("location", "created_by")
+        .order_by("-scan_index")[:8]
+    )
+    scans_today = TrackerSession.objects.filter(created_at__date=today).count()
+    pieces_scanned_today = (
+        TrackerSession.objects.filter(created_at__date=today).aggregate(n=Sum("item_count"))["n"] or 0
+    )
+
+    # Transfers have no screen yet, so a pending count here is the only
+    # place a stalled transfer becomes visible at all.
+    transfers_pending = Transfer.objects.filter(status=TransferStatus.PENDING).count()
+
+    # ---- Reserves about to lapse ---------------------------------------
+    open_alerts = ReserveAlert.objects.filter(resolved_at__isnull=True).select_related(
+        "item", "item__product", "reseller"
+    )
+    reserve_open_count = open_alerts.count()
+    reserve_overdue = open_alerts.filter(expires_at__lt=now).count()
+    reserve_alerts = list(open_alerts.order_by("expires_at")[:6])
+    for alert in reserve_alerts:
+        alert.is_overdue = alert.expires_at < now
+
+    context = {
+        "greeting": greeting,
+        "today_label": now.strftime("%A, %d %B %Y"),
+        "month_label": now.strftime("%B"),
+        "total_items": total_items,
+        "pending": pending,
+        "assigned": assigned,
+        "sold": sold,
+        "reserved": reserved,
+        "in_transit": in_transit,
+        "pending_pct": _pct(pending, total_items),
+        "assigned_pct": _pct(assigned, total_items),
+        "sold_pct": _pct(sold, total_items),
+        "reserved_pct": _pct(reserved, total_items),
+        "available_value": available_value,
+        "assigned_value": assigned_value,
+        "sold_value": sold_value,
+        "locations_stocked": locations_stocked,
+        "locations_empty": locations_empty,
+        "categories": categories,
+        "subcategories": subcategories,
+        "holders": holders,
+        "top_resellers": top_resellers,
+        "recent_invoices": recent_invoices,
+        "reseller_count": Reseller.objects.count(),
+        "invoice_count": AssignmentMaster.objects.count(),
+        "invoice_complete": invoice_counts.get(InvoiceStatus.COMPLETE, 0),
+        "invoice_draft": invoice_counts.get(InvoiceStatus.DRAFT, 0),
+        "invoice_cancelled": invoice_counts.get(InvoiceStatus.CANCELLED, 0),
+        "invoiced_value": invoiced_value,
+        "collected": collected,
+        "collected_month": collected_month,
+        "unpaid_count": unpaid_count,
+        "unpaid_balance": unpaid_balance,
+        "recent_scans": recent_scans,
+        "scans_today": scans_today,
+        "pieces_scanned_today": pieces_scanned_today,
+        "transfers_pending": transfers_pending,
+        "reserve_alerts": reserve_alerts,
+        "reserve_open_count": reserve_open_count,
+        "reserve_overdue": reserve_overdue,
+    }
+    return render(request, "core/home.html", context)
