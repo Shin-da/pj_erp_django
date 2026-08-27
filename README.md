@@ -120,10 +120,13 @@ python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # edit if your local Postgres differs
 python manage.py migrate
-python manage.py seed_demo        # optional demo data
-python manage.py createsuperuser  # or use employee_code=1001 / changeme123 from the seed session
+python manage.py import_mssql_snapshot --flush   # real FTP snapshot into the current catalog
+# python manage.py seed_demo                    # tiny fake barcodes, skip once the snapshot is loaded
+python manage.py createsuperuser  # or use employee_code=1001 / changeme123 if the importer created it
 python manage.py runserver
 ```
+
+Two local catalogs (`pj_erp_dev` / `pj_erp_prod`) and how to switch: [`DATABASE.md`](DATABASE.md).
 
 ## Next steps
 
@@ -134,7 +137,6 @@ python manage.py runserver
    (openpyxl/pandas exports).
 2. Confirm the exact end date of the current hosting subscription — the
    real deadline for the ASP.NET bridge-hosting decision.
-3. Write an ETL script to seed this schema from a real export of
-   `stock_rfid_dev` instead of demo data (not yet written).
+3. Reload the snapshot after a new MSSQL dump: `python manage.py import_mssql_snapshot --flush` then `clone_prod_to_dev --yes`. See `DATABASE.md`.
 4. Build the actual UI (Django templates + admin is all that exists today
    — no custom views/forms yet beyond login/home).
