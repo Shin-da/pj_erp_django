@@ -42,6 +42,7 @@ class Migration(migrations.Migration):
                             ("OPENING", "Opening count"),
                             ("CLOSING", "Closing count"),
                             ("CHECK", "Check item"),
+                            ("FIND", "Find item"),
                         ],
                         max_length=10,
                     ),

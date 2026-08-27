@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Product Tracker</h1>
+    <p><b>Check item</b> looks up status without saving a count. <b>Loss</b> = in the opening scan, still company stock
+      here, not in today's paste. <b>Elsewhere</b> = already moved. <b>Wrong location</b> = scanned here but the system
+      has it at another site.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'tracker:scan_preview' %}" class="btn btn-ghost"><i class="fa-solid fa-flask"></i> Redesign preview</a>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="border-color:var(--danger); color:var(--danger); margin-bottom:16px;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<style>
+  .tracker-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  .tracker-split{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .tracker-gauge-col{ display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .tracker-actions{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
+  @media(max-width:980px){
+    .tracker-grid{ grid-template-columns:1fr; }
+    .tracker-split{ grid-template-columns:1fr; }
+  }
+</style>
+
+<form method="post" id="scanForm" data-expected-url="{% url 'tracker:expected_count' %}">
+    {% csrf_token %}
+  <div class="tracker-grid">
+
+    <div class="panel">
+      <div class="tracker-split">
+        <div>
+          <div class="kpi-label" style="margin-bottom:8px;">Barcode numbers</div>
+          <textarea name="barcodes" id="barcodeInput" data-validate-url="{% url 'tracker:validate_barcodes' %}" rows="14"
+            class="field" style="width:100%; font-family:var(--font-sans); resize:vertical;"
+            placeholder="Paste barcodes here (one per line or comma separated)">{{ barcode_text }}</textarea>
+
+          <span id="barcodeValidatingNote" class="cell-muted"
+            style="display:none; font-size:11.5px; margin-top:6px; align-items:center; gap:6px;">
+            <i class="fa-solid fa-spinner fa-spin"></i> Validating barcodes...
+          </span>
+        </div>
+        <div>
+          <div class="kpi-label" style="margin-bottom:8px;">Removed barcodes</div>
+          <div id="liveRemovedPanel" class="panel" style="font-size:12px;">
+            <div class="cell-muted">Removed barcodes will appear here</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel tracker-gauge-col">
+      <div class="pj-gauge-wrap">
+        <div class="pj-gauge">
+          <div class="pj-gauge-half entered">
+            <div class="pj-gauge-num" id="gaugeEntered">{{ result.entered|default:0 }}</div>
+            <div class="pj-gauge-label">Entered</div>
+          </div>
+          <div class="pj-gauge-half expected">
+            <div class="pj-gauge-num" id="gaugeExpected">{{ result.expected|default:0 }}</div>
+            <div class="pj-gauge-label">Expected</div>
+          </div>
+        </div>
+        <div class="pj-gauge-badge" id="gaugeBadge">{% if result.expected %}{{ result.expected_label }}{% else %}No expected count{% endif %}</div>
+      </div>
+      <div class="tracker-actions">
+    <button type="submit" class="btn btn-primary">Track barcodes</button>
+    <button type="button" id="exportExcelBtn" class="btn btn-ghost" title="Export results to Excel (.csv)" {% if not result %}disabled{% endif %}>
+      <i class="fa-solid fa-file-excel"></i>
+    </button>
+    <button type="button" id="clearAllBtn" class="btn btn-ghost">Clear all</button>
+  </div>
+    </div>
+
+    <div class="panel">
+      <label class="kpi-label">Scan type</label>
+      <select name="scan_type" id="scanType" class="field" style="width:100%; margin-bottom:14px;">
+        <option value="OPENING" {% if scan_type == "OPENING" %}selected{% endif %}>Opening scan</option>
+        <option value="CLOSING" {% if scan_type == "CLOSING" %}selected{% endif %}>Closing scan</option>
+        <option value="CHECK" {% if scan_type == "CHECK" %}selected{% endif %}>Check item</option>
+      </select>
+
+      <label class="kpi-label">Workflow</label>
+      <div class="field" style="width:100%; margin-bottom:14px; color:var(--text-muted);">Scan only</div>
+
+      <label class="kpi-label">Done by</label>
+      <div class="field" style="width:100%; margin-bottom:14px;">{{ request.user.get_full_name|default:request.user.employee_code }}</div>
+
+      <label class="kpi-label">Scan location</label>
+      <select name="location_id" class="field" style="width:100%; margin-bottom:14px;" id="scanLocation">
+        <option value="">-- Select location --</option>
+        {% for loc in locations %}
+        <option value="{{ loc.pk }}" {% if location_id == loc.pk|stringformat:"s" %}selected{% endif %}>{{ loc.name }} ({{ loc.code }})</option>
+        {% endfor %}
+      </select>
+
+      <div id="parentSessionField" style="display:none;">
+        <label class="kpi-label">Opening scan to close against</label>
+        <select name="parent_id" class="field" style="width:100%; margin-bottom:14px;" id="parentSelect">
+          <option value="">-- Select opening scan --</option>
+          {% for s in opening_sessions %}
+          <option value="{{ s.pk }}" data-item-count="{{ s.item_count }}" {% if parent_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s }} — {{ s.item_count }} items</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  
+</form>
+
+{% if result %}
+<div class="section-heading" style="margin-top:24px;"><span class="tag">Result</span></div>
+
+{% if result.removed %}
+<div class="panel" style="font-size:12px; margin-bottom:16px;">
+  {% for bc, reason in result.removed %}
+  <div style="padding:4px 0; border-bottom:1px solid var(--border);"><span class="mono cell-strong">{{ bc }}</span> — <span class="cell-muted">{{ reason }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="filter-bar">
+  <span class="kpi-label">Show in grid:</span>
+  {% for value, label in result_choices %}
+  <label style="display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer;">
+    <input type="checkbox" class="result-filter" value="{{ value }}" checked> {{ label }}
+  </label>
+  {% endfor %}
+</div>
+
+<div class="table-wrap" style="margin-top:12px;">
+  <div class="table-scroll">
+    <table id="resultTable">
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result.rows %}
+        <tr data-result="{{ row.result }}">
+          <td class="mono cell-strong">{{ row.barcode }}{% if row.extra %} <span class="cell-muted">*</span>{% endif %}</td>
+          <td>{{ row.product }}</td>
+          <td>
+            {% if row.result == "COMPANY_STOCK" %}<span class="pill pill-ok">Company stock</span>
+            {% elif row.result == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+            {% elif row.result == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+            {% elif row.result == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+            {% elif row.result == "LOSS" %}<span class="pill pill-danger">Loss</span>
+            {% elif row.result == "ELSEWHERE" %}<span class="pill pill-violet">Elsewhere</span>
+            {% elif row.result == "WRONG_LOCATION" %}<span class="pill pill-warn">Wrong location</span>
+            {% elif row.result == "NOT_FOUND" %}<span class="pill pill-danger">Not found</span>
+            {% else %}<span class="pill pill-neutral">Other</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="3" class="cell-muted">No rows.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="section-heading" style="margin-top:32px;"><span class="tag">Recent scans</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Session</th>
+          <th>Mode</th>
+          <th>Location</th>
+          <th>Closes</th>
+          <th>Items</th>
+          <th>By</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_sessions %}
+        <tr>
+          <td class="mono cell-strong">SN{{ s.scan_index|stringformat:"03d" }}</td>
+          <td>{{ s.get_mode_display }}</td>
+          <td>{{ s.location.code }}</td>
+          <td class="cell-muted">{% if s.parent_session %}SN{{ s.parent_session.scan_index|stringformat:"03d" }}{% else %}—{% endif %}</td>
+          <td class="mono">{{ s.item_count }}</td>
+          <td>{{ s.created_by.employee_code|default:"—" }}</td>
+          <td class="cell-muted">{{ s.created_at|date:"M j, Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="cell-muted">No scans yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="{% static 'core/js/tracker.js' %}"></script>
+<script>
+(function () {
+  var scanType = document.getElementById('scanType');
+    var parentField = document.getElementById('parentSessionField');
+    function sync() {
+      parentField.style.display = scanType.value === 'CLOSING' ? 'block' : 'none';
+    }
+    scanType.addEventListener('change', sync);
+    sync();
+
+    document.querySelectorAll('.result-filter').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var checked = Array.from(document.querySelectorAll('.result-filter')).filter(c => c.checked).map(c => c.value);
+        document.querySelectorAll('tr[data-result]').forEach(function (row) {
+          row.style.display = checked.includes(row.dataset.result) ? '' : 'none';
+        });
+      });
+    });
+
+    var clearBtn = document.getElementById('clearAllBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        var box = document.getElementById('barcodeInput');
+        box.value = '';
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        box.focus();
+      });
+    }
+
+    var exportBtn = document.getElementById('exportExcelBtn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function () {
+        var table = document.getElementById('resultTable');
+        if (!table) return;
+        var rows = Array.from(table.querySelectorAll('tbody tr')).filter(function (r) {
+          return r.style.display !== 'none' && r.hasAttribute('data-result');
+        });
+        if (!rows.length) return;
+        var csv = 'Barcode,Product,Result\n';
+        rows.forEach(function (r) {
+          var cells = r.querySelectorAll('td');
+          var barcode = cells[0].textContent.trim();
+          var product = cells[1].textContent.trim();
+          var result = cells[2].textContent.trim();
+          csv += [barcode, product, result].map(function (v) {
+            return '"' + v.replace(/"/g, '""') + '"';
+          }).join(',') + '\n';
+        });
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'product_tracker_results.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+      });
+    }
+  })();
+</script>
+
+{% endblock %}

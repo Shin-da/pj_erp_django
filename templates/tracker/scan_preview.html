@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Product Tracker — Redesign Preview</h1>
+    <p>For walking through with Cylver &amp; Tatay. <b>Sample data only</b> — nothing on this page writes to the
+      database or reflects real scan logic yet.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'tracker:scan' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back to live
+      tracker</a>
+  </div>
+</div>
+
+<div class="panel" style="border-color:var(--warn); margin-bottom:20px; font-size:12.5px; display:flex; align-items:center; gap:8px;">
+  <i class="fa-solid fa-flask" style="color:var(--warn);"></i>
+  <span><b>Preview build.</b> Reseller groups/clients, rooms, and supplier "expected" counts below are made-up
+    sample data. Return isn't in this preview yet — still being worked out.</span>
+</div>
+
+<div class="seg" id="mainTabSeg" style="margin-bottom:20px;">
+  <button type="button" class="active" data-tab="scan"><i class="fa-solid fa-barcode"></i> Scan</button>
+  <button type="button" data-tab="history"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+</div>
+
+<!-- ================= SCAN TAB ================= -->
+<div id="tabScan">
+
+  <div class="kpi-label" style="margin-bottom:8px;">Scan type</div>
+  <div class="seg" id="scanTypeSeg" style="margin-bottom:20px; flex-wrap:wrap;">
+    <button type="button" class="active" data-scan-type="INVENTORY">Inventory</button>
+    <button type="button" data-scan-type="TRANSFER">Transfer</button>
+    <button type="button" data-scan-type="ROOM_ALLOTMENT">Room Allotment</button>
+    <button type="button" data-scan-type="CONSIGNMENT">Consignment</button>
+    <button type="button" data-scan-type="RETURN_TO_SUPPLIER">Return to Supplier</button>
+  </div>
+
+  <div class="tracker-grid">
+
+    <div class="panel">
+      <div class="kpi-label" style="margin-bottom:8px;">Barcode numbers</div>
+      <textarea id="previewBarcodeInput" rows="12" class="field"
+        style="width:100%; font-family:var(--font-sans); resize:vertical;"
+        placeholder="Paste barcodes here (demo count only — not checked against the database in this preview)"></textarea>
+    </div>
+
+    <div class="panel tracker-gauge-col">
+      <div class="pj-gauge-wrap">
+        <div class="pj-gauge">
+          <div class="pj-gauge-half entered">
+            <div class="pj-gauge-num" id="previewGaugeEntered">0</div>
+            <div class="pj-gauge-label">Entered</div>
+          </div>
+          <div class="pj-gauge-half expected">
+            <div class="pj-gauge-num" id="previewGaugeExpected">0</div>
+            <div class="pj-gauge-label">Expected</div>
+          </div>
+        </div>
+        <div class="pj-gauge-badge" id="previewGaugeBadge">No expected count</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="kpi-label" style="margin-bottom:10px;">Details</div>
+
+      <!-- INVENTORY -->
+      <div data-type-panel="INVENTORY">
+        <div class="kpi-label" style="margin-bottom:8px;">Direction</div>
+        <div class="seg" id="invDirectionSeg" style="margin-bottom:14px;">
+          <button type="button" class="active" data-inv-dir="OPENING">Opening</button>
+          <button type="button" data-inv-dir="CLOSING">Closing</button>
+        </div>
+        <div class="cell-muted" style="font-size:12px;" id="invDirectionNote">
+          Head Office → Showroom. Fixed pair per Tatay's rule — no location picker, direction sets it automatically.
+        </div>
+      </div>
+
+      <!-- TRANSFER -->
+      <div data-type-panel="TRANSFER" style="display:none;">
+        <label class="kpi-label">From</label>
+        <select class="field" style="width:100%; margin-bottom:14px;">
+          <option value="">-- Select location --</option>
+          {% for loc in locations %}
+          <option value="{{ loc.code }}">{{ loc.name }} ({{ loc.code }})</option>
+          {% endfor %}
+        </select>
+        <label class="kpi-label">To</label>
+        <select class="field" style="width:100%; margin-bottom:14px;">
+          <option value="">-- Select location --</option>
+          {% for loc in locations %}
+          <option value="{{ loc.code }}">{{ loc.name }} ({{ loc.code }})</option>
+          {% endfor %}
+        </select>
+        <div class="panel" style="font-size:11.5px; border-color:var(--warn); color:var(--warn);">
+          <i class="fa-solid fa-circle-info"></i> Idea from the brainstorm: a transfer to a different address (e.g.
+          Antipolo) would need a second confirmation scan at the destination before it's marked complete — not
+          built yet, this is just a note for the discussion.
+        </div>
+      </div>
+
+      <!-- ROOM ALLOTMENT -->
+      <div data-type-panel="ROOM_ALLOTMENT" style="display:none;">
+        <label class="kpi-label">Room</label>
+        <select class="field" style="width:100%; margin-bottom:14px;">
+          <option value="">-- Select room --</option>
+          {% for room in rooms %}
+          <option value="{{ room }}">{{ room }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="kpi-label">Reseller group</label>
+        <select class="field" id="raGroupSelect" style="width:100%; margin-bottom:14px;">
+          <option value="">-- Select group --</option>
+        </select>
+
+        <label class="kpi-label">Client</label>
+        <select class="field" id="raClientSelect" style="width:100%; margin-bottom:14px;">
+          <option value="">-- Select a group first --</option>
+        </select>
+
+        <div class="section-heading" style="margin-top:10px;"><span class="tag">Going live? (idea)</span></div>
+        <div class="panel" style="font-size:11.5px;">
+          Scan the full batch first (e.g. 100/100 entered/expected). Once the liver sells some pieces live, switch
+          to <b>Request invoicing</b> and scan just the sold pieces — that would create a request for Accounting to
+          review and approve, instead of a separate manual process.
+          <div style="margin-top:10px;">
+            <button type="button" class="btn btn-ghost btn-sm" id="raInvoicingToggle"><i
+                class="fa-solid fa-file-invoice"></i> Request invoicing (demo)</button>
+          </div>
+          <div id="raInvoicingDemo" style="display:none; margin-top:12px;">
+            <div class="cell-muted" style="margin-bottom:8px;">Example: 10 of the 100 scanned pieces sold live —
+            </div>
+            <div style="display:flex; gap:20px;">
+              <div><span style="font-size:22px; font-weight:700;">10</span>
+                <div class="cell-muted" style="font-size:10.5px;">for invoicing</div>
+              </div>
+              <div><span style="font-size:22px; font-weight:700;">100</span>
+                <div class="cell-muted" style="font-size:10.5px;">entered</div>
+              </div>
+              <div><span style="font-size:22px; font-weight:700;">100</span>
+                <div class="cell-muted" style="font-size:10.5px;">expected</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSIGNMENT -->
+      <div data-type-panel="CONSIGNMENT" style="display:none;">
+        <label class="kpi-label">Destination type</label>
+        <div class="seg" id="consDestSeg" style="margin-bottom:14px;">
+          <button type="button" class="active" data-cons-dest="PERSON">Person</button>
+          <button type="button" data-cons-dest="LOCATION">Location</button>
+        </div>
+
+        <div id="consPersonFields">
+          <label class="kpi-label">Reseller group</label>
+          <select class="field" id="consGroupSelect" style="width:100%; margin-bottom:14px;">
+            <option value="">-- Select group --</option>
+          </select>
+          <label class="kpi-label">Client</label>
+          <select class="field" id="consClientSelect" style="width:100%; margin-bottom:14px;">
+            <option value="">-- Select a group first --</option>
+          </select>
+          <div class="cell-muted" style="font-size:11.5px;">Consignment ID assigned automatically (e.g. <span
+              class="mono">CO0012</span>) — matches the ID scheme already in the live system.</div>
+        </div>
+        <div id="consLocationFields" style="display:none;">
+          <label class="kpi-label">Location</label>
+          <select class="field" style="width:100%; margin-bottom:14px;">
+            <option value="">-- Select location --</option>
+            {% for loc in locations %}
+            <option value="{{ loc.code }}">{{ loc.name }} ({{ loc.code }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- RETURN TO SUPPLIER -->
+      <div data-type-panel="RETURN_TO_SUPPLIER" style="display:none;">
+        <label class="kpi-label">Supplier</label>
+        <select class="field" id="supplierSelect" style="width:100%; margin-bottom:14px;">
+          <option value="">-- Select supplier --</option>
+        </select>
+        <div id="supplierCards" style="display:none; gap:10px; flex-wrap:wrap;"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================= HISTORY TAB ================= -->
+<div id="tabHistory" style="display:none;">
+
+  <div class="filter-bar" style="margin-bottom:16px;">
+    <span class="kpi-label">Show:</span>
+    <div class="seg" id="historyFilterSeg">
+      <button type="button" class="active" data-hist-filter="ALL">All locations</button>
+      <button type="button" data-hist-filter="WITH_STOCK">Only with stock</button>
+    </div>
+    <div class="seg" id="historyViewSeg" style="margin-left:auto;">
+      <button type="button" class="active" data-hist-view="CARDS"><i class="fa-solid fa-grip"></i> Cards</button>
+      <button type="button" data-hist-view="TABLE"><i class="fa-solid fa-table-list"></i> Table</button>
+    </div>
+  </div>
+
+  <div class="loc-grid" id="historyCards">
+    {% for loc in locations %}
+    <div class="loc-card" data-item-count="{{ loc.item_count }}">
+      <div class="loc-card-top">
+        <div class="loc-card-icon"><i class="fa-solid fa-location-dot"></i></div>
+        <div>
+          <div class="loc-card-name">{{ loc.name }}</div>
+          <div class="loc-card-type">{{ loc.get_location_type_display }}</div>
+        </div>
+      </div>
+      <div class="loc-card-num">{{ loc.item_count }}</div>
+      <div class="loc-card-sub">{{ loc.available_count }} available</div>
+    </div>
+    {% empty %}
+    <p class="cell-muted">No locations yet.</p>
+    {% endfor %}
+  </div>
+
+  <div class="table-wrap" id="historyTable" style="display:none;">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Type</th>
+            <th>Items</th>
+            <th>Available</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for loc in locations %}
+          <tr data-item-count="{{ loc.item_count }}">
+            <td class="cell-strong">{{ loc.name }} ({{ loc.code }})</td>
+            <td>{{ loc.get_location_type_display }}</td>
+            <td class="mono">{{ loc.item_count }}</td>
+            <td class="mono">{{ loc.available_count }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="cell-muted">No locations yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .tracker-grid {
+    display: grid;
+    grid-template-columns: 1fr 0.8fr 1.1fr;
+    gap: 16px;
+  }
+
+  .tracker-gauge-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  @media(max-width:980px) {
+    .tracker-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  window.TRACKER_PREVIEW = {
+    resellerGroups: {{ reseller_groups_json | safe }},
+    suppliers: {{ suppliers_json | safe }},
+  };
+</script>
+<script src="{% static 'core/js/tracker_preview.js' %}"></script>
+
+{% endblock %}

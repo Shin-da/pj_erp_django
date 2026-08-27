@@ -32,6 +32,7 @@ class ScanMode(models.TextChoices):
     OPENING = "OPENING", "Opening count"
     CLOSING = "CLOSING", "Closing count"
     CHECK = "CHECK", "Check item"
+    FIND = "FIND", "Find item"
 
 
 class ScanResult(models.TextChoices):
@@ -43,6 +44,7 @@ class ScanResult(models.TextChoices):
     ELSEWHERE = "ELSEWHERE", "Elsewhere"
     WRONG_LOCATION = "WRONG_LOCATION", "Wrong location"
     NOT_FOUND = "NOT_FOUND", "Not found"
+    OTHER = "OTHER", "Other"
 
 
 class TrackerSession(TimeStampedModel):
@@ -83,6 +85,10 @@ class TrackerScanItem(TimeStampedModel):
     result = models.CharField(max_length=20, choices=ScanResult.choices, blank=True)
     location_at_scan = models.ForeignKey(
         "locations.Location", null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    is_extra = models.BooleanField(
+        default=False,
+        help_text="Scanned in a closing/check session but wasn't part of the opening baseline set.",
     )
 
     class Meta:
