@@ -7,3 +7,4 @@ staticfiles/
 media/
 .DS_Store
 *.log
+_legacy_import_scratch/
