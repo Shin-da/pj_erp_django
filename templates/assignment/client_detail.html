@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ client.name }}</h1>
+    <p>
+      {% if client.group %}<a href="{% url 'assignment:group_detail' client.group.pk %}">{{ client.group.name }}</a>{% else %}<span class="cell-muted">Not filed under a group</span>{% endif %}
+      {% if client.reference_code %} · <span class="mono">{{ client.reference_code }}</span>{% endif %}
+    </p>
+  </div>
+  <div class="page-head-actions">
+    {% if client.group %}
+    <a href="{% url 'assignment:group_detail' client.group.pk %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back to group</a>
+    {% else %}
+    <a href="{% url 'assignment:group_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> All resellers</a>
+    {% endif %}
+    <a href="/admin/assignment/reseller/{{ client.pk }}/change/" class="btn btn-ghost"><i class="fa-solid fa-pen"></i> Edit</a>
+  </div>
+</div>
+
+<div class="id-hero">
+  <div class="id-hero-cell">
+    <div class="l">Holding now</div>
+    <div class="v mono">{{ page_obj.paginator.count }}</div>
+  </div>
+  <div class="id-hero-cell">
+    <div class="l">Value held</div>
+    <div class="v mono">{% if held_value %}{{ held_value|floatformat:2 }}{% else %}—{% endif %}</div>
+  </div>
+  <div class="id-hero-cell">
+    <div class="l">Assignments</div>
+    <div class="v mono">{{ client.assignment_count }}</div>
+  </div>
+  <div class="id-hero-cell">
+    <div class="l">Status</div>
+    <div class="v">{% if client.is_active %}<span class="pill pill-ok">Active</span>{% else %}<span class="pill pill-neutral">Inactive</span>{% endif %}</div>
+  </div>
+</div>
+
+<div class="section-heading" style="margin-top:28px;"><span class="tag">Pieces currently held</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Location on record</th>
+          <th>Selling price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in page_obj %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' item.barcode %}">{{ item.barcode }}</a></td>
+          <td><a href="{% url 'catalogue:product_detail' item.product.pk %}">{{ item.product.name }}</a></td>
+          <td class="cell-muted">{{ item.location.name }}</td>
+          <td class="mono">{% if item.product.selling_price %}{{ item.product.currency.symbol|default:item.product.currency.code }}{{ item.product.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="cell-muted">Nothing currently assigned out to this client.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div class="table-foot">
+    <div>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div class="pagination">
+      {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}"><button type="button">&laquo;</button></a>{% endif %}
+      {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}"><button type="button">&raquo;</button></a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="section-heading" style="margin-top:28px;"><span class="tag">Assignment history</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice</th>
+          <th>Lines</th>
+          <th>Status</th>
+          <th>Display slot</th>
+          <th>Created by</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in assignments %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'assignment:invoice_detail' a.pk %}">{{ a.invoice_number }}</a></td>
+          <td class="mono">{{ a.line_count }}</td>
+          <td>
+            {% if a.invoice_status == "COMPLETE" %}<span class="pill pill-ok">Invoiced</span>
+            {% elif a.invoice_status == "DRAFT" %}<span class="pill pill-warn">Draft</span>
+            {% else %}<span class="pill pill-neutral">Cancelled</span>
+            {% endif %}
+          </td>
+          <td class="cell-muted">{{ a.display_slot.name|default:"—" }}</td>
+          <td class="cell-muted">{% if a.created_by %}{{ a.created_by.get_full_name|default:a.created_by.employee_code }}{% else %}—{% endif %}</td>
+          <td class="cell-muted">{{ a.created_at|date:"M j, Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="cell-muted">No assignments recorded for this client yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if slots %}
+<div class="section-heading" style="margin-top:28px;"><span class="tag">Display slots</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Slot</th>
+          <th>Allotted</th>
+          <th>Released</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in slots %}
+        <tr>
+          <td class="cell-strong">{{ s.slot.name }}</td>
+          <td class="cell-muted">{{ s.created_at|date:"M j, Y" }}</td>
+          <td>{% if s.released_at %}<span class="cell-muted">{{ s.released_at|date:"M j, Y" }}</span>{% else %}<span class="pill pill-info">Still held</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<style>
+  .id-hero { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .id-hero-cell .l { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-bottom:6px; }
+  .id-hero-cell .v { font-size:16px; font-weight:600; }
+  @media(max-width:900px){ .id-hero { grid-template-columns:repeat(2,1fr); } }
+</style>
+
+{% endblock %}

@@ -20,9 +20,15 @@ Legacy findings this fixes:
     preserved the existing number) — no sequence table, gaps wherever a
     master row was created and deleted, inconsistent zero-padding
     (`RE00`+7 = `RE007` but `RE00`+1234 = `RE001234`) (§5.1). A real
-    Postgres sequence (`AssignmentMaster.invoice_seq`, via a
-    `models.Sequence`-backed default) with fixed-width zero-padding fixes
-    this by construction.
+    fixed-width zero-padded number derived from the row's own
+    primary key (`_generated_invoice_number`, stamped once at save time)
+    fixes the padding inconsistency. NOTE: there is no separate
+    `invoice_seq` column and no `models.Sequence` default -- an earlier
+    version of this docstring described one. Numbers are still pk-derived,
+    exactly as in the legacy system; what changed is the fixed width and
+    the soft-delete that stops a row disappearing out from under an issued
+    number. If a genuinely gapless reserved sequence is ever required,
+    that is still to be built.
   - **Two independently-maintained pricing calculations** existed in
     `sp_product_assign` (`insert_alvin_discount`'s `@type='true'` branch
     vs. its else branch), which SQL comments said had to be kept manually
@@ -62,6 +68,35 @@ from apps.core.models import TimeStampedModel, SoftDeleteModel, AuditLogEntry
 from apps.inventory.models import StockStatus
 
 
+class ResellerGroup(TimeStampedModel):
+    """
+    A grouping of resellers/clients — the "reseller group" the business
+    actually organises people by day to day (regional groups, the set of
+    resellers one coordinator handles, etc.).
+
+    New concept, no legacy table behind it: `tblresellermaster` was flat.
+    Grouping was maintained outside the system, which is why "who's in
+    which group" was never answerable from a screen.
+
+    Kept deliberately thin — a group is a label plus its members. It does
+    NOT own stock, does NOT get invoiced, and nothing about assignment or
+    pricing routes through it. If groups later need their own commercial
+    terms, that's a real decision to make then, not a field to add
+    speculatively now.
+    """
+
+    name = models.CharField(max_length=150)
+    code = models.CharField(max_length=20, unique=True, help_text="Short code used on screens and reports, e.g. GRP-A.")
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Reseller(TimeStampedModel):
     """Replaces `tblresellermaster`. Deliberately NOT the same concept as
     `locations.Location` — see INVENTORY-AND-INVOICING.md §2: "Company
@@ -71,6 +106,14 @@ class Reseller(TimeStampedModel):
 
     name = models.CharField(max_length=150)
     reference_code = models.CharField(max_length=50, blank=True)
+    group = models.ForeignKey(
+        ResellerGroup,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="clients",
+        help_text="Nullable on purpose — every existing reseller row stays valid and simply shows as ungrouped until someone files it.",
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -111,6 +154,21 @@ class DisplaySlotAllotment(TimeStampedModel):
         return f"{self.slot} <- {self.reseller}" + ("" if self.released_at else " (active)")
 
 
+class CommissionType(models.TextChoices):
+    """
+    Ported from pj-accounting's computeCommission() (src/invoices.js) —
+    same two rules, same vocabulary, so a commission concept means the
+    same thing wherever it's used across the two systems:
+      GOLD    -> commission_rate is pesos per gram of the product's
+                 net_weight
+      JEWELRY -> commission_rate is a fraction (e.g. 0.05) of this
+                 line's own total
+    """
+
+    GOLD = "GOLD", "Gold (rate per gram)"
+    JEWELRY = "JEWELRY", "Jewelry (rate x line total)"
+
+
 class InvoiceStatus(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
     COMPLETE = "COMPLETE", "Complete (invoiced)"
@@ -138,6 +196,12 @@ class AssignmentMaster(SoftDeleteModel):
     is_reserve = models.BooleanField(
         default=False, help_text="Reserve-path assignment (legacy RN00 prefix) vs. normal reseller assignment (RE00)."
     )
+    invoice_number = models.CharField(
+        max_length=32,
+        blank=True,
+        db_index=True,
+        help_text="Stored so imported legacy numbers (RE00128, RN00004, …) survive. New rows get a fixed-width RE/RN + id if left blank.",
+    )
     invoice_status = models.CharField(max_length=20, choices=InvoiceStatus.choices, default=InvoiceStatus.DRAFT)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="assignments_created"
@@ -147,21 +211,18 @@ class AssignmentMaster(SoftDeleteModel):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return self.invoice_number
+        return self.invoice_number or f"{'RN' if self.is_reserve else 'RE'}(unsaved)"
 
-    @property
-    def invoice_number(self):
-        """
-        Fixed-width, pinned to `id` (a real Postgres sequence) — replaces
-        `"RE00"+masterId` / `"RN00"+masterId` (§5.1: same underlying idea,
-        but the legacy version had no protection against the row being
-        deleted out from under an issued number, and inconsistent
-        zero-padding — `RE00`+7 = `RE007` but `RE00`+1234 = `RE001234`).
-        Fixed 6-digit width here; prefix still communicates reserve vs.
-        normal, matching what staff already read.
-        """
+    def _generated_invoice_number(self):
         prefix = "RN" if self.is_reserve else "RE"
         return f"{prefix}{self.pk:06d}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.invoice_number and self.pk:
+            generated = self._generated_invoice_number()
+            type(self).all_objects.filter(pk=self.pk).update(invoice_number=generated)
+            self.invoice_number = generated
 
     @transaction.atomic
     def add_line(self, item, *, unit_price, actor=None):
@@ -185,10 +246,44 @@ class AssignmentMaster(SoftDeleteModel):
 
 
 class AssignmentLine(TimeStampedModel):
+    """
+    Commission fields (added after the 27 Aug 2026 request to bring
+    pj-accounting's invoice/commission idea into this app): deliberately
+    NOT a separate invoice document, same as the rest of this file — a
+    commission is just two more numbers on the line that already carries
+    the price. Foundation only for now; pj-accounting's manual-entry
+    form, per-partner reporting, and audit-log listing are explicitly
+    deferred until the rest of this app's UI (Phase 8) exists to host
+    them — see django-rebuild-plan.md.
+    """
+
     master = models.ForeignKey(AssignmentMaster, on_delete=models.CASCADE, related_name="lines")
     item = models.ForeignKey("inventory.ProductItem", on_delete=models.PROTECT, related_name="assignment_lines")
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"))
+    commission_type = models.CharField(
+        max_length=20,
+        choices=CommissionType.choices,
+        blank=True,
+        help_text="Leave blank if this line carries no reseller commission.",
+    )
+    commission_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Pesos per gram for GOLD, or a fraction (e.g. 0.05) of the line total for JEWELRY.",
+    )
+    commission_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Auto-computed from commission_rate/commission_type on save unless commission_overridden is set.",
+    )
+    commission_overridden = models.BooleanField(
+        default=False,
+        help_text="True once a human has set commission_value directly — mirrors pj-accounting's commissionValue-supplied-by-admin override rule. Auto-calculation stops touching it after that; use set_commission_override() to flip it deliberately rather than editing the field directly.",
+    )
 
     class Meta:
         constraints = [
@@ -208,3 +303,45 @@ class AssignmentLine(TimeStampedModel):
         hypothetical one. There's only one path here.
         """
         return (self.unit_price * (Decimal("100") - self.discount_percent) / Decimal("100")).quantize(Decimal("0.01"))
+
+    def calculate_commission(self):
+        """
+        Ported from pj-accounting's computeCommission() (src/invoices.js).
+        Returns None when there's nothing to compute (no rate, no type,
+        a zero rate, or — for GOLD — a product with no net_weight
+        recorded) so the caller decides what to do with "nothing to
+        compute" rather than this silently becoming 0. See save().
+        """
+        if not self.commission_rate or not self.commission_type:
+            return None
+        if self.commission_type == CommissionType.GOLD:
+            weight = self.item.product.net_weight
+            if weight is None:
+                return None
+            return (self.commission_rate * weight).quantize(Decimal("0.01"))
+        if self.commission_type == CommissionType.JEWELRY:
+            return (self.commission_rate * self.calculate_line_total()).quantize(Decimal("0.01"))
+        return None
+
+    def save(self, *args, **kwargs):
+        if not self.commission_overridden:
+            auto = self.calculate_commission()
+            self.commission_value = auto if auto is not None else Decimal("0")
+        super().save(*args, **kwargs)
+
+    def set_commission_override(self, value, *, actor=None):
+        """
+        The one deliberate path that can move commission_value away from
+        calculate_commission()'s answer — mirrors pj-accounting's
+        admin-supplied commissionValue override. Logged, unlike the
+        ordinary auto-recalculation that happens on every save().
+        """
+        self.commission_overridden = True
+        self.commission_value = Decimal(value).quantize(Decimal("0.01"))
+        self.save(update_fields=["commission_value", "commission_overridden", "updated_at"])
+        AuditLogEntry.record(
+            actor=actor,
+            action="commission_overridden",
+            obj=self,
+            summary=f"{self.item.barcode} on {self.master.invoice_number}: commission set to {self.commission_value}",
+        )

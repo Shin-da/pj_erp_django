@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Resellers</h1>
+    <p>{{ groups|length }} group{{ groups|length|pluralize }} · {{ total_clients }} client{{ total_clients|pluralize }} in total. "Holding" is live — pieces currently assigned out and not yet returned or sold.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="/admin/assignment/resellergroup/add/" class="btn btn-ghost"><i class="fa-solid fa-plus"></i> New group</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Search group name, code, or client name…">
+  <button type="submit" class="btn btn-primary btn-sm">Search</button>
+  {% if q %}<a href="{% url 'assignment:group_list' %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+</form>
+
+<div class="loc-grid" style="margin-top:16px;">
+  {% for g in groups %}
+  <a href="{% url 'assignment:group_detail' g.pk %}" class="loc-card">
+    <div class="loc-card-top">
+      <div class="loc-card-icon"><i class="fa-solid fa-users"></i></div>
+      <div>
+        <div class="loc-card-name">{{ g.name }}</div>
+        <div class="loc-card-type mono">{{ g.code }}</div>
+      </div>
+    </div>
+    <div class="loc-card-num">{{ g.client_count }}</div>
+    <div class="loc-card-sub">client{{ g.client_count|pluralize }} · {{ g.items_held }} piece{{ g.items_held|pluralize }} held</div>
+  </a>
+  {% empty %}
+  <p class="cell-muted">No reseller groups yet. Create one in the admin, then assign clients to it.</p>
+  {% endfor %}
+</div>
+
+<div class="section-heading" style="margin-top:32px;"><span class="tag">Ungrouped clients</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Reference</th>
+          <th>Holding</th>
+          <th>Assignments</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in ungrouped %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'assignment:client_detail' c.pk %}">{{ c.name }}</a></td>
+          <td class="mono cell-muted">{{ c.reference_code|default:"—" }}</td>
+          <td class="mono">{{ c.items_held }}</td>
+          <td class="mono">{{ c.assignment_count }} <span class="cell-muted">({{ c.open_assignment_count }} open)</span></td>
+          <td>{% if c.is_active %}<span class="pill pill-ok">Active</span>{% else %}<span class="pill pill-neutral">Inactive</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="cell-muted">Every client is filed under a group.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

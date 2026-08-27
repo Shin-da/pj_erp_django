@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ group.name }} <span class="cell-muted mono" style="font-size:14px; font-weight:400;">{{ group.code }}</span></h1>
+    <p>{{ clients|length }} client{{ clients|length|pluralize }} · {{ items_held_total }} piece{{ items_held_total|pluralize }} currently held across the group.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'assignment:group_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> All groups</a>
+    <a href="/admin/assignment/resellergroup/{{ group.pk }}/change/" class="btn btn-ghost"><i class="fa-solid fa-pen"></i> Edit</a>
+  </div>
+</div>
+
+{% if group.notes %}
+<div class="panel" style="margin-bottom:16px; font-size:12.5px;">{{ group.notes|linebreaksbr }}</div>
+{% endif %}
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Search client name or reference…">
+  <button type="submit" class="btn btn-primary btn-sm">Search</button>
+  {% if q %}<a href="{% url 'assignment:group_detail' group.pk %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+</form>
+
+<div class="table-wrap" style="margin-top:12px;">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Reference</th>
+          <th>Holding now</th>
+          <th>Assignments</th>
+          <th>Open</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clients %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'assignment:client_detail' c.pk %}">{{ c.name }}</a></td>
+          <td class="mono cell-muted">{{ c.reference_code|default:"—" }}</td>
+          <td class="mono">{{ c.items_held }}</td>
+          <td class="mono">{{ c.assignment_count }}</td>
+          <td class="mono">{% if c.open_assignment_count %}<span class="pill pill-warn">{{ c.open_assignment_count }}</span>{% else %}<span class="cell-muted">—</span>{% endif %}</td>
+          <td>{% if c.is_active %}<span class="pill pill-ok">Active</span>{% else %}<span class="pill pill-neutral">Inactive</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="cell-muted">No clients in this group yet. Add them from the client's admin page, or from this group's admin page.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

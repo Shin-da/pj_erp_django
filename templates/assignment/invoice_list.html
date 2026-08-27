@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Invoices</h1>
+    <p>Reseller assignments, viewed as invoices — same records as the <a href="{% url 'assignment:group_list' %}">reseller directory</a>, no separate document behind them.</p>
+  </div>
+  <div class="page-head-actions">
+    <button type="button" class="btn btn-primary" data-open-modal="newInvoiceModal"><i class="fa-solid fa-plus"></i> New invoice</button>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="border-color:{% if message.tags == 'success' %}var(--ok){% else %}var(--danger){% endif %}; color:{% if message.tags == 'success' %}var(--ok){% else %}var(--danger){% endif %}; margin-bottom:16px;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<div class="inv-shell">
+  <div class="inv-list-col">
+    <form method="get" class="inv-filter">
+      <input type="search" name="q" class="fbar-input" placeholder="Invoice no. or reseller…" value="{{ q }}">
+      <select name="status" class="fbar-input" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+
+    <div class="inv-list">
+      {% for inv in page_obj %}
+      <a href="{% url 'assignment:invoice_detail' inv.pk %}" class="inv-row{% if selected.pk == inv.pk %} active{% endif %}">
+        <div class="inv-row-top">
+          <span class="mono cell-strong">{{ inv.invoice_number|default:"(unsaved)" }}</span>
+          {% if inv.invoice_status == "COMPLETE" %}<span class="pill pill-ok">Invoiced</span>
+          {% elif inv.invoice_status == "DRAFT" %}<span class="pill pill-warn">Draft</span>
+          {% else %}<span class="pill pill-neutral">Cancelled</span>
+          {% endif %}
+        </div>
+        <div class="inv-row-sub">{{ inv.reseller.name }}</div>
+        <div class="inv-row-meta">
+          <span>{{ inv.created_at|date:"M j, Y" }}</span>
+          <span>{{ inv.line_count }} item{{ inv.line_count|pluralize }}</span>
+          <span class="mono">{% if inv.list_amount %}{{ inv.list_amount|floatformat:2 }}{% else %}—{% endif %}</span>
+        </div>
+      </a>
+      {% empty %}
+      <div class="cell-muted" style="padding:16px;">No invoices match the current filters.</div>
+      {% endfor %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="table-foot">
+      <div>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+      <div class="pagination">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}"><button type="button">&laquo;</button></a>{% endif %}
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}"><button type="button">&raquo;</button></a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="inv-detail-col">
+    {% if selected %}
+    <div class="panel">
+      <div class="inv-detail-head">
+        <div>
+          <div class="inv-eyebrow">Invoice no.{% if selected.is_reserve %} <span class="pill pill-violet">Reserve</span>{% endif %}</div>
+          <div class="inv-number mono">{{ selected.invoice_number }}</div>
+          <div class="cell-muted">
+            <a href="{% url 'assignment:client_detail' selected.reseller.pk %}">{{ selected.reseller.name }}</a>
+            · {{ selected.created_at|date:"M j, Y H:i" }}
+            · {{ selected.line_list|length }} item{{ selected.line_list|length|pluralize }}
+            {% if selected.display_slot %} · slot {{ selected.display_slot.name }}{% endif %}
+          </div>
+        </div>
+        <div class="inv-detail-actions">
+          {% if selected.invoice_status == "COMPLETE" %}<span class="pill pill-ok">Invoiced</span>
+          {% elif selected.invoice_status == "DRAFT" %}<span class="pill pill-warn">Draft</span>
+          {% else %}<span class="pill pill-neutral">Cancelled</span>
+          {% endif %}
+          {% if selected.invoice_status == "DRAFT" %}
+          <form method="post" action="{% url 'assignment:invoice_stamp' selected.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-check"></i> Mark complete</button>
+          </form>
+          {% endif %}
+          <a href="/admin/assignment/assignmentmaster/{{ selected.pk }}/change/" class="btn btn-ghost btn-sm"><i class="fa-solid fa-pen"></i> Edit in admin</a>
+        </div>
+      </div>
+
+      <div class="inv-tots">
+        <div class="inv-tot"><div class="kpi-label">Item total</div><div class="inv-tot-v">{{ selected.amount_total|floatformat:2 }}</div></div>
+        <div class="inv-tot"><div class="kpi-label">Commission total</div><div class="inv-tot-v accent">{{ selected.commission_total|floatformat:2 }}</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Barcode</th>
+                <th>Product</th>
+                <th>Unit price</th>
+                <th>Discount</th>
+                <th>Line total</th>
+                <th>Commission</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for line in selected.line_list %}
+              <tr>
+                <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' line.item.barcode %}">{{ line.item.barcode }}</a></td>
+                <td>{{ line.item.product.name }}</td>
+                <td class="mono">{{ line.unit_price|floatformat:2 }}</td>
+                <td class="mono">{% if line.discount_percent %}{{ line.discount_percent }}%{% else %}—{% endif %}</td>
+                <td class="mono cell-strong">{{ line.calculate_line_total|floatformat:2 }}</td>
+                <td class="mono">
+                  {% if line.commission_type %}
+                    {{ line.commission_value|floatformat:2 }}
+                    <span class="cell-muted">({{ line.get_commission_type_display }}{% if line.commission_overridden %}, override{% endif %})</span>
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="panel inv-empty">
+      <div class="inv-empty-icon"><i class="fa-solid fa-file-invoice"></i></div>
+      <div>Select an invoice on the left to see its breakdown.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- New invoice modal -->
+<div class="modal-overlay" id="newInvoiceModal">
+  <div class="modal modal-invoice">
+    <div class="modal-head">
+      <div>
+        <h2>New invoice</h2>
+        <p>Adds a real AssignmentMaster + lines — same as assigning stock to a reseller. Commission fills itself in; type a value only to override it.</p>
+      </div>
+      <div class="inv-number-preview">
+        <div class="inv-eyebrow">Will be invoiced as</div>
+        <div class="inv-number mono" id="invNumberPreview">RE{{ next_assignment_id|stringformat:"06d" }}</div>
+      </div>
+      <button type="button" class="modal-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form method="post" action="{% url 'assignment:invoice_create' %}" id="newInvoiceForm">
+      {% csrf_token %}
+      <div class="modal-body">
+
+        <div class="inv-modal-section">
+          <div class="section-heading"><span class="tag">Invoice details</span></div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="invReseller">Reseller</label>
+              <select id="invReseller" name="reseller" required>
+                <option value="">Choose a reseller…</option>
+                {% for r in resellers %}
+                <option value="{{ r.pk }}">{{ r.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="invReserveFlag">Type</label>
+              <select id="invReserveFlag" name="is_reserve">
+                <option value="">Normal assignment (RE)</option>
+                <option value="on">Reserve (RN)</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="invLocation">Scanning at (location)</label>
+              <select id="invLocation" name="scan_location">
+                <option value="">Any location (no check)</option>
+                {% for loc in locations %}
+                <option value="{{ loc.pk }}">{{ loc.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="invSlot">Room / display slot</label>
+              <select id="invSlot" name="display_slot">
+                <option value="">No slot for this invoice</option>
+                {% for slot in display_slots %}
+                <option value="{{ slot.pk }}">{{ slot.name }}{% if slot.occupant %} — occupied by {{ slot.occupant }}{% else %} — available{% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="inv-modal-section">
+          <div class="section-heading"><span class="tag">Scan items</span></div>
+          <p class="page-sub">Scan a barcode (or type it) and press Enter. Price is pulled from the product automatically — adjust it after if needed. Gold-weight commission auto-calc isn't wired up yet, so set commission manually per line for now.</p>
+          <div class="inv-scan-row">
+            <i class="fa-solid fa-barcode inv-scan-icon"></i>
+            <input type="text" id="invScanInput" class="inv-scan-input" placeholder="Scan or type a barcode, then press Enter" autocomplete="off">
+            <span id="invScanMsg"></span>
+          </div>
+
+          <div class="table-wrap inv-lines-wrap">
+            <div class="table-scroll">
+              <table id="invLinesTable">
+                <colgroup>
+                  <col style="width:36px">
+                  <col style="width:130px">
+                  <col style="min-width:160px">
+                  <col style="width:110px">
+                  <col style="width:100px">
+                  <col style="width:140px">
+                  <col style="width:120px">
+                  <col style="width:130px">
+                  <col style="width:36px">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Barcode</th>
+                    <th>Product</th>
+                    <th>Unit price</th>
+                    <th>Discount %</th>
+                    <th>Commission type</th>
+                    <th>Commission rate</th>
+                    <th>Commission (preview)</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="invLinesBody">
+                  <tr id="invLinesEmpty"><td colspan="9" class="cell-muted" style="text-align:center; padding:20px;">No items scanned yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="inv-modal-totals">
+          <span id="invLineCount">0 items scanned</span>
+          <span>Item total <b id="invItemTotal" class="mono">0.00</b> · Commission <b id="invCommTotal" class="mono">0.00</b></span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span class="spacer">Saving re-checks every scanned item on the server.</span>
+        <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="invSaveBtn">Save invoice</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .inv-shell { display:grid; grid-template-columns:340px 1fr; gap:16px; align-items:start; }
+  .inv-list-col { display:flex; flex-direction:column; gap:10px; }
+  .inv-filter { display:flex; gap:8px; }
+  .inv-filter .fbar-input { flex:1; }
+  .inv-list { display:flex; flex-direction:column; gap:8px; max-height:72vh; overflow-y:auto; }
+  .inv-row { display:block; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; text-decoration:none; color:inherit; transition:border-color var(--t-fast); }
+  .inv-row:hover { border-color:var(--brand); }
+  .inv-row.active { border-color:var(--brand); background:var(--brand-dim); }
+  .inv-row-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .inv-row-sub { font-size:12.5px; color:var(--text-muted); margin-top:4px; }
+  .inv-row-meta { display:flex; gap:10px; font-size:11.5px; color:var(--text-faint); margin-top:6px; }
+  .inv-detail-col .panel { padding:18px 20px; }
+  .inv-detail-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .inv-detail-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .inv-eyebrow { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+  .inv-number { font-size:22px; font-weight:700; margin:2px 0 4px; }
+  .inv-tots { display:flex; gap:24px; margin:18px 0; padding:14px 16px; background:var(--bg-2); border-radius:var(--radius); }
+  .inv-tot-v { font-size:18px; font-weight:700; margin-top:4px; }
+  .inv-tot-v.accent { color:var(--brand-strong); }
+  .inv-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:260px; color:var(--text-muted); }
+  .inv-empty-icon { font-size:32px; color:var(--text-faint); }
+
+  /* New-invoice modal — widened and re-spaced 27 Aug 2026 after the first
+     pass felt cramped: 9 line-item columns need real room, not a 760px
+     modal built for a two-field form. */
+  .modal-invoice { max-width:1040px; }
+  .modal-invoice .modal-head { padding:22px 28px; align-items:center; gap:16px; }
+  .inv-number-preview { display:flex; flex-direction:column; align-items:flex-end; margin-right:8px; }
+  .inv-number-preview .inv-eyebrow { white-space:nowrap; }
+  .inv-number-preview .inv-number { margin:2px 0 0; }
+  .modal-invoice .modal-body { padding:26px 28px; }
+  .modal-invoice .modal-foot { padding:16px 28px; }
+  .inv-modal-section { margin-bottom:26px; }
+  .inv-modal-section .page-sub { margin:4px 0 14px; }
+  .inv-modal-section .form-grid { gap:18px 20px; }
+  .inv-scan-row { display:flex; align-items:center; gap:10px; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius); padding:4px 16px; }
+  .inv-scan-icon { color:var(--text-muted); font-size:14px; }
+  .inv-scan-input { flex:1; border:none; background:transparent; font-size:14px; padding:11px 0; outline:none; color:var(--text); }
+  .inv-scan-input::placeholder { color:var(--text-faint); }
+  #invScanMsg { font-size:12px; white-space:nowrap; }
+  #invScanMsg.ok { color:var(--ok); }
+  #invScanMsg.err { color:var(--danger); }
+  .inv-lines-wrap { margin-top:14px; }
+  .inv-lines-wrap table { min-width:900px; }
+  .inv-lines-wrap th { white-space:nowrap; }
+  #invLinesBody td { vertical-align:middle; }
+  #invLinesBody input, #invLinesBody select { width:100%; border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 9px; font-size:12.5px; background:var(--bg); color:var(--text); }
+  .inv-line-del { cursor:pointer; color:var(--danger); font-size:15px; }
+  .inv-modal-totals { display:flex; align-items:center; justify-content:space-between; margin-top:4px; padding:14px 18px; background:var(--bg-2); border-radius:var(--radius); font-size:13px; }
+  .inv-modal-totals b { font-size:15px; }
+  @media(max-width:1080px){ .modal-invoice { max-width:94vw; } }
+  @media(max-width:1000px){ .inv-shell { grid-template-columns:1fr; } }
+</style>
+
+<script>
+(function(){
+  var COMMISSION_TYPES = {{ commission_types_json|safe }};
+  var NEXT_ASSIGNMENT_ID = {{ next_assignment_id }};
+  var body = document.getElementById("invLinesBody");
+  var emptyRow = document.getElementById("invLinesEmpty");
+  var scanInput = document.getElementById("invScanInput");
+  var scanMsg = document.getElementById("invScanMsg");
+  var locationSelect = document.getElementById("invLocation");
+  var reserveFlag = document.getElementById("invReserveFlag");
+  var numberPreview = document.getElementById("invNumberPreview");
+  var rowCount = 0;
+  var scannedBarcodes = {};
+
+  // Preview only, per the note in views.py's invoice_list: the real
+  // number is decided at save() time from the row's own pk. This just
+  // shows "what it'll almost certainly be" so it isn't a total surprise
+  // after saving, and flips RE/RN the moment Type is changed.
+  function updateNumberPreview(){
+    var prefix = reserveFlag.value === "on" ? "RN" : "RE";
+    numberPreview.textContent = prefix + String(NEXT_ASSIGNMENT_ID).padStart(6, "0");
+  }
+  reserveFlag.addEventListener("change", updateNumberPreview);
+
+  function commissionOptions(){
+    var out = '<option value="">None</option>';
+    COMMISSION_TYPES.forEach(function(pair){
+      out += '<option value="' + pair[0] + '">' + pair[1] + '</option>';
+    });
+    return out;
+  }
+
+  function setScanMsg(text, kind){
+    scanMsg.textContent = text || "";
+    scanMsg.className = kind || "";
+  }
+
+  function addRow(data){
+    if(emptyRow) { emptyRow.remove(); }
+    var i = rowCount++;
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="cell-muted">' + (i + 1) + '</td>' +
+      '<td class="mono cell-strong">' + data.barcode +
+        '<input type="hidden" name="item_barcode" value="' + data.barcode + '"></td>' +
+      '<td>' + data.product_name + '</td>' +
+      '<td><input name="unit_price" type="number" step="0.01" min="0" value="' + data.unit_price + '"></td>' +
+      '<td><input name="discount_percent" type="number" step="0.01" min="0" max="100" value="0"></td>' +
+      '<td><select name="commission_type">' + commissionOptions() + '</select></td>' +
+      '<td><input name="commission_rate" type="number" step="0.0001" min="0" value=""></td>' +
+      '<td class="mono commission-preview">0.00</td>' +
+      '<td><span class="inv-line-del" title="Remove line">&times;</span></td>';
+    body.appendChild(tr);
+
+    var unitPrice = tr.querySelector('input[name="unit_price"]');
+    var discount = tr.querySelector('input[name="discount_percent"]');
+    var commType = tr.querySelector('select[name="commission_type"]');
+    var commRate = tr.querySelector('input[name="commission_rate"]');
+    var preview = tr.querySelector(".commission-preview");
+
+    function recalc(){
+      var price = parseFloat(unitPrice.value) || 0;
+      var disc = parseFloat(discount.value) || 0;
+      var lineTotal = price * (100 - disc) / 100;
+      var rate = parseFloat(commRate.value) || 0;
+      // Mirrors calculate_commission() server-side: GOLD needs the
+      // product's weight, which this form doesn't have client-side, so
+      // GOLD previews as "by weight" here rather than a wrong number —
+      // the real value comes back once the invoice is saved. Also
+      // explicitly out of scope for this pass (gold auto-calc is later).
+      if(commType.value === "JEWELRY" && rate){
+        preview.textContent = (rate * lineTotal).toFixed(2);
+      } else if(commType.value === "GOLD" && rate){
+        preview.textContent = "— (by weight)";
+      } else {
+        preview.textContent = "0.00";
+      }
+      updateTotals();
+    }
+    [unitPrice, discount, commType, commRate].forEach(function(el){ el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
+    tr.querySelector(".inv-line-del").addEventListener("click", function(){
+      delete scannedBarcodes[data.barcode];
+      tr.remove();
+      updateTotals();
+      if(!body.querySelector("tr")) body.appendChild(emptyRow);
+    });
+
+    recalc();
+    scannedBarcodes[data.barcode] = true;
+  }
+
+  function updateTotals(){
+    var rows = body.querySelectorAll("tr:not(#invLinesEmpty)");
+    var itemTotal = 0, commTotal = 0;
+    rows.forEach(function(tr){
+      var price = parseFloat(tr.querySelector('input[name="unit_price"]').value) || 0;
+      var disc = parseFloat(tr.querySelector('input[name="discount_percent"]').value) || 0;
+      itemTotal += price * (100 - disc) / 100;
+      var previewNum = parseFloat(tr.querySelector(".commission-preview").textContent);
+      if(!isNaN(previewNum)) commTotal += previewNum;
+    });
+    document.getElementById("invLineCount").textContent = rows.length + " item" + (rows.length === 1 ? "" : "s") + " scanned";
+    document.getElementById("invItemTotal").textContent = itemTotal.toFixed(2);
+    document.getElementById("invCommTotal").textContent = commTotal.toFixed(2);
+  }
+
+  function scanBarcode(){
+    var barcode = scanInput.value.trim();
+    if(!barcode) return;
+    if(scannedBarcodes[barcode]){
+      setScanMsg(barcode + " is already on this invoice.", "err");
+      scanInput.select();
+      return;
+    }
+    setScanMsg("Looking up " + barcode + "…", "");
+    var qs = new URLSearchParams({ barcode: barcode, location: locationSelect.value });
+    fetch("{% url 'assignment:item_lookup' %}?" + qs.toString())
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d.ok){
+          setScanMsg(d.error || "Could not look up that barcode.", "err");
+          scanInput.select();
+          return;
+        }
+        addRow(d);
+        setScanMsg(d.barcode + " added — " + d.product_name, "ok");
+        scanInput.value = "";
+        scanInput.focus();
+      })
+      .catch(function(){
+        setScanMsg("Lookup failed — check the connection and try again.", "err");
+      });
+  }
+
+  scanInput.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+      e.preventDefault();
+      scanBarcode();
+    }
+  });
+
+  // Re-open with a clean scan slate every time.
+  document.querySelectorAll('[data-open-modal="newInvoiceModal"]').forEach(function(btn){
+    btn.addEventListener("click", function(){
+      body.innerHTML = "";
+      body.appendChild(emptyRow);
+      rowCount = 0;
+      scannedBarcodes = {};
+      setScanMsg("", "");
+      updateTotals();
+      updateNumberPreview();
+      setTimeout(function(){ scanInput.focus(); }, 30);
+    });
+  });
+
+  document.getElementById("invSaveBtn").addEventListener("click", function(e){
+    if(!body.querySelector("tr:not(#invLinesEmpty)")){
+      e.preventDefault();
+      setScanMsg("Scan at least one item before saving.", "err");
+      scanInput.focus();
+    }
+  });
+})();
+</script>
+
+{% endblock %}
