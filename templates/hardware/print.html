@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Print labels</h1>
+    <p>Paste barcodes, pick a template (or let each item use its category's default), preview, then print to a
+      Zebra printer over BrowserPrint or fall back to your browser's own print dialog.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'hardware:template_list' %}" class="btn btn-ghost"><i class="fa-solid fa-pen"></i> Manage
+      templates</a>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="border-color:var(--warn); margin-bottom:16px;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<form method="post" id="printForm">
+  {% csrf_token %}
+  <div class="two-col" style="grid-template-columns:1.2fr 1fr;">
+    <div class="panel">
+      <div class="kpi-label" style="margin-bottom:8px;">Barcode numbers</div>
+      <textarea name="barcodes" rows="10" class="field"
+        style="width:100%; font-family:var(--font-sans); resize:vertical;"
+        placeholder="Paste barcodes here (one per line or comma separated)">{{ barcode_text }}</textarea>
+    </div>
+    <div class="panel">
+      <label class="kpi-label">Template</label>
+      <select name="template_id" class="field" style="width:100%; margin-bottom:14px;">
+        <option value="">-- Auto (use each item's category default) --</option>
+        {% for t in templates %}
+        <option value="{{ t.pk }}">{{ t.name }} ({{ t.get_category_display }})</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">
+        <i class="fa-solid fa-magnifying-glass"></i> Load &amp; preview
+      </button>
+    </div>
+  </div>
+</form>
+
+{% if preview_items is not None %}
+
+{% if not_found %}
+<div class="panel" style="font-size:12px; margin-top:16px; border-color:var(--danger);">
+  <b>{{ not_found|length }}</b> barcode(s) not found: {{ not_found|join:", " }}
+</div>
+{% endif %}
+
+<div class="panel" style="margin-top:16px;">
+  <h4 style="margin:0 0 10px; font-size:14px;"><i class="fa-solid fa-print"></i> Zebra printer</h4>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <select id="selected_device" class="field" onchange="onDeviceSelected(this)">
+      <option value="">-- Select printer --</option>
+    </select>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="setup()"><i
+        class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+    <button type="button" class="btn btn-primary btn-sm" onclick="printBarcodesToPrinter()"><i
+        class="fa-solid fa-print"></i> Print to Zebra</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="window.print()"><i
+        class="fa-solid fa-globe"></i> Browser print</button>
+  </div>
+</div>
+
+<input type="hidden" id="zplData" value="{{ zpl_data|escapejs }}">
+<input type="hidden" id="productCount" value="{{ product_count }}">
+
+<div class="section-heading" style="margin-top:20px;">
+  <span class="tag">Preview ({{ product_count }} label{{ product_count|pluralize }})</span>
+</div>
+<div class="label-preview-container">
+  {% for p in preview_items %}
+  <div class="barcode-label">
+    <div class="barcode-label-head mono cell-strong">{{ p.barcode }}</div>
+    <div class="cell-muted" style="font-size:10.5px; margin-bottom:6px;">{{ p.template_name }}</div>
+    {% for f in p.fields %}
+    <div style="font-size:11px;">{{ f.text }}</div>
+    {% endfor %}
+  </div>
+  {% empty %}
+  <div class="cell-muted">No labels to preview.</div>
+  {% endfor %}
+</div>
+
+{% endif %}
+
+<style>
+  .label-preview-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .barcode-label {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 220px;
+    min-height: 140px;
+    padding: 8px;
+    background: var(--surface);
+  }
+
+  .barcode-label-head {
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+
+  @media print {
+
+    .page-head,
+    .page-head-actions,
+    form#printForm,
+    .panel:has(#selected_device) {
+      display: none !important;
+    }
+  }
+</style>
+
+<script src="{% static 'core/js/vendor/BrowserPrint-3.0.216.min.js' %}"></script>
+<script>
+  var selected_device = null;
+  var devices = [];
+
+  function setup() {
+    if (typeof BrowserPrint === 'undefined') {
+      console.warn('BrowserPrint SDK not available — is Zebra Browser Print running on this machine?');
+      return;
+    }
+    BrowserPrint.getDefaultDevice("printer", function (device) {
+      selected_device = device;
+      devices = [device];
+
+      var ddl = document.getElementById("selected_device");
+      ddl.innerHTML = "";
+      ddl.add(new Option(device.name, device.uid));
+
+      BrowserPrint.getLocalDevices(function (deviceList) {
+        deviceList.forEach(function (dev) {
+          if (!devices.find(function (d) { return d.uid === dev.uid; })) {
+            devices.push(dev);
+            ddl.add(new Option(dev.name, dev.uid));
+          }
+        });
+      }, errorCallback, "printer");
+    }, errorCallback);
+  }
+
+  function onDeviceSelected(sel) {
+    selected_device = devices.find(function (d) { return d.uid === sel.value; });
+  }
+
+  function errorCallback(err) {
+    alert("Printer error: " + err);
+  }
+
+  function printBarcodesToPrinter() {
+    var zplField = document.getElementById('zplData');
+    var countField = document.getElementById('productCount');
+    if (!zplField) return;
+
+    var zpl = zplField.value;
+    var count = countField ? countField.value : "0";
+
+    if (!selected_device) {
+      alert("Please select a printer.");
+      return;
+    }
+    if (!zpl || zpl.trim() === "") {
+      alert("No labels loaded to print.");
+      return;
+    }
+    if (!confirm("Print " + count + " label(s) to " + selected_device.name + "?")) return;
+
+    selected_device.send(zpl,
+      function () { alert("Successfully printed " + count + " label(s)."); },
+      errorCallback
+    );
+  }
+
+  document.addEventListener('DOMContentLoaded', setup);
+</script>
+
+{% endblock %}

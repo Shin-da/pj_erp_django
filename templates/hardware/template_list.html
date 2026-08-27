@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Tag Printing</h1>
+    <p>Design label layouts and print Zebra RFID tags for scanned barcodes. Field placement is new and hasn't been
+      verified on a physical printer yet — test a real print before relying on a layout for daily use.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'hardware:print_labels' %}" class="btn btn-primary"><i class="fa-solid fa-print"></i> Print
+      labels</a>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="border-color:var(--brand); margin-bottom:16px;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<div class="panel" style="margin-bottom:20px;">
+  <div class="kpi-label" style="margin-bottom:8px;">New template</div>
+  <form method="post" action="{% url 'hardware:template_create' %}"
+    style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+    {% csrf_token %}
+    <input type="text" name="name" class="field" placeholder="Template name (e.g. Ring default)"
+      style="min-width:220px;" required>
+    <select name="category" class="field">
+      {% for value, label in categories %}
+      <option value="{{ value }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Create &amp; design</button>
+  </form>
+</div>
+
+<div class="section-heading"><span class="tag">Templates</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Fields</th>
+          <th>Default?</th>
+          <th>Size (dots)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td class="cell-strong">{{ t.name }}</td>
+          <td>{{ t.get_category_display }}</td>
+          <td class="mono">{{ t.fields.all|length }}</td>
+          <td>
+            {% if t.is_default %}<span class="pill pill-ok">Default</span>{% else %}<span
+              class="cell-muted">—</span>{% endif %}
+          </td>
+          <td class="mono cell-muted">{{ t.width_dots }}×{{ t.height_dots }}</td>
+          <td>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+              <a href="{% url 'hardware:template_edit' t.pk %}" class="btn btn-ghost btn-sm"><i
+                  class="fa-solid fa-pen"></i> Edit</a>
+              <form method="post" action="{% url 'hardware:template_duplicate' t.pk %}" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-copy"></i> Duplicate</button>
+              </form>
+              <form method="post" action="{% url 'hardware:template_delete' t.pk %}" style="margin:0;"
+                onsubmit="return confirm('Delete this template? This cannot be undone.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="cell-muted">No templates yet — create one above.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
