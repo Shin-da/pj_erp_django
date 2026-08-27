@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ location.name }} <span class="cell-muted" style="font-size:14px; font-weight:400;">({{ location.code }})</span></h1>
+    <p>{{ page_obj.paginator.count }} item{{ page_obj.paginator.count|pluralize }} at this location.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'inventory:location_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> All locations</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Search barcode, reference, product name…">
+  <select name="status" class="field fbar-select">
+    <option value="">All statuses</option>
+    {% for value, label in status_choices %}
+    <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+  {% if q or status %}<a href="{% url 'inventory:location_detail' location.code %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+</form>
+
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Reference</th>
+          <th>Category</th>
+          <th>Selling price</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in page_obj %}
+        <tr>
+          <td class="mono cell-strong">{{ item.barcode }}</td>
+          <td>{{ item.product.name }}</td>
+          <td class="cell-muted">{{ item.product.reference_id|default:"—" }}</td>
+          <td class="cell-muted">{{ item.product.category.name }}</td>
+          <td class="mono">
+            {% if item.product.selling_price %}{{ item.product.currency.symbol|default:item.product.currency.code }}{{ item.product.selling_price|floatformat:2 }}{% else %}—{% endif %}
+          </td>
+          <td>
+            {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+            {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+            {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+            {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+            {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+            {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="cell-muted">No items match.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-foot">
+    <div>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div class="pagination">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if status %}&status={{ status }}{% endif %}"><button type="button">&laquo;</button></a>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if status %}&status={{ status }}{% endif %}"><button type="button">&raquo;</button></a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

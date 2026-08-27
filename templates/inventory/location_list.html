@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Stock by Location</h1>
+    <p>{{ locations.count }} locations — click a location to see its barcode-level stock.</p>
+  </div>
+</div>
+
+<div class="loc-grid">
+  {% for loc in locations %}
+  <a href="{% url 'inventory:location_detail' loc.code %}" class="loc-card" style="text-decoration:none; color:inherit; display:block;">
+    <div class="loc-card-top">
+      <div class="loc-card-icon"><i class="fa-solid fa-location-dot"></i></div>
+      <div>
+        <div class="loc-card-name">{{ loc.name }}</div>
+        <div class="loc-card-type">{{ loc.get_location_type_display }}</div>
+      </div>
+    </div>
+    <div class="loc-card-num">{{ loc.item_count }}</div>
+    <div class="loc-card-sub">{{ loc.available_count }} available &middot; {{ loc.assigned_count }} assigned &middot; {{ loc.sold_count }} sold</div>
+  </a>
+  {% empty %}
+  <p class="cell-muted">No locations yet.</p>
+  {% endfor %}
+</div>
+
+{% endblock %}

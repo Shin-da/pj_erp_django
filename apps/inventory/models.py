@@ -29,7 +29,20 @@ Legacy findings this fixes:
     `.dacpac`'s `model.xml` — 2 mentions each, both in the `CREATE TABLE`,
     zero in any `INSERT`/`UPDATE` — IADMIN-SYSTEM-REFERENCE.md /
     INVENTORY-AND-INVOICING.md §9b.3). The design was already correct;
-    it just wasn't wired up. `last_transfer` here is that design, wired up.
+    it just wasn't wired up.
+
+    NOT YET REBUILT: there is no `last_transfer` field on ProductItem.
+    An earlier version of this docstring claimed there was. Transfer
+    history currently lives in `AuditLogEntry` rows written by
+    `move_to_location` (action="location_transfer", with the transfer id
+    in `changes`), which is queryable but is not a column. Add the field
+    if a per-item "last transfer" lookup needs to be cheap; don't
+    describe it as existing until it does.
+
+  - `StockStatus.IN_TRANSIT` is defined and counted on the dashboard but
+    is never written by anything — `Transfer.execute` calls
+    `move_to_location` directly. Either set it while a transfer is
+    pending, or drop the state. Today it is always zero.
 """
 
 from django.conf import settings
