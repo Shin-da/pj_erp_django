@@ -21,6 +21,8 @@ Legacy findings this fixes:
     `transfer_id`) but no procedure ever wrote them.
 """
 
+from decimal import Decimal
+
 from django.db import models
 
 from apps.core.models import TimeStampedModel
@@ -99,6 +101,37 @@ class ProductMaster(TimeStampedModel):
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    # ---- Rates the legacy invoice multiplies prices by ----------------
+    #
+    # Every amount on `ResellerPaymentInvoice.aspx` is
+    # `selling_price * convert_rate`, where the rate comes from the
+    # product master: `update_convert_rate` when `ratechange_status` is
+    # 'apply', otherwise `Converte_rate` (see
+    # scripts/018_product_master_management_invoice.sql in the legacy
+    # repo). Leaving these out of the first import pass meant any invoice
+    # this system rendered could disagree with the PDF the customer
+    # already holds, for the same invoice. They are carried for that
+    # reason — nothing else uses them yet.
+    #
+    # `metal_rate` is the per-gram price shown in the invoice's "Price
+    # Per Gram" column, which the legacy page reveals only for gold.
+    metal_rate = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="tblproduct_master.metalrate — per-gram price, shown on gold invoice lines.",
+    )
+    convert_rate = models.DecimalField(
+        max_digits=12, decimal_places=6, default=Decimal("1"),
+        help_text="tblproduct_master.Converte_rate. Multiplies price on the printed invoice.",
+    )
+    update_convert_rate = models.DecimalField(
+        max_digits=12, decimal_places=6, null=True, blank=True,
+        help_text="Pending replacement rate; used instead of convert_rate when rate_change_status is 'apply'.",
+    )
+    rate_change_status = models.CharField(
+        max_length=20, blank=True,
+        help_text="'apply' means use update_convert_rate; anything else means use convert_rate.",
+    )
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -106,3 +139,15 @@ class ProductMaster(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name} ({self.reference_id})" if self.reference_id else self.name
+
+    @property
+    def effective_rate(self):
+        """
+        The one place that decides which conversion rate applies. The
+        legacy system re-implemented this CASE across several
+        stored-procedure branches that a SQL comment warned had to be
+        kept aligned by hand — there is one copy here.
+        """
+        if self.rate_change_status == "apply" and self.update_convert_rate is not None:
+            return self.update_convert_rate
+        return self.convert_rate if self.convert_rate is not None else Decimal("1")

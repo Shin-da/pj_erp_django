@@ -66,14 +66,28 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum
-from django.http import JsonResponse
+from django.db.models import (
+    Count,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.core.models import LegacyDocument
 from apps.inventory.models import ProductItem, StockStatus
 from apps.locations.models import Location
+from apps.payments.models import ResellerPayment
 
+from .invoice_pdf import render_invoice_html, render_invoice_pdf
 from .models import (
     AssignmentMaster,
     CommissionType,
@@ -207,14 +221,32 @@ def invoice_list(request, pk=None):
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
 
+    money = DecimalField(max_digits=14, decimal_places=2)
+    # The SQL form of AssignmentLine.calculate_line_total(). The list used
+    # to sum unit_price and call itself "discount-blind on purpose" — but a
+    # discounted invoice then showed at full price in the list and at its
+    # real price in the detail beside it, which reads as a bug rather than
+    # a shortcut. Same expression as the dashboard uses.
+    net_line = ExpressionWrapper(
+        F("lines__unit_price")
+        * (Value(Decimal("100")) - F("lines__discount_percent"))
+        / Value(Decimal("100")),
+        output_field=money,
+    )
+    paid_sq = Subquery(
+        ResellerPayment.objects.filter(assignment_id=OuterRef("pk"))
+        .values("assignment_id")
+        .annotate(t=Sum("amount"))
+        .values("t")[:1],
+        output_field=money,
+    )
+
     invoices = (
         AssignmentMaster.objects.select_related("reseller")
         .annotate(
             line_count=Count("lines", distinct=True),
-            # Discount-blind on purpose — cheap for a list of 30 rows.
-            # The detail view below sums calculate_line_total() instead,
-            # which is the real, discount-aware total.
-            list_amount=Sum("lines__unit_price"),
+            list_amount=Sum(net_line),
+            paid_amount=Coalesce(paid_sq, Value(Decimal("0.00"), output_field=money)),
         )
         .order_by("-created_at")
     )
@@ -226,16 +258,91 @@ def invoice_list(request, pk=None):
     paginator = Paginator(invoices, 30)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    # One colour vocabulary across the app, applied here to what actually
+    # matters about an invoice: whether money is owed. Colouring purely by
+    # invoice_status made the list a wall of identical green "Invoiced"
+    # pills whether a row was settled or six figures outstanding.
+    #
+    #   ok      settled / nothing to do
+    #   info    out on purpose, an active commitment
+    #   warn    needs attention, time-bound
+    #   danger  void, broken
+    #
+    # Every state also carries a WORD, never colour alone — the page is
+    # printed in greyscale and read by colour-blind operators.
+    for inv in page_obj:
+        billed = inv.list_amount or Decimal("0")
+        paid = inv.paid_amount or Decimal("0")
+        inv.balance = billed - paid
+        if inv.invoice_status == InvoiceStatus.CANCELLED:
+            inv.pay_state, inv.pay_label, inv.pay_tone = "VOID", "Cancelled", "danger"
+        elif inv.invoice_status == InvoiceStatus.DRAFT:
+            inv.pay_state, inv.pay_label, inv.pay_tone = "DRAFT", "Draft", "warn"
+        elif inv.balance <= 0 and billed > 0:
+            inv.pay_state, inv.pay_label, inv.pay_tone = "PAID", "Paid", "ok"
+        elif paid > 0:
+            inv.pay_state, inv.pay_label, inv.pay_tone = "PARTIAL", "Part paid", "warn"
+        else:
+            inv.pay_state, inv.pay_label, inv.pay_tone = "UNPAID", "Unpaid", "info"
+
     selected = None
     if pk:
         selected = get_object_or_404(
             AssignmentMaster.objects.select_related("reseller", "display_slot", "created_by"), pk=pk
         )
         selected.line_list = list(
-            selected.lines.select_related("item", "item__product", "item__product__currency").order_by("id")
+            selected.lines.select_related(
+                "item", "item__product", "item__product__category", "item__product__currency", "item__location"
+            ).order_by("id")
         )
         selected.amount_total = sum((line.calculate_line_total() for line in selected.line_list), Decimal("0"))
         selected.commission_total = sum((line.commission_value for line in selected.line_list), Decimal("0"))
+
+        # Hide columns that are empty for THIS invoice. Most invoices carry
+        # no discount and no commission, and two columns of "—" across
+        # eleven rows push the numbers that matter off to the side.
+        selected.has_discount = any(line.discount_percent for line in selected.line_list)
+        selected.has_commission = any(line.commission_type for line in selected.line_list)
+
+        # Where each piece actually is now. An invoice is a record of what
+        # went out; the operator's real question is what came back. Without
+        # this the page cannot distinguish "eleven pieces with the reseller"
+        # from "eleven pieces already returned" — which is exactly why a
+        # cancelled invoice used to read like a live one.
+        status_tally = {}
+        for line in selected.line_list:
+            status_tally[line.item.status] = status_tally.get(line.item.status, 0) + 1
+        selected.status_tally = [
+            {"status": s, "label": StockStatus(s).label, "n": n}
+            for s, n in sorted(status_tally.items(), key=lambda kv: -kv[1])
+        ]
+        selected.still_out = status_tally.get(StockStatus.ASSIGNED, 0) + status_tally.get(
+            StockStatus.RESERVED, 0
+        )
+
+        # Money actually collected against this invoice.
+        payments = list(
+            ResellerPayment.objects.filter(assignment=selected)
+            .select_related("recorded_by")
+            .order_by("-paid_on", "-id")
+        )
+        # NOT `selected.payments` — ResellerPayment declares
+        # related_name="payments", so that attribute is the reverse
+        # manager and assigning to it raises.
+        selected.payment_list = payments
+        selected.paid_total = sum((p.amount for p in payments), Decimal("0"))
+        selected.balance = selected.amount_total - selected.paid_total
+        # A cancelled invoice is not "outstanding" — nothing is owed on a
+        # document that no longer stands. Say that instead of showing a
+        # balance someone might try to collect.
+        selected.is_void = selected.invoice_status == InvoiceStatus.CANCELLED
+
+        # The PDF the legacy system generated for this invoice, if this
+        # row predates the rebuild and the file was migrated across. It is
+        # the document the customer was actually handed; the screen above
+        # is today's data, and the two can legitimately disagree if the
+        # record was corrected afterwards.
+        selected.legacy_docs = list(LegacyDocument.for_object(selected))
 
     slots = list(DisplaySlot.objects.order_by("name"))
     for slot in slots:
@@ -429,3 +536,47 @@ def invoice_stamp(request, pk):
     master.stamp_invoice(actor=request.user)
     messages.success(request, f"Invoice {master.invoice_number} marked complete.")
     return redirect("assignment:invoice_detail", pk=master.pk)
+
+
+@login_required
+def invoice_pdf(request, pk):
+    """
+    The generated invoice, as a PDF.
+
+    Unlike the legacy `ResellerPaymentInvoice.aspx`, asking for the PDF
+    does NOT stamp the invoice complete, does not delete payment rows,
+    and does not write anything at all — it is a pure read. Marking an
+    invoice complete is its own explicit action.
+
+    `?download=1` forces a save dialog; without it the browser displays
+    it inline, which is what someone clicking "PDF" on the invoice page
+    expects.
+    """
+    master = get_object_or_404(
+        AssignmentMaster.objects.select_related("reseller", "reseller_location"), pk=pk
+    )
+    try:
+        pdf_bytes = render_invoice_pdf(master, base_url=request.build_absolute_uri("/"))
+    except RuntimeError as exc:
+        messages.error(request, str(exc))
+        return redirect("assignment:invoice_detail", pk=master.pk)
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    disposition = "attachment" if request.GET.get("download") else "inline"
+    response["Content-Disposition"] = f'{disposition}; filename="{master.invoice_number}.pdf"'
+    return response
+
+
+@login_required
+def invoice_pdf_preview(request, pk):
+    """
+    The same layout rendered as plain HTML.
+
+    Exists so the invoice design can be worked on without a PDF engine
+    installed, and so a print-to-PDF from the browser stays available if
+    WeasyPrint won't build on a given machine.
+    """
+    master = get_object_or_404(
+        AssignmentMaster.objects.select_related("reseller", "reseller_location"), pk=pk
+    )
+    return HttpResponse(render_invoice_html(master))

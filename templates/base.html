@@ -36,6 +36,10 @@
           class="nav-item top-level{% if request.resolver_match.app_name == 'assignment' and request.resolver_match.url_name in 'invoice_list,invoice_detail' %} active{% endif %}">
           <i class="fa-solid fa-file-invoice"></i> <span class="nav-label">Invoices</span>
         </a>
+        <a href="{% url 'returns:return_scan' %}" title="Returns"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'returns' %} active{% endif %}">
+          <i class="fa-solid fa-rotate-left"></i> <span class="nav-label">Returns</span>
+        </a>
         <a href="{% url 'tracker:scan' %}" title="Product Tracker"
           class="nav-item top-level{% if request.resolver_match.app_name == 'tracker' %} active{% endif %}">
           <i class="fa-solid fa-barcode"></i> <span class="nav-label">Product Tracker</span>

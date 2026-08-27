@@ -1,0 +1,1058 @@
+{
+  "source": "C:\\Users\\Matt\\ftp_perfect-jewel-active-sync",
+  "media_root": "C:\\Users\\ONEGAI_SERVER\\pj_erp_django\\pj-erp\\media",
+  "copied": [
+    {
+      "invoice": "RE0010",
+      "assignment_pk": 38,
+      "original_name": "invoice_pdf_0010.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0010.pdf",
+      "bytes": 170112,
+      "sha256": "d547f4a0bc4c6e93b269db90bc4f230fae312ef69820ec6696c95ba46dd0b000"
+    },
+    {
+      "invoice": "RE00100",
+      "assignment_pk": 82,
+      "original_name": "invoice_pdf_00100.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00100.pdf",
+      "bytes": 171330,
+      "sha256": "4abd72e73b435a9313ff4bc4d2c707f2d830ffe8d4c0c6f8b79b806ffdd6e970"
+    },
+    {
+      "invoice": "RE00101",
+      "assignment_pk": 129,
+      "original_name": "invoice_pdf_00101.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00101.pdf",
+      "bytes": 171146,
+      "sha256": "7ed05b49347fe5ed1d99bf518ee0f9efb9726f68a83fdda43aa9f74bb22afd82"
+    },
+    {
+      "invoice": "RE00102",
+      "assignment_pk": 59,
+      "original_name": "invoice_pdf_00102.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00102.pdf",
+      "bytes": 125779,
+      "sha256": "1c35c4c57d6f43fde9f25c67d8da9f41bd3a62de8c3149795a9b53115493e519"
+    },
+    {
+      "invoice": "RE00104",
+      "assignment_pk": 111,
+      "original_name": "invoice_pdf_00104.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00104.pdf",
+      "bytes": 172768,
+      "sha256": "1166e698bada26ef2a8c0b3fb92fc9b003b905e38511515c32b483661e756528"
+    },
+    {
+      "invoice": "RE00105",
+      "assignment_pk": 112,
+      "original_name": "invoice_pdf_00105.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00105.pdf",
+      "bytes": 175631,
+      "sha256": "4b54915ca4102679fad411c3c09f93260738c31ce9395a9b90b523c6265b162b"
+    },
+    {
+      "invoice": "RE00106",
+      "assignment_pk": 113,
+      "original_name": "invoice_pdf_00106.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00106.pdf",
+      "bytes": 170836,
+      "sha256": "b2dd7cb7a1e6ff0053ce070d16f65f6b0b80b186f7db2cca18fe002c73d2826e"
+    },
+    {
+      "invoice": "RE00107",
+      "assignment_pk": 60,
+      "original_name": "invoice_pdf_00107.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00107.pdf",
+      "bytes": 171370,
+      "sha256": "f47cbc81d5db8b4309c3ccabf34d0f58f5d9c3a3643bc5ea777fea5507a1f224"
+    },
+    {
+      "invoice": "RE00108",
+      "assignment_pk": 61,
+      "original_name": "invoice_pdf_00108.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00108.pdf",
+      "bytes": 170959,
+      "sha256": "0cd2eb723b4ac1c796ffa27ae35faf10cd604b4c86aa9b8cb7ab201fd65a5c00"
+    },
+    {
+      "invoice": "RE00109",
+      "assignment_pk": 131,
+      "original_name": "invoice_pdf_00109.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00109.pdf",
+      "bytes": 171133,
+      "sha256": "fece334d303a58c76e4a66834cf590930069577023c37adb09e34c8e3ccfb105"
+    },
+    {
+      "invoice": "RE0011",
+      "assignment_pk": 39,
+      "original_name": "invoice_pdf_0011.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0011.pdf",
+      "bytes": 71607,
+      "sha256": "01170eb4e755fc7a2935174e705c79c90f67c3b6a645ab3603e020dd1b98a755"
+    },
+    {
+      "invoice": "RE00110",
+      "assignment_pk": 132,
+      "original_name": "invoice_pdf_00110.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00110.pdf",
+      "bytes": 75046,
+      "sha256": "3c7b826fab075027332fd006b1f7b473c5dafac3195cbdce7d235a58cc759b43"
+    },
+    {
+      "invoice": "RE00111",
+      "assignment_pk": 133,
+      "original_name": "invoice_pdf_00111.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00111.pdf",
+      "bytes": 72146,
+      "sha256": "5e49dae0cdf3c0b05b35751b57f20338cce43ce2ad1a999ff5547806fefe1ee8"
+    },
+    {
+      "invoice": "RE00112",
+      "assignment_pk": 62,
+      "original_name": "invoice_pdf_00112.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00112.pdf",
+      "bytes": 170980,
+      "sha256": "eefcf717508719d2de50532e651b480329d290517aab2f60d1726f1c40dcea46"
+    },
+    {
+      "invoice": "RE00113",
+      "assignment_pk": 63,
+      "original_name": "invoice_pdf_00113.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00113.pdf",
+      "bytes": 171138,
+      "sha256": "8581bbbfe98f7a4d7acd8a302f62c9a85b97819b3466dfdeb994e0213a48a834"
+    },
+    {
+      "invoice": "RE00114",
+      "assignment_pk": 64,
+      "original_name": "invoice_pdf_00114.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00114.pdf",
+      "bytes": 171327,
+      "sha256": "d0b66c45cee59b8ad38c5359fad0b19caae9e46425266c0a4b9f034fd2d103e5"
+    },
+    {
+      "invoice": "RE00115",
+      "assignment_pk": 65,
+      "original_name": "invoice_pdf_00115.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00115.pdf",
+      "bytes": 181365,
+      "sha256": "591050afb06fc065e4ca7046740d9e31d68ed38d16e5b17b27596a1de87132ce"
+    },
+    {
+      "invoice": "RE00116",
+      "assignment_pk": 66,
+      "original_name": "invoice_pdf_00116.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00116.pdf",
+      "bytes": 77958,
+      "sha256": "8ba6d83cc716ba13c135df156ae68ccb0fa1188cd0e384c88552509e62502752"
+    },
+    {
+      "invoice": "RE00117",
+      "assignment_pk": 67,
+      "original_name": "invoice_pdf_00117.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00117.pdf",
+      "bytes": 169917,
+      "sha256": "59b120e78028e076060b948d2ac1ec05e43c42ffde546e260607f9f4a96376cd"
+    },
+    {
+      "invoice": "RE00118",
+      "assignment_pk": 68,
+      "original_name": "invoice_pdf_00118.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00118.pdf",
+      "bytes": 78503,
+      "sha256": "28765d69c41cdc6b6af5bb789cda4082130f19339d7d2af2f18ba257fb439ef3"
+    },
+    {
+      "invoice": "RE00119",
+      "assignment_pk": 83,
+      "original_name": "invoice_pdf_00119.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00119.pdf",
+      "bytes": 172941,
+      "sha256": "24328d79f742fe5b099b269cfde950551d228d451810322bd86425613e72324d"
+    },
+    {
+      "invoice": "RE0012",
+      "assignment_pk": 40,
+      "original_name": "invoice_pdf_0012.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0012.pdf",
+      "bytes": 170441,
+      "sha256": "4757ed03e3cc012e62c54ed4e293eec083e4b4ac09cf47bdb09cb60dac6aca1c"
+    },
+    {
+      "invoice": "RE00120",
+      "assignment_pk": 84,
+      "original_name": "invoice_pdf_00120.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00120.pdf",
+      "bytes": 171615,
+      "sha256": "997fe21dff5abae119783b1a17a0bdb7edd8d2501217580c0d3bbc3293e836ec"
+    },
+    {
+      "invoice": "RE00121",
+      "assignment_pk": 85,
+      "original_name": "invoice_pdf_00121.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00121.pdf",
+      "bytes": 171307,
+      "sha256": "60b249f70fc9e1d2ba5e82cb3270624d13959425f6bcd3b7afc47235f73f3c52"
+    },
+    {
+      "invoice": "RE00122",
+      "assignment_pk": 86,
+      "original_name": "invoice_pdf_00122.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00122.pdf",
+      "bytes": 171626,
+      "sha256": "97671f9b1a51946d106eddb67b3f4c27b03773a03103c0057c579300ff01a6f2"
+    },
+    {
+      "invoice": "RE00123",
+      "assignment_pk": 87,
+      "original_name": "invoice_pdf_00123.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00123.pdf",
+      "bytes": 172162,
+      "sha256": "79d4c3a5a9b986841781beba4b9f44660a059f0a4691ee4dcd540b180e141ea9"
+    },
+    {
+      "invoice": "RE00124",
+      "assignment_pk": 88,
+      "original_name": "invoice_pdf_00124.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00124.pdf",
+      "bytes": 175065,
+      "sha256": "45928e362ca5c4f568d475401150244108f127535dc1637245110eeb70c13a22"
+    },
+    {
+      "invoice": "RE00125",
+      "assignment_pk": 89,
+      "original_name": "invoice_pdf_00125.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00125.pdf",
+      "bytes": 170855,
+      "sha256": "9c3d4430a440fadd542a7682b4760ddad671b477fc43bd1b2b25ed923191df63"
+    },
+    {
+      "invoice": "RE00126",
+      "assignment_pk": 90,
+      "original_name": "invoice_pdf_00126.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00126.pdf",
+      "bytes": 170580,
+      "sha256": "e70de6fd4ef2477e50a53845430513033f102f038a6eba215c4b6ea944483ee6"
+    },
+    {
+      "invoice": "RE00127",
+      "assignment_pk": 91,
+      "original_name": "invoice_pdf_00127.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00127.pdf",
+      "bytes": 170563,
+      "sha256": "b4383791570cf0e2dd30c6fb2f5606a6aa9185efe438a4bef0c19d88b05c4dc1"
+    },
+    {
+      "invoice": "RE00128",
+      "assignment_pk": 134,
+      "original_name": "invoice_pdf_00128.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00128.pdf",
+      "bytes": 147892,
+      "sha256": "13c7aebcb7e5d09809423b8b7c96766319cdc7c208abfee2e0e54a18ce25fc30"
+    },
+    {
+      "invoice": "RE00129",
+      "assignment_pk": 92,
+      "original_name": "invoice_pdf_00129.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00129.pdf",
+      "bytes": 184152,
+      "sha256": "33aafaa462c87356fdde9add9fe89dfc8d5a8df0b9fc909f9cdfa1ab3fc37e56"
+    },
+    {
+      "invoice": "RE0013",
+      "assignment_pk": 41,
+      "original_name": "invoice_pdf_0013.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0013.pdf",
+      "bytes": 172697,
+      "sha256": "0a141a6c48bcec96132bc6cf086a9ef9edbc23f91e20f367e41b816a33fc0d85"
+    },
+    {
+      "invoice": "RE00130",
+      "assignment_pk": 93,
+      "original_name": "invoice_pdf_00130.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00130.pdf",
+      "bytes": 170966,
+      "sha256": "d0fa6477160cc75f61b38d6733724c74fc939e1b13408efac03188a78dda2e51"
+    },
+    {
+      "invoice": "RE00131",
+      "assignment_pk": 94,
+      "original_name": "invoice_pdf_00131.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00131.pdf",
+      "bytes": 172283,
+      "sha256": "d8d9dd05115df155a727d71a9749e0e8efc8524bb9f7461424866ba6d42e18c2"
+    },
+    {
+      "invoice": "RE00132",
+      "assignment_pk": 95,
+      "original_name": "invoice_pdf_00132.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00132.pdf",
+      "bytes": 170219,
+      "sha256": "c1c34506426320c2706d346cb5a7d00bcae96474dd0b0670863becbb7cf64ff6"
+    },
+    {
+      "invoice": "RE00133",
+      "assignment_pk": 96,
+      "original_name": "invoice_pdf_00133.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00133.pdf",
+      "bytes": 169966,
+      "sha256": "060e6df33bf9af081028d428c78d3e8a232327ab71c1119673be54fe61c60ae2"
+    },
+    {
+      "invoice": "RE00134",
+      "assignment_pk": 135,
+      "original_name": "invoice_pdf_00134.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_00134.pdf",
+      "bytes": 183643,
+      "sha256": "efc2c0869df5ba8470c7e522466978e57579c22bd60f5eb4e91628fbea8571ed"
+    },
+    {
+      "invoice": "RE0014",
+      "assignment_pk": 42,
+      "original_name": "invoice_pdf_0014.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0014.pdf",
+      "bytes": 70999,
+      "sha256": "fd6aef5b3c2c5ea1bca286038139dbe15c37be1b187b9ff1d69e3ddaff9612fa"
+    },
+    {
+      "invoice": "RE0015",
+      "assignment_pk": 43,
+      "original_name": "invoice_pdf_0015.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0015.pdf",
+      "bytes": 69598,
+      "sha256": "93cfa31ba54424fc32aca3270650623a4dc5b3ff9fc520eb19b7c117cb3cdc7a"
+    },
+    {
+      "invoice": "RE0016",
+      "assignment_pk": 44,
+      "original_name": "invoice_pdf_0016.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0016.pdf",
+      "bytes": 70113,
+      "sha256": "aff25249cd000105bbcfcbad985df6ee9eef702934d8a1aae1f8d95699461b65"
+    },
+    {
+      "invoice": "RE0017",
+      "assignment_pk": 45,
+      "original_name": "invoice_pdf_0017.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0017.pdf",
+      "bytes": 69442,
+      "sha256": "a861058b5bc29edc82d5cc097a00a6d43b5ed24f9ed17fbe0a608c692fe19f44"
+    },
+    {
+      "invoice": "RE0018",
+      "assignment_pk": 46,
+      "original_name": "invoice_pdf_0018.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0018.pdf",
+      "bytes": 126016,
+      "sha256": "7b93c7347cf476783a4cd435b948d6c72c5bb0f49dac76703a24d200a436aa81"
+    },
+    {
+      "invoice": "RE0019",
+      "assignment_pk": 47,
+      "original_name": "invoice_pdf_0019.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0019.pdf",
+      "bytes": 137531,
+      "sha256": "759c20be7b82d0fc5045eb6f031b33b9855eb229e4507da16474144745a5bf23"
+    },
+    {
+      "invoice": "RE002",
+      "assignment_pk": 2,
+      "original_name": "invoice_pdf_002.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_002.pdf",
+      "bytes": 171335,
+      "sha256": "6ac9dd83c5d1137c87b9ba03d2c309d5d45c1d26af775da4f581fabffb3ffdfc"
+    },
+    {
+      "invoice": "RE0020",
+      "assignment_pk": 7,
+      "original_name": "invoice_pdf_0020.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0020.pdf",
+      "bytes": 171587,
+      "sha256": "77fe9e14ba4dc2e521b5e93957e492501e0fc1517d25ac8fd2bb07de8cf6411e"
+    },
+    {
+      "invoice": "RE0021",
+      "assignment_pk": 8,
+      "original_name": "invoice_pdf_0021.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0021.pdf",
+      "bytes": 170304,
+      "sha256": "2f2fe0f445981aba0fe48bf540dbca343465a88a28bbc8002a1779ec847aea49"
+    },
+    {
+      "invoice": "RE0022",
+      "assignment_pk": 9,
+      "original_name": "invoice_pdf_0022.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0022.pdf",
+      "bytes": 172384,
+      "sha256": "dc3f483fcdf64ad7ba5ed0097817a21e953250ab11ca2e91321aa1d6adfd2ca1"
+    },
+    {
+      "invoice": "RE0023",
+      "assignment_pk": 10,
+      "original_name": "invoice_pdf_0023.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0023.pdf",
+      "bytes": 170325,
+      "sha256": "d7a7a40aa01549407ebb4af8597983ed8c7c8a4e314b100191becc253c7f46e2"
+    },
+    {
+      "invoice": "RE0024",
+      "assignment_pk": 11,
+      "original_name": "invoice_pdf_0024.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0024.pdf",
+      "bytes": 171036,
+      "sha256": "9d12e8098f6f40f719ce6ed5324f3c5c49fcf18ff6de2f86c38cb518220b7ae8"
+    },
+    {
+      "invoice": "RE0027",
+      "assignment_pk": 71,
+      "original_name": "invoice_pdf_0027.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0027.pdf",
+      "bytes": 171441,
+      "sha256": "47ef1d19ce1a8948fc0d313979f115d8dd65b49dbd32b614c7b4d3ad7520e572"
+    },
+    {
+      "invoice": "RE0028",
+      "assignment_pk": 72,
+      "original_name": "invoice_pdf_0028.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0028.pdf",
+      "bytes": 195314,
+      "sha256": "e9fe2cc4444e64f08ef2ca6171da575d2840940732237f58d5bb3fda7a45eaa1"
+    },
+    {
+      "invoice": "RE0029",
+      "assignment_pk": 97,
+      "original_name": "invoice_pdf_0029.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0029.pdf",
+      "bytes": 170534,
+      "sha256": "9629b1a2eee18c7112fcab53b46af018a86bdb1f10d58214b2f78816ec4175b5"
+    },
+    {
+      "invoice": "RE003",
+      "assignment_pk": 3,
+      "original_name": "invoice_pdf_003.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_003.pdf",
+      "bytes": 171442,
+      "sha256": "ac1126ae65d669c924e860ed0c2107e76cea5e97fae5ce5f4af58856c6abd418"
+    },
+    {
+      "invoice": "RE0030",
+      "assignment_pk": 12,
+      "original_name": "invoice_pdf_0030.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0030.pdf",
+      "bytes": 171738,
+      "sha256": "9c5d526f7d41b2a05966d251a67e4a9965b4d828d5712f5241bbea0473556ddb"
+    },
+    {
+      "invoice": "RE0031",
+      "assignment_pk": 13,
+      "original_name": "invoice_pdf_0031.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0031.pdf",
+      "bytes": 171700,
+      "sha256": "95874a5d94b154082ee84a4647934b654e9922bd83667fcde497e59286645eb6"
+    },
+    {
+      "invoice": "RE0032",
+      "assignment_pk": 14,
+      "original_name": "invoice_pdf_0032.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0032.pdf",
+      "bytes": 171819,
+      "sha256": "4ed93959e59f80b8cd9e7ae4e38f577c8dfa8dd314811b5cc42464b334d7d591"
+    },
+    {
+      "invoice": "RE0033",
+      "assignment_pk": 15,
+      "original_name": "invoice_pdf_0033.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0033.pdf",
+      "bytes": 172119,
+      "sha256": "251dde34afa8fdcfd22def2a726f44f5a2e420544c66051df14a8a6e9240b262"
+    },
+    {
+      "invoice": "RE0034",
+      "assignment_pk": 16,
+      "original_name": "invoice_pdf_0034.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0034.pdf",
+      "bytes": 171665,
+      "sha256": "6d62221c4874820b71b2b592b3ca8b2208c6fa06e005b749555d898cfbf664ff"
+    },
+    {
+      "invoice": "RE0035",
+      "assignment_pk": 17,
+      "original_name": "invoice_pdf_0035.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0035.pdf",
+      "bytes": 170980,
+      "sha256": "8eac2db2ed1c5a590b4deb9fab0258ddb5ce83bdc40338272f619fb092c98ecb"
+    },
+    {
+      "invoice": "RE0036",
+      "assignment_pk": 18,
+      "original_name": "invoice_pdf_0036.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0036.pdf",
+      "bytes": 171113,
+      "sha256": "4d94079686d48b6d8579527d7588b6dc8a8e93029652c47f961b8f42b28afbde"
+    },
+    {
+      "invoice": "RE0037",
+      "assignment_pk": 98,
+      "original_name": "invoice_pdf_0037.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0037.pdf",
+      "bytes": 171608,
+      "sha256": "a1486f8eb5a89106267feb11c1b7a02cfa97697c3008afd8ccdb20be7886369f"
+    },
+    {
+      "invoice": "RE0038",
+      "assignment_pk": 99,
+      "original_name": "invoice_pdf_0038.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0038.pdf",
+      "bytes": 171084,
+      "sha256": "0b3bb0396adde60d0294d7c019f0ffd1fbe087c8542dc0d5383719ec46f7f585"
+    },
+    {
+      "invoice": "RE0039",
+      "assignment_pk": 19,
+      "original_name": "invoice_pdf_0039.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0039.pdf",
+      "bytes": 170724,
+      "sha256": "8ef8fe92008ce11d10d7e4e01e6d41e3273dd1cbe4d23cc927a853a14791c10a"
+    },
+    {
+      "invoice": "RE004",
+      "assignment_pk": 4,
+      "original_name": "invoice_pdf_004.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_004.pdf",
+      "bytes": 170718,
+      "sha256": "74089cdbc96285472632d8602f061c97e76e41decc570fa07545495ca2e4fe64"
+    },
+    {
+      "invoice": "RE0040",
+      "assignment_pk": 100,
+      "original_name": "invoice_pdf_0040.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0040.pdf",
+      "bytes": 170747,
+      "sha256": "7d691b647bf0fde76652c99202478b33f5e5fac3baeb20ed84e250a5d15f8461"
+    },
+    {
+      "invoice": "RE0041",
+      "assignment_pk": 20,
+      "original_name": "invoice_pdf_0041.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0041.pdf",
+      "bytes": 171331,
+      "sha256": "2f10e0ca4e1f8cf96cc7acb18858744f121165d0b4716c305507f35e0ad9461d"
+    },
+    {
+      "invoice": "RE0042",
+      "assignment_pk": 21,
+      "original_name": "invoice_pdf_0042.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0042.pdf",
+      "bytes": 126053,
+      "sha256": "452ed131e2a96f62bd406c8b768d78ea46c742fbef27bf1f27f0b81c2c4188a9"
+    },
+    {
+      "invoice": "RE0043",
+      "assignment_pk": 101,
+      "original_name": "invoice_pdf_0043.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0043.pdf",
+      "bytes": 170754,
+      "sha256": "84fb98fa88948476e2792491345ce448009b1657ae323b1391b35e60a760669c"
+    },
+    {
+      "invoice": "RE0044",
+      "assignment_pk": 102,
+      "original_name": "invoice_pdf_0044.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0044.pdf",
+      "bytes": 128171,
+      "sha256": "ed598cdc7db54548133f155d41250b18f9591882cc17c8d3e07693839bcc2ead"
+    },
+    {
+      "invoice": "RE0045",
+      "assignment_pk": 48,
+      "original_name": "invoice_pdf_0045.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0045.pdf",
+      "bytes": 67967,
+      "sha256": "8e852a4dfba9253edbf05199703ca4995519aca9d474ec0ece1306d42fb1add5"
+    },
+    {
+      "invoice": "RE0046",
+      "assignment_pk": 49,
+      "original_name": "invoice_pdf_0046.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0046.pdf",
+      "bytes": 170987,
+      "sha256": "71047b517d22d46da54e0a4a749005445859d435fad1c1688ce5f5f1f3786513"
+    },
+    {
+      "invoice": "RE0047",
+      "assignment_pk": 50,
+      "original_name": "invoice_pdf_0047.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0047.pdf",
+      "bytes": 125808,
+      "sha256": "16baa0a22b50f33ab2e795c6a1f31ab42dd5fe35a6ccb29fada1312918be6bee"
+    },
+    {
+      "invoice": "RE0048",
+      "assignment_pk": 22,
+      "original_name": "invoice_pdf_0048.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0048.pdf",
+      "bytes": 170923,
+      "sha256": "209120079a332939c79dc22f2c467e36a2fb62a75ff001b83c7e01484baa0684"
+    },
+    {
+      "invoice": "RE0049",
+      "assignment_pk": 103,
+      "original_name": "invoice_pdf_0049.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0049.pdf",
+      "bytes": 171025,
+      "sha256": "82a21b6ae4b7d8f6de49e0fad8457f60206e84eb5d0e46f67548adb70e66b8b2"
+    },
+    {
+      "invoice": "RE005",
+      "assignment_pk": 5,
+      "original_name": "invoice_pdf_005.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_005.pdf",
+      "bytes": 175091,
+      "sha256": "42b13e293e844c92077e98de7696d3db488256fc15dca24c57a9130f844b6fe8"
+    },
+    {
+      "invoice": "RE0050",
+      "assignment_pk": 23,
+      "original_name": "invoice_pdf_0050.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0050.pdf",
+      "bytes": 125795,
+      "sha256": "d0841e179768d9c165e8624e06ba22507ebb179b5b77420c38da35fc4292eca0"
+    },
+    {
+      "invoice": "RE0051",
+      "assignment_pk": 24,
+      "original_name": "invoice_pdf_0051.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0051.pdf",
+      "bytes": 125974,
+      "sha256": "24088274e99a13c60f9fe12ec1811dd001723de4ad587db63cc8f32cfc44efa4"
+    },
+    {
+      "invoice": "RE0052",
+      "assignment_pk": 25,
+      "original_name": "invoice_pdf_0052.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0052.pdf",
+      "bytes": 69783,
+      "sha256": "9eb36db42676014558776529a9ddbcb993e720fff5b649a952972108730441ac"
+    },
+    {
+      "invoice": "RE0053",
+      "assignment_pk": 26,
+      "original_name": "invoice_pdf_0053.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0053.pdf",
+      "bytes": 166316,
+      "sha256": "5e18061dd0f7a3727afcf266ef5a7469d726d3f6ba3a97953aa6c6bdf87dc535"
+    },
+    {
+      "invoice": "RE0054",
+      "assignment_pk": 104,
+      "original_name": "invoice_pdf_0054.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0054.pdf",
+      "bytes": 172901,
+      "sha256": "755c92d9c9df3808be0eef17d73efd89eea528332adea5fff7fa45b88ba4ea77"
+    },
+    {
+      "invoice": "RE0055",
+      "assignment_pk": 73,
+      "original_name": "invoice_pdf_0055.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0055.pdf",
+      "bytes": 69041,
+      "sha256": "1bedf7b6e81723a2d74a593843215c2a9007ca400bd9fe19178fdbef076c01a0"
+    },
+    {
+      "invoice": "RE0056",
+      "assignment_pk": 27,
+      "original_name": "invoice_pdf_0056.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0056.pdf",
+      "bytes": 170883,
+      "sha256": "ac85a59bc485997a455f195cc1f490d1657ac12d06a5eb23571b5ca1df797ad7"
+    },
+    {
+      "invoice": "RE0057",
+      "assignment_pk": 28,
+      "original_name": "invoice_pdf_0057.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0057.pdf",
+      "bytes": 171370,
+      "sha256": "e6c36a93ba03a16d3fa046b42cb5d21aa438744330dd7016c92e944eef7e2539"
+    },
+    {
+      "invoice": "RE0058",
+      "assignment_pk": 29,
+      "original_name": "invoice_pdf_0058.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0058.pdf",
+      "bytes": 171144,
+      "sha256": "7e056bdb940e8e6e74220a70b72c608090b43b88db17f86429ddec1dd156659f"
+    },
+    {
+      "invoice": "RE0059",
+      "assignment_pk": 30,
+      "original_name": "invoice_pdf_0059.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0059.pdf",
+      "bytes": 171625,
+      "sha256": "2f1ac9cd9e6d242144ef95d6c64a2680756e70a080f8464d4ed8ede924591c87"
+    },
+    {
+      "invoice": "RE006",
+      "assignment_pk": 6,
+      "original_name": "invoice_pdf_006.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_006.pdf",
+      "bytes": 170558,
+      "sha256": "178cb0b9bfe9e7e36d687379293f19005d7c8b28558f414b2ebbe844c526b74b"
+    },
+    {
+      "invoice": "RE0060",
+      "assignment_pk": 31,
+      "original_name": "invoice_pdf_0060.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0060.pdf",
+      "bytes": 171081,
+      "sha256": "e290787e54c70e835d9e9528aaf5bcf194eaaca911822f37257220c7051a504a"
+    },
+    {
+      "invoice": "RE0061",
+      "assignment_pk": 32,
+      "original_name": "invoice_pdf_0061.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0061.pdf",
+      "bytes": 171255,
+      "sha256": "a51eba3b2fc9896df80933c27d71c2777f0e797e38ab7b3b5972c93cfc87bd60"
+    },
+    {
+      "invoice": "RE0062",
+      "assignment_pk": 105,
+      "original_name": "invoice_pdf_0062.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0062.pdf",
+      "bytes": 170442,
+      "sha256": "f9f3822eed2f293234f701e26d25b4b87bb44645a476ef5fc77b8f3d68301ee9"
+    },
+    {
+      "invoice": "RE0063",
+      "assignment_pk": 106,
+      "original_name": "invoice_pdf_0063.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0063.pdf",
+      "bytes": 173549,
+      "sha256": "9a00efe250e5edcf06c0954badda9c1ca4d3524b3c0a3b3255318a4d0de87ba3"
+    },
+    {
+      "invoice": "RE0064",
+      "assignment_pk": 33,
+      "original_name": "invoice_pdf_0064.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0064.pdf",
+      "bytes": 170630,
+      "sha256": "349111bbae84596e7191904448d71d5a8b3817be628e16ea98e2c2ce66f06ed8"
+    },
+    {
+      "invoice": "RE0065",
+      "assignment_pk": 74,
+      "original_name": "invoice_pdf_0065.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0065.pdf",
+      "bytes": 170282,
+      "sha256": "03cc22a8cdb5aa65ba08745fa956ac0148934b9e982f48b37fdcf16c4bf7e077"
+    },
+    {
+      "invoice": "RE0066",
+      "assignment_pk": 34,
+      "original_name": "invoice_pdf_0066.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0066.pdf",
+      "bytes": 69649,
+      "sha256": "ac44029fdcebcf6d9f68db7dc2298bbd5c28767f9b62e0969a9f20cba1aaf373"
+    },
+    {
+      "invoice": "RE0067",
+      "assignment_pk": 107,
+      "original_name": "invoice_pdf_0067.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0067.pdf",
+      "bytes": 68830,
+      "sha256": "8e3ca2385c0f44bfc16d39e8e5b4f0966d51631be7a7aa60a62040ad838a4b34"
+    },
+    {
+      "invoice": "RE0068",
+      "assignment_pk": 51,
+      "original_name": "invoice_pdf_0068.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0068.pdf",
+      "bytes": 170550,
+      "sha256": "c706e9a713d300bb56b240dfc654805888084ed8f130c3f121728c6c06313358"
+    },
+    {
+      "invoice": "RE0069",
+      "assignment_pk": 52,
+      "original_name": "invoice_pdf_0069.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0069.pdf",
+      "bytes": 171098,
+      "sha256": "b74f076bbd220858ba9029835a8428a41bf3634954680562f6685ad887ad5299"
+    },
+    {
+      "invoice": "RE007",
+      "assignment_pk": 35,
+      "original_name": "invoice_pdf_007.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_007.pdf",
+      "bytes": 171711,
+      "sha256": "d0dde12e093cd39d9cd13dae6d6b4124f64da5755bf7b64eb39c1afcb070046f"
+    },
+    {
+      "invoice": "RE0070",
+      "assignment_pk": 75,
+      "original_name": "invoice_pdf_0070.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0070.pdf",
+      "bytes": 171860,
+      "sha256": "b88219e03f0fa92ea5490b7941da5283145b03627a0e75f53f03bf51167c12f9"
+    },
+    {
+      "invoice": "RE0071",
+      "assignment_pk": 76,
+      "original_name": "invoice_pdf_0071.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0071.pdf",
+      "bytes": 170849,
+      "sha256": "a451851a127535eed61874a6afedb68be8c07525c633a8b93adf1918d74af4b5"
+    },
+    {
+      "invoice": "RE0072",
+      "assignment_pk": 77,
+      "original_name": "invoice_pdf_0072.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0072.pdf",
+      "bytes": 68249,
+      "sha256": "e30a82853d4072fddf72756b54545a2732eecb6bd0f190e5b2680e794a5cb95c"
+    },
+    {
+      "invoice": "RE0073",
+      "assignment_pk": 53,
+      "original_name": "invoice_pdf_0073.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0073.pdf",
+      "bytes": 70618,
+      "sha256": "2ef40b28212d202a2e3f745fa5dbe015f3a165a374a1375f0ee091d3a0ffa0cf"
+    },
+    {
+      "invoice": "RE0074",
+      "assignment_pk": 54,
+      "original_name": "invoice_pdf_0074.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0074.pdf",
+      "bytes": 171082,
+      "sha256": "93c8d3240def2acec2ec720d9bb48220b7e7b272bacff8092859431796727e54"
+    },
+    {
+      "invoice": "RE0075",
+      "assignment_pk": 78,
+      "original_name": "invoice_pdf_0075.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0075.pdf",
+      "bytes": 170891,
+      "sha256": "3ec17b3f5b2d1ef4330e4c1c5dba72c756401683aab8532ded90471c55916d44"
+    },
+    {
+      "invoice": "RE0076",
+      "assignment_pk": 55,
+      "original_name": "invoice_pdf_0076.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0076.pdf",
+      "bytes": 127856,
+      "sha256": "437b941f7e9b42a8ac4f7738597c38a5b2c329d241548138493925b5d23705db"
+    },
+    {
+      "invoice": "RE0077",
+      "assignment_pk": 115,
+      "original_name": "invoice_pdf_0077.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0077.pdf",
+      "bytes": 171285,
+      "sha256": "073dca6be1238d21348d6b3294443fed5f92428904fe3c8ee922f1621b892a4b"
+    },
+    {
+      "invoice": "RE0078",
+      "assignment_pk": 79,
+      "original_name": "invoice_pdf_0078.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0078.pdf",
+      "bytes": 73860,
+      "sha256": "fee3b8e4bb97deddb6b63f558e5606df7c8d5d607b19ee029b57571a786bb817"
+    },
+    {
+      "invoice": "RE0079",
+      "assignment_pk": 80,
+      "original_name": "invoice_pdf_0079.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0079.pdf",
+      "bytes": 170904,
+      "sha256": "53a72e1433556843a3045a51ca3a99d6666d83c7c92de1305668d285b806df6e"
+    },
+    {
+      "invoice": "RE008",
+      "assignment_pk": 36,
+      "original_name": "invoice_pdf_008.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_008.pdf",
+      "bytes": 171222,
+      "sha256": "13579f56dd69a5d19f67961f3b1a6b5b86513a081607ae7dc54ba8e60649b54c"
+    },
+    {
+      "invoice": "RE0080",
+      "assignment_pk": 116,
+      "original_name": "invoice_pdf_0080.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0080.pdf",
+      "bytes": 72984,
+      "sha256": "03e22c57db79ff969a16042b9668bc85278757425dd7ee259c67364edb9acd89"
+    },
+    {
+      "invoice": "RE0081",
+      "assignment_pk": 117,
+      "original_name": "invoice_pdf_0081.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0081.pdf",
+      "bytes": 171230,
+      "sha256": "627716cfbf9432ae7a4f7da6acc33d8ebeb5ab51089727bb52e3e68322cbe6da"
+    },
+    {
+      "invoice": "RE0082",
+      "assignment_pk": 118,
+      "original_name": "invoice_pdf_0082.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0082.pdf",
+      "bytes": 171218,
+      "sha256": "b78b8e2c4b778e1f4c5521fc7c319dbdec4de620e1c01f7e7144a384c49ade5b"
+    },
+    {
+      "invoice": "RE0083",
+      "assignment_pk": 119,
+      "original_name": "invoice_pdf_0083.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0083.pdf",
+      "bytes": 170990,
+      "sha256": "b57a15d18797f0c07219539a80eed21433e113575eb62d07c90cd58410ae5c27"
+    },
+    {
+      "invoice": "RE0084",
+      "assignment_pk": 120,
+      "original_name": "invoice_pdf_0084.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0084.pdf",
+      "bytes": 173565,
+      "sha256": "25269c0e66a5ad229a1252fdc0502b494bbd36dd65165ed24cdf42b6c4f27c5e"
+    },
+    {
+      "invoice": "RE0085",
+      "assignment_pk": 56,
+      "original_name": "invoice_pdf_0085.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0085.pdf",
+      "bytes": 170699,
+      "sha256": "a675e578a9da627a6c165460994120f89dd747e331ff8e8b069b45b668c2d041"
+    },
+    {
+      "invoice": "RE0086",
+      "assignment_pk": 121,
+      "original_name": "invoice_pdf_0086.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0086.pdf",
+      "bytes": 126348,
+      "sha256": "b68f7732445b7543289ea28ca3265200b0ee2b75bd0ca03ba63713f015fa319a"
+    },
+    {
+      "invoice": "RE0087",
+      "assignment_pk": 122,
+      "original_name": "invoice_pdf_0087.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0087.pdf",
+      "bytes": 126393,
+      "sha256": "3bc2694c8862328afa43cbd1e3857bcb43998b553f2317ec505fc8db58c41006"
+    },
+    {
+      "invoice": "RE0088",
+      "assignment_pk": 123,
+      "original_name": "invoice_pdf_0088.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0088.pdf",
+      "bytes": 126475,
+      "sha256": "41612ba1d74aedbb129056bf1fab468b81a27303a2b5a24f8dbee5df4bb6b304"
+    },
+    {
+      "invoice": "RE0089",
+      "assignment_pk": 124,
+      "original_name": "invoice_pdf_0089.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0089.pdf",
+      "bytes": 175858,
+      "sha256": "c89fd2bf43aebfeebea883daf00c7f33572f590223a7321263cc576b65d8c1a5"
+    },
+    {
+      "invoice": "RE009",
+      "assignment_pk": 37,
+      "original_name": "invoice_pdf_009.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_009.pdf",
+      "bytes": 170443,
+      "sha256": "d64636e62d9e5a7bc61b9b11476b4ca35087e7c3bc0d55c77c58025c0dd495d7"
+    },
+    {
+      "invoice": "RE0090",
+      "assignment_pk": 125,
+      "original_name": "invoice_pdf_0090.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0090.pdf",
+      "bytes": 127240,
+      "sha256": "0ca93c3a1b06ecf815a3e95656685ecf47e4be9aa325ce5f9df96ed4819159b9"
+    },
+    {
+      "invoice": "RE0091",
+      "assignment_pk": 108,
+      "original_name": "invoice_pdf_0091.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0091.pdf",
+      "bytes": 171345,
+      "sha256": "41feaae4c646239c820d21ffce147ac89f4bf6456a45efe78320dd5d602ff2c1"
+    },
+    {
+      "invoice": "RE0092",
+      "assignment_pk": 57,
+      "original_name": "invoice_pdf_0092.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0092.pdf",
+      "bytes": 128099,
+      "sha256": "6eac72b4b9805ed1ea91179f6e66ee13d88f81fd84419178ad2fb7a684b6a3ea"
+    },
+    {
+      "invoice": "RE0093",
+      "assignment_pk": 109,
+      "original_name": "invoice_pdf_0093.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0093.pdf",
+      "bytes": 171883,
+      "sha256": "0465038221e6e9ae09e2fe0f1f9540a3afdabed2670c83e50fd717a1ccf83277"
+    },
+    {
+      "invoice": "RE0094",
+      "assignment_pk": 110,
+      "original_name": "invoice_pdf_0094.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0094.pdf",
+      "bytes": 126982,
+      "sha256": "96432de31f4c10843e242c94659f98e9bad93c02fc151341dc05f777eb6b9d4a"
+    },
+    {
+      "invoice": "RE0095",
+      "assignment_pk": 126,
+      "original_name": "invoice_pdf_0095.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0095.pdf",
+      "bytes": 176573,
+      "sha256": "89d1eebe4aa2d6190f1f3965cfe8a6f15d9147ddf604c4a015cca2c6ebb3e049"
+    },
+    {
+      "invoice": "RE0096",
+      "assignment_pk": 127,
+      "original_name": "invoice_pdf_0096.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0096.pdf",
+      "bytes": 171142,
+      "sha256": "8c60d884016369812d213df17d2dd895bfa5e73369a962999be0881337827855"
+    },
+    {
+      "invoice": "RE0097",
+      "assignment_pk": 58,
+      "original_name": "invoice_pdf_0097.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0097.pdf",
+      "bytes": 166329,
+      "sha256": "3e37f14db41bd0ab071ff463965d2e874516275ad18d2dbac6f086a00f364d23"
+    },
+    {
+      "invoice": "RE0098",
+      "assignment_pk": 128,
+      "original_name": "invoice_pdf_0098.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0098.pdf",
+      "bytes": 171884,
+      "sha256": "8f54fc1d7bd9bec175d205f806547de8222bae3cbf73621930d2539b8a72c104"
+    },
+    {
+      "invoice": "RE0099",
+      "assignment_pk": 81,
+      "original_name": "invoice_pdf_0099.pdf",
+      "stored_as": "legacy/2026/08/invoice_pdf_0099.pdf",
+      "bytes": 170723,
+      "sha256": "d91bf4ffd6212945845fcc60cb8fc11d5452e840b9d9656a219651277780b3c3"
+    }
+  ],
+  "skipped_already_present": [],
+  "unmatched": [
+    {
+      "file": "invoice_pdf_001.pdf",
+      "reason": "no invoice numbered RE001 or RN001"
+    },
+    {
+      "file": "invoice_pdf_00187.pdf",
+      "reason": "no invoice numbered RE00187 or RN00187"
+    }
+  ],
+  "ambiguous": []
+}

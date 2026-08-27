@@ -1,0 +1,197 @@
+{% load humanize %}<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ master.invoice_number }}</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+
+    body { font-family: "Segoe UI", "DejaVu Sans", sans-serif; color: #000; font-size: 9.5pt; margin: 0; }
+    table { width: 100%; border-collapse: collapse; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Branch banner — the dark bar the legacy invoice opens with. */
+    .banner { background: #2c3e50; color: #fff; text-align: center; padding: 7px 16px; }
+    .banner .lbl { display: block; font-size: 7pt; letter-spacing: .18em; text-transform: uppercase; opacity: .75; }
+    .banner .name { font-size: 12pt; font-weight: 600; letter-spacing: .05em; }
+
+    .head { display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid #666; padding: 12px 0 10px; margin-bottom: 14px; }
+    .head img { max-height: 54px; max-width: 150px; }
+    .inv-no { text-align: right; }
+    .inv-no .lbl { font-size: 7.5pt; letter-spacing: .1em; text-transform: uppercase; color: #555; }
+    .inv-no .val { font-size: 19pt; font-weight: 700; }
+
+    .party { width: 100%; margin-bottom: 14px; }
+    .party td { padding: 3px 0; vertical-align: bottom; }
+    .party .k { font-weight: 700; width: 78px; white-space: nowrap; }
+    .party .v { border-bottom: 1px solid #999; padding-right: 14px; }
+
+    .lines th { border: 1px solid #888; padding: 5px 6px; background: #f2f2f2; font-size: 8pt;
+                text-transform: uppercase; letter-spacing: .03em; }
+    .lines td { border: 1px solid #777; padding: 5px 6px; }
+    .lines tbody tr:nth-child(even) td { background: #fafafa; }
+    .lines tfoot td { border: 1px solid #777; border-top: 2px solid #000; font-weight: 700; background: #f2f2f2; }
+
+    .lower { display: flex; gap: 22px; margin-top: 18px; }
+    .lower .left { flex: 1.15; }
+    .lower .right { flex: 1; }
+
+    .summary td { border: 1px solid #777; padding: 5px 10px; }
+    .summary td:first-child { font-weight: 600; width: 52%; }
+    .summary .grand td { font-weight: 700; font-size: 10.5pt; }
+    .summary .owed td { background: #f2f2f2; }
+
+    .sig { text-align: center; margin-top: 14px; }
+    .sig .who { font-weight: 700; min-height: 12pt; }
+    .sig .line { border-bottom: 1px solid #000; margin: 16px auto 4px; width: 82%; }
+    .sig .role { font-size: 8pt; }
+
+    .box { border: 1px solid #777; padding: 7px 9px; margin: 4px 0 12px; font-size: 8.5pt; line-height: 1.45; }
+    .box-h { font-weight: 700; font-size: 8.5pt; }
+
+    .void { border: 2px solid #000; padding: 8px 10px; margin-bottom: 12px; font-weight: 700; text-align: center;
+            letter-spacing: .08em; text-transform: uppercase; }
+    .void-note { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 8.5pt; display: block; margin-top: 3px; }
+
+    .copy { text-align: right; font-style: italic; margin-top: 14px; font-size: 8.5pt; }
+  </style>
+</head>
+<body>
+
+  <div class="banner">
+    <span class="lbl">Branch / Location</span>
+    <span class="name">{% if location %}{{ location.name }}{% else %}&mdash;{% endif %}</span>
+  </div>
+
+  <div class="head">
+    <div>
+      {% if location and location.logo %}<img src="{{ location.logo.path }}" alt="">{% endif %}
+    </div>
+    <div class="inv-no">
+      <div class="lbl">Invoice No.</div>
+      <div class="val">{{ master.invoice_number }}</div>
+    </div>
+  </div>
+
+  {% if is_void %}
+  <div class="void">
+    This invoice has been cancelled
+    <span class="void-note">Retained for reference only. No payment is due against this document.</span>
+  </div>
+  {% endif %}
+
+  <table class="party">
+    <tr>
+      <td class="k">Name:</td><td class="v">{{ reseller.name }}</td>
+      <td class="k">Res No.:</td><td class="v">{{ reseller.legacy_id|default:reseller.reference_code }}</td>
+    </tr>
+    <tr>
+      <td class="k">Address:</td><td class="v">{{ reseller.address|default:"" }}</td>
+      <td class="k">Date:</td><td class="v">{{ master.created_at|date:"d-M-Y" }}</td>
+    </tr>
+    <tr>
+      <td class="k">Email/Phone:</td>
+      <td class="v" colspan="3">{{ reseller.email|default:"" }}{% if reseller.email and reseller.contact %} &middot; {% endif %}{{ reseller.contact|default:"" }}</td>
+    </tr>
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>Product Description</th>
+        <th>Supplier Product Code</th>
+        <th>PJ Number</th>
+        <th>Sold Qty</th>
+        <th>Net Weight</th>
+        <th>Weight Unit</th>
+        {% if show_per_gram %}<th class="num">Price Per Gram</th>{% endif %}
+        <th class="num">Unit Price</th>
+        <th class="num">Final Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.n }}</td>
+        <td>{{ r.product_name }}</td>
+        <td>{{ r.product_code|default:"&mdash;" }}</td>
+        <td>{{ r.barcode }}</td>
+        <td>{{ r.qty }}</td>
+        <td>{% if r.net_weight %}{{ r.net_weight|floatformat:3 }}{% else %}&mdash;{% endif %}</td>
+        <td>{{ r.weight_unit }}</td>
+        {% if show_per_gram %}<td class="num">{% if r.metal_rate %}{{ r.metal_rate|floatformat:2 }}{% else %}&mdash;{% endif %}</td>{% endif %}
+        <td class="num">PHP {{ r.unit_price|floatformat:2|intcomma }}</td>
+        <td class="num">PHP {{ r.line_total|floatformat:2|intcomma }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="{% if show_per_gram %}10{% else %}9{% endif %}">No items on this invoice.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="{% if show_per_gram %}9{% else %}8{% endif %}">{{ rows|length }} piece{{ rows|length|pluralize }}</td>
+        <td class="num">PHP {{ subtotal|floatformat:2|intcomma }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="lower">
+    <div class="left">
+      <div class="sig">
+        <div class="who">{{ reseller.name }}</div>
+        <div class="line"></div>
+        <div class="role">Customer's Signature</div>
+      </div>
+      <div class="sig">
+        <div class="who">&nbsp;</div>
+        <div class="line"></div>
+        <div class="role">Sales Representative Signature</div>
+      </div>
+      <div class="sig">
+        <div class="who">&nbsp;</div>
+        <div class="line"></div>
+        <div class="role">Stockman Signature</div>
+      </div>
+      <div class="sig">
+        <div class="who">&nbsp;</div>
+        <div class="line"></div>
+        <div class="role">Cashier Signature</div>
+      </div>
+    </div>
+
+    <div class="right">
+      <table class="summary">
+        <tr><td>Subtotal</td><td class="num">PHP {{ subtotal|floatformat:2|intcomma }}</td></tr>
+        <tr><td>Tax / VAT</td><td class="num">PHP 0.00</td></tr>
+        <tr class="grand"><td>Total Amt. Due</td><td class="num">PHP {{ subtotal|floatformat:2|intcomma }}</td></tr>
+        <tr><td>Amount Paid</td><td class="num">PHP {{ paid|floatformat:2|intcomma }}</td></tr>
+        <tr class="owed">
+          <td><b>Balance</b></td>
+          <td class="num"><b>{% if is_void %}Cancelled{% elif balance > 0 %}PHP {{ balance|floatformat:2|intcomma }}{% else %}Paid in full{% endif %}</b></td>
+        </tr>
+      </table>
+
+      <div class="box-h" style="margin-top:12px;">Remarks:</div>
+      <div class="box">
+        Payment is due from date of issue.<br>
+        Payment can be made via cash or bank transfer.<br>
+        Please include your invoice number. Thank you.
+      </div>
+
+      <div class="box-h">Important Attachments:</div>
+      <div class="box">
+        1. Proof of Payment Screenshot<br>
+        2. Picture of released item<br>
+        3. Cashier inbound validation<br>
+        4. Stamp Carmela / PY number<br>
+        5. PakiPay transaction number
+      </div>
+    </div>
+  </div>
+
+  <div class="copy">Office Copy</div>
+
+</body>
+</html>

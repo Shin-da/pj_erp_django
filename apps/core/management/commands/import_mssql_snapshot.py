@@ -40,7 +40,13 @@ from apps.core.models import AuditLogEntry
 from apps.locations.models import Location, LocationType
 from apps.catalogue.models import Category, Currency, Metal, Purity, Supplier, ProductMaster
 from apps.inventory.models import ProductItem, StockStatus
-from apps.assignment.models import AssignmentMaster, AssignmentLine, Reseller, InvoiceStatus
+from apps.assignment.models import (
+    AssignmentMaster,
+    AssignmentLine,
+    InvoiceStatus,
+    Reseller,
+    ResellerLocation,
+)
 from apps.payments.models import ResellerPayment, SupplierPayment
 from apps.returns.models import ReturnRecord, ReserveAlert
 from apps.transfers.models import TransferLine, Transfer
@@ -57,6 +63,7 @@ WANTED = {
     "tblproduct_master",
     "tblproduct_detail_master",
     "tblResellerMaster",
+    "tblresellerlocationMaster",
     "tblProductAssignMaster",
     "tblProductAssign",
     "tblAssignPayment_transaction",
@@ -278,6 +285,7 @@ class Command(BaseCommand):
                 location_by_nid,
             )
             reseller_by_nid = self._import_resellers(rows("tblResellerMaster"))
+            reseller_location_by_nid = self._import_reseller_locations(rows("tblresellerlocationMaster"))
             if not opts["skip_assignments"]:
                 master_by_nid = self._import_assignments(
                     rows("tblProductAssignMaster"),
@@ -287,6 +295,7 @@ class Command(BaseCommand):
                     reseller_by_nid,
                     item_by_detail_nid,
                     item_by_barcode,
+                    reseller_location_by_nid,
                 )
             else:
                 master_by_nid = {}
@@ -326,6 +335,11 @@ class Command(BaseCommand):
         Category.objects.all().delete()
         Currency.objects.all().delete()
         Reseller.objects.all().delete()
+        # ResellerGroup is deliberately NOT flushed — groups are authored
+        # in this system, not imported, so a re-import must not wipe them.
+        # (Their members' group FK is nullable and re-import will clear it;
+        # regrouping is manual until tblGroupmaster is mapped.)
+        ResellerLocation.objects.all().delete()
         Location.all_objects.all().delete()
 
     def _import_locations(self, locs):
@@ -458,6 +472,13 @@ class Command(BaseCommand):
                 gross_weight=as_dec(row.get("gross_wt")),
                 purchase_price=as_dec(row.get("purchase_price")) or as_dec(row.get("actual_price")),
                 selling_price=as_dec(row.get("selling_price")),
+                # Rates the printed invoice multiplies by — see
+                # ProductMaster.effective_rate. A missing Converte_rate
+                # means 1, matching the legacy ISNULL(...,1).
+                metal_rate=as_dec(row.get("metalrate")),
+                convert_rate=as_dec(row.get("Converte_rate")) or Decimal("1"),
+                update_convert_rate=as_dec(row.get("update_convert_rate")),
+                rate_change_status=as_str(row.get("ratechange_status"))[:20],
                 is_active=is_active_flag(row),
             ))
             nids.append(nid)
@@ -503,6 +524,29 @@ class Command(BaseCommand):
         ))
         return item_by_detail_nid, item_by_barcode
 
+    def _import_reseller_locations(self, locations):
+        """
+        `tblresellerlocationMaster` — the branch banner and logo printed
+        at the top of a legacy invoice. The logo column holds a path into
+        the legacy web tree; only the filename is kept here, because the
+        file itself is copied separately by `import_legacy_documents`.
+        """
+        by_nid = {}
+        for row in locations:
+            nid = row["nid"]
+            obj, _ = ResellerLocation.objects.update_or_create(
+                legacy_id=nid,
+                defaults={
+                    "name": (as_str(row.get("locationname")) or f"Location {nid}")[:150],
+                    "remarks": as_str(row.get("remarks"))[:200],
+                    "is_active": is_active_flag(row),
+                },
+            )
+            by_nid[nid] = obj
+            by_nid[str(nid)] = obj
+        self.stdout.write(self.style.SUCCESS(f"  Reseller locations: {len(locations)}"))
+        return by_nid
+
     def _import_resellers(self, resellers):
         by_nid = {}
         for row in resellers:
@@ -513,6 +557,14 @@ class Command(BaseCommand):
                 defaults={
                     "name": name[:150],
                     "is_active": is_active_flag(row),
+                    # Printed on the invoice. The company_* columns are
+                    # the business-facing set and the plain ones the
+                    # personal set; prefer company, fall back, so an
+                    # invoice addressed to a shop shows the shop.
+                    "address": (as_str(row.get("company_address")) or as_str(row.get("address")))[:255],
+                    "contact": (as_str(row.get("cnumber")) or as_str(row.get("contact")))[:100],
+                    "email": (as_str(row.get("cemailid")) or as_str(row.get("email")))[:150],
+                    "legacy_id": nid,
                 },
             )
             by_nid[nid] = obj
@@ -523,7 +575,9 @@ class Command(BaseCommand):
     def _import_assignments(
         self, masters, lines, barcode_logs, details,
         reseller_by_nid, item_by_detail_nid, item_by_barcode,
+        reseller_location_by_nid=None,
     ):
+        reseller_location_by_nid = reseller_location_by_nid or {}
         logs_by_assign = {}
         for row in barcode_logs:
             aid = as_int(row.get("assign_detail_id"))
@@ -550,6 +604,8 @@ class Command(BaseCommand):
             is_reserve = inv.upper().startswith("RN") or as_str(row.get("invoice_name")).upper().startswith("RN")
             am = AssignmentMaster(
                 reseller=reseller,
+                # Which branch banner and logo the printed invoice carried.
+                reseller_location=reseller_location_by_nid.get(as_int(row.get("reseller_locationid"))),
                 is_reserve=is_reserve,
                 invoice_status=map_invoice_status(row),
                 invoice_number=inv[:32],

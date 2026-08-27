@@ -13,4 +13,6 @@ urlpatterns = [
     path("invoices/item-lookup/", views.item_lookup, name="item_lookup"),
     path("invoices/<int:pk>/", views.invoice_list, name="invoice_detail"),
     path("invoices/<int:pk>/stamp/", views.invoice_stamp, name="invoice_stamp"),
+    path("invoices/<int:pk>/pdf/", views.invoice_pdf, name="invoice_pdf"),
+    path("invoices/<int:pk>/preview/", views.invoice_pdf_preview, name="invoice_pdf_preview"),
 ]

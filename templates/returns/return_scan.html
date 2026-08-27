@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Returns</h1>
+    <p>Scan pieces coming back in. Each one is checked against what the system thinks it is before you choose what happens to it — and the whole batch is processed together, so nothing is half-applied.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'assignment:invoice_list' %}" class="btn btn-ghost"><i class="fa-solid fa-file-invoice"></i> Invoices</a>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="margin-bottom:16px; {% if message.tags == 'error' %}border-color:var(--danger); color:var(--danger);{% else %}border-color:var(--ok); color:var(--ok);{% endif %}">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<div class="ret-grid">
+
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:8px;">Scan or paste barcodes</div>
+    <textarea id="retInput" rows="10" class="field" data-lookup-url="{% url 'returns:item_lookup' %}"
+      style="width:100%; font-family:var(--font-sans); resize:vertical;"
+      placeholder="One per line, or comma separated. Each barcode is looked up as you go."></textarea>
+    <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+      <button type="button" class="btn btn-primary btn-sm" id="retResolve"><i class="fa-solid fa-magnifying-glass"></i> Look up</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="retClear">Clear</button>
+      <span id="retBusy" class="cell-muted" style="display:none; font-size:11.5px;"><i class="fa-solid fa-spinner fa-spin"></i> Checking…</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:8px;">Set every eligible row to</div>
+    <div class="seg" id="retBulkSeg" style="flex-wrap:wrap;">
+      {% for value, label in outcomes %}
+      <button type="button" data-outcome="{{ value }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+    <p class="cell-muted" style="font-size:11.5px; margin-top:10px;">Rows that can't take an outcome are skipped — a reserved piece can only be returned to stock, not marked sold.</p>
+
+    <div class="ret-counts" style="margin-top:16px;">
+      <div><span class="n" id="retCountReady">0</span><span class="l">ready</span></div>
+      <div><span class="n" id="retCountBlocked">0</span><span class="l">can't return</span></div>
+    </div>
+  </div>
+</div>
+
+<form method="post" action="{% url 'returns:process_returns' %}" id="retForm">
+  {% csrf_token %}
+  <div class="table-wrap" style="margin-top:16px;">
+    <div class="table-scroll">
+      <table id="retTable">
+        <thead>
+          <tr>
+            <th>Barcode</th>
+            <th>Product</th>
+            <th>Currently</th>
+            <th>Out with</th>
+            <th>Invoice</th>
+            <th>Outcome</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="retRows">
+          <tr id="retEmpty"><td colspan="7" class="cell-muted">Nothing scanned yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="cell-muted" id="retFootNote">Scan some barcodes to begin.</div>
+      <button type="submit" class="btn btn-primary" id="retSubmit" disabled>Process returns</button>
+    </div>
+  </div>
+</form>
+
+<div class="section-heading" style="margin-top:32px;"><span class="tag">Recently processed</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Outcome</th>
+          <th>Was on</th>
+          <th>By</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' r.item.barcode %}">{{ r.item.barcode }}</a></td>
+          <td>{{ r.item.product.name }}</td>
+          <td>
+            {% if r.outcome == "RETURN" %}<span class="pill pill-ok">Returned to stock</span>
+            {% elif r.outcome == "SOLD" %}<span class="pill pill-neutral">Confirmed sold</span>
+            {% elif r.outcome == "RESERVE" %}<span class="pill pill-warn">Moved to reserve</span>
+            {% else %}<span class="pill pill-info">{{ r.get_outcome_display }}</span>
+            {% endif %}
+          </td>
+          <td class="mono cell-muted">{% if r.assignment_line %}{{ r.assignment_line.master.invoice_number }}{% else %}—{% endif %}</td>
+          <td class="cell-muted">{% if r.processed_by %}{{ r.processed_by.get_short_name|default:r.processed_by.employee_code }}{% else %}—{% endif %}</td>
+          <td class="cell-muted">{{ r.created_at|date:"M j, Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="cell-muted">No returns processed yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .ret-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; }
+  @media(max-width:900px){ .ret-grid{ grid-template-columns:1fr; } }
+
+  .ret-counts { display:flex; gap:24px; }
+  .ret-counts .n { font-size:24px; font-weight:700; line-height:1; display:block; }
+  .ret-counts .l { font-size:10.5px; color:var(--text-muted); }
+
+  #retTable tr.is-blocked { opacity:.62; }
+  #retTable tr.is-blocked td { background:var(--neutral-bg); }
+  .ret-remove { background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:13px; padding:2px 6px; }
+  .ret-remove:hover { color:var(--danger); }
+</style>
+
+<script>
+  window.RETURNS_OUTCOMES = {{ outcomes_json|safe }};
+</script>
+<script src="{% static 'core/js/returns.js' %}"></script>
+
+{% endblock %}

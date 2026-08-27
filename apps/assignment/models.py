@@ -97,6 +97,40 @@ class ResellerGroup(TimeStampedModel):
         return f"{self.name} ({self.code})"
 
 
+class ResellerLocation(TimeStampedModel):
+    """
+    Replaces `tblresellerlocationMaster` — the reseller-side "branch" an
+    invoice is issued under (L'ESPÉRANCE, ONELIVE, RDR, LuxeTrust…).
+
+    Still NOT `locations.Location`: that is a *company* site where stock
+    physically sits. This is whose banner and logo appear at the top of
+    the printed invoice. The legacy schema kept the two apart and so does
+    this (INVENTORY-AND-INVOICING.md §2).
+
+    `logo` is the file `tblresellerlocationMaster.invoicelogo` pointed at,
+    migrated across from `Documents/GroupImages/`. Without it a rendered
+    invoice is unbranded, which is the single most visible difference
+    between a real invoice and a printout.
+    """
+
+    name = models.CharField(max_length=150)
+    remarks = models.CharField(max_length=200, blank=True)
+    # FileField, not ImageField: ImageField needs Pillow purely to
+    # validate dimensions, and nothing here cares about dimensions.
+    logo = models.FileField(upload_to="reseller_logos/", blank=True)
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblresellerlocationMaster.nid — how imported invoices find their banner.",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Reseller(TimeStampedModel):
     """Replaces `tblresellermaster`. Deliberately NOT the same concept as
     `locations.Location` — see INVENTORY-AND-INVOICING.md §2: "Company
@@ -106,6 +140,21 @@ class Reseller(TimeStampedModel):
 
     name = models.CharField(max_length=150)
     reference_code = models.CharField(max_length=50, blank=True)
+
+    # Printed on the invoice, under Name / Address / Email-Phone. All three
+    # exist on tblResellerMaster and were simply not carried across on the
+    # first import pass.
+    address = models.CharField(max_length=255, blank=True)
+    contact = models.CharField(max_length=100, blank=True)
+    email = models.CharField(max_length=150, blank=True)
+
+    # The legacy invoice prints this as "Res No." — it is nothing more
+    # than tblResellerMaster.nid shown to the customer as a reference.
+    # Kept so a reissued invoice matches the one they already hold.
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text='tblResellerMaster.nid. Printed on invoices as "Res No.".',
+    )
     group = models.ForeignKey(
         ResellerGroup,
         null=True,
@@ -192,6 +241,10 @@ class AssignmentMaster(SoftDeleteModel):
     display_slot = models.ForeignKey(
         DisplaySlot, null=True, blank=True, on_delete=models.SET_NULL, related_name="assignments",
         help_text="Optional — only if this reseller has a physical display slot allotted (see class docstring).",
+    )
+    reseller_location = models.ForeignKey(
+        ResellerLocation, null=True, blank=True, on_delete=models.SET_NULL, related_name="assignments",
+        help_text="Which reseller branch this was issued under — drives the invoice banner and logo. Legacy tblProductAssignMaster.reseller_locationid.",
     )
     is_reserve = models.BooleanField(
         default=False, help_text="Reserve-path assignment (legacy RN00 prefix) vs. normal reseller assignment (RE00)."
