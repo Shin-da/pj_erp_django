@@ -1,16 +1,183 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>{% block title %}Perfect Jewel ERP{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
-    a { color: #1a5fb4; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; max-width: 480px; }
-  </style>
-</head>
-<body>
-  {% block content %}{% endblock %}
-</body>
-</html>
+{% extends "skeleton.html" %}
+{% load static %}
+{% block body %}
+<div class="app-shell" id="appShell">
+  <div class="sb-backdrop" id="sbBackdrop"></div>
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo">
+      <div class="mark">PJ</div>
+      <div>
+        <div class="name">Perfect Jewelry</div>
+        <div class="sub">Enterprise System</div>
+      </div>
+    </div>
+
+    <div class="sb-scroll">
+      <div class="sb-section">
+        <a href="{% url 'core:home' %}" title="Dashboard"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'home' %} active{% endif %}">
+          <i class="fa-solid fa-chart-simple"></i> <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="{% url 'catalogue:product_list' %}" title="Products"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'catalogue' %} active{% endif %}">
+          <i class="fa-solid fa-gem"></i> <span class="nav-label">Products</span>
+        </a>
+        <a href="{% url 'inventory:location_list' %}" title="Stock by Location"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'inventory' %} active{% endif %}">
+          <i class="fa-solid fa-boxes-stacked"></i> <span class="nav-label">Stock by Location</span>
+        </a>
+        <a href="{% url 'assignment:group_list' %}" title="Resellers"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'assignment' and request.resolver_match.url_name in 'group_list,group_detail,client_detail' %} active{% endif %}">
+          <i class="fa-solid fa-users"></i> <span class="nav-label">Resellers</span>
+        </a>
+        <a href="{% url 'assignment:invoice_list' %}" title="Invoices"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'assignment' and request.resolver_match.url_name in 'invoice_list,invoice_detail' %} active{% endif %}">
+          <i class="fa-solid fa-file-invoice"></i> <span class="nav-label">Invoices</span>
+        </a>
+        <a href="{% url 'tracker:scan' %}" title="Product Tracker"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'tracker' %} active{% endif %}">
+          <i class="fa-solid fa-barcode"></i> <span class="nav-label">Product Tracker</span>
+        </a>
+        <a href="{% url 'hardware:print_labels' %}" title="Tag Printing"
+          class="nav-item top-level{% if request.resolver_match.app_name == 'hardware' %} active{% endif %}">
+          <i class="fa-solid fa-tag"></i> <span class="nav-label">Tag Printing</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- <div class="sb-foot">
+      <div class="sb-foot-user">
+        <div class="u-avatar">S</div>
+        <div>
+          <div class="u-name">Shin D.</div>
+          <div class="u-role">Administrator</div>
+        </div>
+      </div>
+    </div> -->
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu"><i class="fa-solid fa-bars"></i></button>
+
+      <div class="topbar-left">
+          <div class="crumbs" id="crumbs">Dashboard</div>
+          <span class="db-badge {% if db_is_prod %}prod{% else %}dev{% endif %}" title="{{ db_name }}">
+            {% if db_is_prod %}PROD SNAPSHOT{% else %}DEV{% endif %}
+          </span>
+      </div>
+
+      <div class="topbar-search">
+        <div class="search-box" data-suggest-url="{% url 'core:search_suggest' %}" data-search-url="{% url 'core:search' %}">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" autocomplete="off" spellcheck="false" placeholder="Search barcode, product, location…">
+          <kbd>/</kbd>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme">
+          <i class="fa-solid fa-moon"></i>
+          <i class="fa-solid fa-sun"></i>
+        </button>
+
+        <div class="menu-wrap" data-menu>
+          <button class="icon-btn" data-menu-trigger aria-label="Notifications">
+            <i class="fa-regular fa-bell"></i>
+            <span class="badge"></span>
+          </button>
+          <div class="dropdown notif">
+            <div class="dropdown-head"
+              style="display:flex;align-items:center;justify-content:space-between;border-bottom:none;margin-bottom:2px;">
+              <span class="n" style="font-weight:600;">Notifications</span>
+              <span style="font-size:10.5px;color:var(--brand-strong);font-weight:700;">3 new</span>
+            </div>
+            <div class="notif-list">
+              <div class="notif-row">
+                <div class="notif-dot-wrap">
+                  <div class="notif-dot"></div>
+                </div>
+                <div class="notif-icon" style="background:var(--ok-bg);color:var(--ok);"><i
+                    class="fa-solid fa-circle-check"></i></div>
+                <div class="notif-body">
+                  <div class="t">Invoice <b>INV-004821</b> was marked paid in full.</div>
+                  <div class="m">6 minutes ago</div>
+                </div>
+              </div>
+              <div class="notif-row">
+                <div class="notif-dot-wrap">
+                  <div class="notif-dot"></div>
+                </div>
+                <div class="notif-icon" style="background:var(--warn-bg);color:var(--warn);"><i
+                    class="fa-solid fa-triangle-exclamation"></i></div>
+                <div class="notif-body">
+                  <div class="t">3 barcodes came back <b>Not Found</b> on today's tracker scan.</div>
+                  <div class="m">42 minutes ago</div>
+                </div>
+              </div>
+              <div class="notif-row">
+                <div class="notif-dot-wrap">
+                  <div class="notif-dot"></div>
+                </div>
+                <div class="notif-icon" style="background:var(--info-bg);color:var(--info);"><i
+                    class="fa-solid fa-hand-holding-dollar"></i></div>
+                <div class="notif-body">
+                  <div class="t">Supplier payment to <b>Alden Gems Co.</b> is awaiting approval.</div>
+                  <div class="m">1 hour ago</div>
+                </div>
+              </div>
+              <div class="notif-row read">
+                <div class="notif-dot-wrap">
+                  <div class="notif-dot"></div>
+                </div>
+                <div class="notif-icon" style="background:var(--neutral-bg);color:var(--neutral);"><i
+                    class="fa-solid fa-right-left"></i></div>
+                <div class="notif-body">
+                  <div class="t">Transfer #TR-1182 completed — Main Branch → SM Fairview.</div>
+                  <div class="m">Yesterday</div>
+                </div>
+              </div>
+            </div>
+            <div class="dropdown-foot"><a href="#">View all notifications</a></div>
+          </div>
+        </div>
+
+        <div class="menu-wrap" data-menu>
+          <button class="menu-trigger" data-menu-trigger>
+            <div class="avatar">{{ user.employee_code|slice:":1"|upper }}</div>
+            <div class="u-meta">
+              <div class="n">{{ user.get_full_name|default:user.employee_code }}</div>
+              <div class="r">{{ user.employee_code }}</div>
+            </div>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div class="dropdown">
+            <div class="dropdown-head">
+              <div class="n">{{ user.get_full_name|default:user.employee_code }}</div>
+              <div class="e">{{ user.email|default:"No email on file" }}</div>
+            </div>
+            <button class="dropdown-item"><i class="fa-solid fa-user"></i> My Profile</button>
+            <button class="dropdown-item"><i class="fa-solid fa-key"></i> Change Password</button>
+            <button class="dropdown-item"><i class="fa-solid fa-gear"></i> Preferences</button>
+            <div class="dropdown-divider"></div>
+            <form method="post" action="{% url 'accounts:logout' %}" style="margin:0;">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item danger">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </header>
+    <div class="content" id="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'core/js/base.js' %}"></script>
+<script src="{% static 'core/js/search.js' %}"></script>
+{% endblock %}

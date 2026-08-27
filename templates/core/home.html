@@ -1,9 +1,383 @@
 {% extends "base.html" %}
+{% load humanize %}
+{% block title %}Dashboard — Perfect Jewel ERP{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>Perfect Jewel ERP</h1>
-  <p>Signed in as <strong>{{ user.employee_code }}</strong> ({{ user.get_full_name }}).</p>
-  <p>Rebuild scaffold — <code>inventory</code> and <code>tracker</code> apps are live in Django admin.</p>
-  <p><a href="{% url 'admin:index' %}">Open admin</a> &middot; <a href="{% url 'accounts:logout' %}">Log out</a></p>
+
+<div class="page-head">
+  <div>
+    <h1>{{ greeting }}, {{ user.get_short_name }}</h1>
+    <p>{{ today_label }} · {{ total_items|intcomma }} tagged pieces in this catalog.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-gem"></i> Products</a>
+    <a href="{% url 'assignment:group_list' %}" class="btn btn-ghost"><i class="fa-solid fa-users"></i> Resellers</a>
+  </div>
 </div>
+
+<div class="section-heading"><span class="tag">Inventory</span></div>
+<div class="kpi-grid">
+  <a href="{% url 'catalogue:product_list' %}" class="kpi-card kpi-link">
+    <div class="kpi-top">
+      <span class="kpi-label">Total stock</span>
+      <span class="kpi-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+    </div>
+    <div class="kpi-num">{{ total_items|intcomma }}</div>
+    <div class="kpi-sub">Every tagged piece</div>
+  </a>
+
+  <a href="{% url 'catalogue:product_list' %}?stock=AVAILABLE" class="kpi-card kpi-link" style="--kpi-accent:var(--ok); --kpi-bg:var(--ok-bg);">
+    <div class="kpi-top">
+      <span class="kpi-label">Company stock</span>
+      <span class="kpi-icon"><i class="fa-solid fa-warehouse"></i></span>
+    </div>
+    <div class="kpi-num">{{ pending|intcomma }}</div>
+    <div class="kpi-sub">{{ pending_pct }}% · &#8369;{{ available_value|floatformat:0|intcomma }}</div>
+  </a>
+
+  <a href="{% url 'assignment:group_list' %}" class="kpi-card kpi-link" style="--kpi-accent:var(--info); --kpi-bg:var(--info-bg);">
+    <div class="kpi-top">
+      <span class="kpi-label">Assigned</span>
+      <span class="kpi-icon"><i class="fa-solid fa-handshake"></i></span>
+    </div>
+    <div class="kpi-num">{{ assigned|intcomma }}</div>
+    <div class="kpi-sub">{% if assigned %}With resellers · &#8369;{{ assigned_value|floatformat:0|intcomma }}{% else %}None currently out{% endif %}</div>
+  </a>
+
+  <a href="{% url 'catalogue:product_list' %}?stock=SOLD" class="kpi-card kpi-link" style="--kpi-accent:var(--violet); --kpi-bg:var(--violet-bg);">
+    <div class="kpi-top">
+      <span class="kpi-label">Sold</span>
+      <span class="kpi-icon"><i class="fa-solid fa-circle-check"></i></span>
+    </div>
+    <div class="kpi-num">{{ sold|intcomma }}</div>
+    <div class="kpi-sub">&#8369;{{ sold_value|floatformat:0|intcomma }}{% if reserved %} · {{ reserved }} reserved{% endif %}{% if in_transit %} · {{ in_transit }} in transit{% endif %}</div>
+  </a>
+</div>
+
+{% if total_items %}
+<div class="mix-wrap">
+  <div class="mix-bar" title="Company {{ pending_pct }}% · Assigned {{ assigned_pct }}% · Sold {{ sold_pct }}% · Reserved {{ reserved_pct }}%">
+    <span class="mix-pending" style="width:{{ pending_pct }}%"></span>
+    <span class="mix-assigned" style="width:{{ assigned_pct }}%"></span>
+    <span class="mix-sold" style="width:{{ sold_pct }}%"></span>
+    <span class="mix-reserved" style="width:{{ reserved_pct }}%"></span>
+  </div>
+  <div class="mix-legend">
+    <span><i class="mix-dot mix-pending"></i> Company stock {{ pending_pct }}%</span>
+    <span><i class="mix-dot mix-assigned"></i> Assigned {{ assigned_pct }}%</span>
+    <span><i class="mix-dot mix-sold"></i> Sold {{ sold_pct }}%</span>
+    {% if reserved %}<span><i class="mix-dot mix-reserved"></i> Reserved {{ reserved_pct }}%</span>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="dash-sales">
+  <div class="section-heading" style="margin-top:0;"><span class="tag">Sales</span></div>
+  <div class="kpi-grid" style="margin-bottom:0;">
+    <a href="{% url 'assignment:invoice_list' %}?status=COMPLETE" class="kpi-card kpi-link">
+      <div class="kpi-top">
+        <span class="kpi-label">Invoiced</span>
+        <span class="kpi-icon"><i class="fa-solid fa-file-invoice"></i></span>
+      </div>
+      <div class="kpi-num">&#8369;{{ invoiced_value|floatformat:0|intcomma }}</div>
+      <div class="kpi-sub">{{ invoice_complete|intcomma }} complete{% if invoice_draft %} · {{ invoice_draft }} draft{% endif %}{% if invoice_cancelled %} · {{ invoice_cancelled }} cancelled{% endif %}</div>
+    </a>
+    <div class="kpi-card" style="--kpi-accent:var(--ok); --kpi-bg:var(--ok-bg);">
+      <div class="kpi-top">
+        <span class="kpi-label">Collected</span>
+        <span class="kpi-icon"><i class="fa-solid fa-hand-holding-dollar"></i></span>
+      </div>
+      <div class="kpi-num">&#8369;{{ collected|floatformat:0|intcomma }}</div>
+      <div class="kpi-sub">All recorded payments</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-top">
+        <span class="kpi-label">Collected {{ month_label }}</span>
+        <span class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></span>
+      </div>
+      <div class="kpi-num">&#8369;{{ collected_month|floatformat:0|intcomma }}</div>
+      <div class="kpi-sub">Payment dates this month</div>
+    </div>
+    <a href="{% url 'assignment:invoice_list' %}?status=COMPLETE" class="kpi-card kpi-link is-alert">
+      <div class="kpi-top">
+        <span class="kpi-label">Unpaid invoices</span>
+        <span class="kpi-icon"><i class="fa-solid fa-file-circle-exclamation"></i></span>
+      </div>
+      <div class="kpi-num">{{ unpaid_count|intcomma }}</div>
+      <div class="kpi-sub">&#8369;{{ unpaid_balance|floatformat:0|intcomma }} still outstanding</div>
+    </a>
+  </div>
+</div>
+
+<div class="section-heading"><span class="tag">By location</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table class="loc-bars" id="dashLocations">
+      <tbody>
+        {% for loc in locations_stocked %}
+        <tr>
+          <td class="loc-name-cell">
+            <a href="{% url 'inventory:location_detail' loc.code %}">{{ loc.name }}</a>
+            <div class="cell-muted" style="font-size:10.5px;">{{ loc.get_location_type_display }} · {{ loc.available_count|intcomma }} available{% if loc.sold_count %} · {{ loc.sold_count|intcomma }} sold{% endif %}</div>
+          </td>
+          <td class="loc-bar-cell">
+            <div class="dash-bar"><span style="width:{{ loc.bar_pct }}%"></span></div>
+          </td>
+          <td class="mono loc-count-cell">{{ loc.item_count|intcomma }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="cell-muted">No locations yet.</td></tr>
+        {% endfor %}
+        {% for loc in locations_empty %}
+        <tr class="loc-empty">
+          <td class="loc-name-cell">
+            <a href="{% url 'inventory:location_detail' loc.code %}">{{ loc.name }}</a>
+            <div class="cell-muted" style="font-size:10.5px;">{{ loc.get_location_type_display }} · empty</div>
+          </td>
+          <td class="loc-bar-cell">
+            <div class="dash-bar"><span style="width:0"></span></div>
+          </td>
+          <td class="mono loc-count-cell">0</td>
+        </tr>
+        {% endfor %}
+        {% if locations_empty %}
+        <tr class="loc-toggle-row">
+          <td colspan="3">
+            <button type="button" class="linkish" id="locEmptyToggle" data-count="{{ locations_empty|length }}">Show {{ locations_empty|length }} empty location{{ locations_empty|length|pluralize }}</button>
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="two-col">
+  <div>
+    <div class="section-heading"><span class="tag">Top sub-categories</span></div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Sub-category</th>
+              <th>Pieces</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in subcategories %}
+            <tr>
+              <td class="cell-strong"><a href="{% url 'catalogue:product_list' %}?subcategory={{ row.subcategory|urlencode }}">{{ row.label }}</a></td>
+              <td class="mono">{{ row.item_count|intcomma }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2" class="cell-muted">No sub-category names on this catalog yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    {% if holders %}
+    <div class="section-heading"><span class="tag">Holding now</span></div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Reseller</th>
+              <th>Pieces</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in holders %}
+            <tr>
+              <td class="cell-strong"><a href="{% url 'assignment:client_detail' r.pk %}">{{ r.name }}</a></td>
+              <td class="mono">{{ r.items_held|intcomma }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="section-heading"><span class="tag">Top resellers</span></div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Reseller</th>
+              <th>Lines</th>
+              <th>Invoiced</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in top_resellers %}
+            <tr>
+              <td class="cell-strong"><a href="{% url 'assignment:client_detail' r.pk %}">{{ r.name }}</a></td>
+              <td class="mono">{{ r.billed_lines|intcomma }}</td>
+              <td class="mono">&#8369;{{ r.billed_value|floatformat:0|intcomma }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="cell-muted">No assignment history in this catalog.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if reserve_open_count %}
+<div class="section-heading"><span class="tag">Reserves</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Held for</th>
+          <th>Expires</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in reserve_alerts %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' alert.item.barcode %}">{{ alert.item.barcode }}</a></td>
+          <td>{{ alert.item.product.name }}</td>
+          <td><a href="{% url 'assignment:client_detail' alert.reseller_id %}">{{ alert.reseller.name }}</a></td>
+          <td>{% if alert.is_overdue %}<span class="pill pill-danger">Lapsed {{ alert.expires_at|date:"M j" }}</span>{% else %}<span class="cell-muted">{{ alert.expires_at|date:"M j, Y" }}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-foot">
+    <div class="cell-muted">{{ reserve_open_count|intcomma }} open reserve{{ reserve_open_count|pluralize }}{% if reserve_overdue %} · {{ reserve_overdue }} past expiry{% endif %}. Nothing expires these automatically yet.</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="section-heading"><span class="tag">Floor activity</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Session</th>
+          <th>Mode</th>
+          <th>Location</th>
+          <th>Pieces</th>
+          <th>By</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_scans %}
+        <tr>
+          <td class="mono cell-strong">SN{{ s.scan_index|stringformat:"03d" }}</td>
+          <td>{{ s.get_mode_display }}{% if s.is_transfer %} <span class="pill pill-info">Transfer</span>{% endif %}</td>
+          <td><a href="{% url 'inventory:location_detail' s.location.code %}">{{ s.location.name }}</a></td>
+          <td class="mono">{{ s.item_count|intcomma }}</td>
+          <td class="cell-muted">{% if s.created_by %}{{ s.created_by.get_short_name|default:s.created_by.employee_code }}{% else %}—{% endif %}</td>
+          <td class="cell-muted">{{ s.created_at|date:"M j, H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="cell-muted">No scan sessions recorded yet. Every tracker submit writes one.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-foot">
+    <div class="cell-muted">{% if scans_today %}{{ scans_today }} scan{{ scans_today|pluralize }} today covering {{ pieces_scanned_today|intcomma }} piece{{ pieces_scanned_today|pluralize }}.{% else %}No scans yet today.{% endif %}{% if transfers_pending %} · {{ transfers_pending }} transfer{{ transfers_pending|pluralize }} still pending.{% endif %}</div>
+    <a href="{% url 'tracker:scan' %}" class="btn btn-ghost btn-sm">Open tracker</a>
+  </div>
+</div>
+
+<div class="section-heading"><span class="tag">Recent invoices</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice</th>
+          <th>Reseller</th>
+          <th>Lines</th>
+          <th>Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in recent_invoices %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'assignment:invoice_detail' inv.pk %}">{{ inv.invoice_number|default:"—" }}</a></td>
+          <td><a href="{% url 'assignment:client_detail' inv.reseller_id %}">{{ inv.reseller.name }}</a></td>
+          <td class="mono">{{ inv.line_count }}</td>
+          <td class="mono">&#8369;{{ inv.billed|floatformat:0|intcomma }}</td>
+          <td>
+            {% if inv.invoice_status == "COMPLETE" %}<span class="pill pill-ok">Complete</span>
+            {% elif inv.invoice_status == "CANCELLED" %}<span class="pill pill-danger">Cancelled</span>
+            {% else %}<span class="pill pill-warn">Draft</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="cell-muted">No assignments imported yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section-heading"><span class="tag">Quick actions</span></div>
+<div class="dash-actions">
+  <a href="{% url 'tracker:scan' %}" class="action-card"><i class="fa-solid fa-barcode"></i>Product Tracker</a>
+  <a href="{% url 'assignment:invoice_list' %}" class="action-card"><i class="fa-solid fa-file-invoice"></i>Invoices</a>
+  <a href="{% url 'catalogue:product_list' %}" class="action-card"><i class="fa-solid fa-gem"></i>View Products</a>
+  <a href="{% url 'inventory:location_list' %}" class="action-card"><i class="fa-solid fa-boxes-stacked"></i>Stock by Location</a>
+  <a href="{% url 'assignment:group_list' %}" class="action-card"><i class="fa-solid fa-users"></i>Resellers</a>
+  <a href="{% url 'hardware:print_labels' %}" class="action-card"><i class="fa-solid fa-print"></i>Print Tags</a>
+</div>
+
+{% if categories %}
+<div class="section-heading"><span class="tag">Jewellery type</span></div>
+<div class="loc-grid" style="margin-bottom:8px;">
+  {% for cat in categories %}
+  <a href="{% url 'catalogue:product_list' %}?category={{ cat.code }}" class="loc-card" style="text-decoration:none; color:inherit; display:block;">
+    <div class="loc-card-top">
+      <div class="loc-card-icon"><i class="fa-solid fa-gem"></i></div>
+      <div>
+        <div class="loc-card-name">{{ cat.name }}</div>
+        <div class="loc-card-type mono">{{ cat.code }}</div>
+      </div>
+    </div>
+    <div class="loc-card-num">{{ cat.item_count|intcomma }}</div>
+    <div class="loc-card-sub">tagged pieces</div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var btn = document.getElementById("locEmptyToggle");
+  if (!btn) return;
+  btn.addEventListener("click", function () {
+    var table = document.getElementById("dashLocations");
+    var showing = btn.getAttribute("data-showing") === "1";
+    var empties = table.querySelectorAll(".loc-empty");
+    for (var i = 0; i < empties.length; i++) {
+      empties[i].classList.toggle("is-visible", !showing);
+    }
+    btn.setAttribute("data-showing", showing ? "0" : "1");
+    var n = btn.getAttribute("data-count");
+    btn.textContent = (showing ? "Show " : "Hide ") + n + " empty location" + (n === "1" ? "" : "s");
+  });
+})();
+</script>
+
 {% endblock %}

@@ -8,7 +8,9 @@ implements.
 """
 
 from pathlib import Path
-from decouple import config, Csv
+
+from decouple import Csv, config
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -66,6 +68,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.core.context_processors.db_profile",
             ],
         },
     },
@@ -78,11 +81,28 @@ ASGI_APPLICATION = "config.asgi.application"
 # PostgreSQL only. The legacy system's biggest structural gap was 0 foreign
 # keys / 0 indexes on core tables (confirmed by the SYSTEM-AUDIT.md audit) —
 # this is the one thing this rebuild is not allowed to compromise on.
+#
+# Two local catalogs, switched by DJANGO_DB_PROFILE (never the live MSSQL
+# host). Both are filled from the same FTP snapshot of stock_rfid:
+#   dev  -> pj_erp_dev   working copy you can mutate while building
+#   prod -> pj_erp_prod  frozen snapshot of real catalogue/resellers/invoices
+# Flip DJANGO_DB_PROFILE in .env and restart runserver. Same credentials.
+
+DB_PROFILE = config("DJANGO_DB_PROFILE", default="dev").strip().lower()
+if DB_PROFILE not in ("dev", "prod"):
+    raise ImproperlyConfigured(
+        f"DJANGO_DB_PROFILE must be 'dev' or 'prod', got {DB_PROFILE!r}"
+    )
+
+DB_NAME_BY_PROFILE = {
+    "dev": config("DB_NAME_DEV", default="pj_erp_dev"),
+    "prod": config("DB_NAME_PROD", default="pj_erp_prod"),
+}
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="pj_erp_dev"),
+        "NAME": DB_NAME_BY_PROFILE[DB_PROFILE],
         "USER": config("DB_USER", default="pj_dev"),
         "PASSWORD": config("DB_PASSWORD", default="pj_dev_local"),
         "HOST": config("DB_HOST", default="localhost"),
@@ -90,6 +110,10 @@ DATABASES = {
         "CONN_MAX_AGE": 60,
     }
 }
+
+# Path to the MSSQL script dump (schema + INSERTs) taken from the FTP
+# stock_rfid snapshot. Used by `import_mssql_snapshot`. Never commit it.
+LEGACY_SQL_DUMP = config("LEGACY_SQL_DUMP", default="")
 
 # --- Auth --------------------------------------------------------------------
 # Custom user model from day one — never swap this in later, Django makes it

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Search</h1>
+    <p>{% if q %}{{ total }} result{{ total|pluralize }} for <b>{{ q }}</b>.{% else %}Type a barcode, product name, reference ID, or location.{% endif %}</p>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Barcode, product name, reference, location…" autofocus>
+  <button type="submit" class="btn btn-primary btn-sm">Search</button>
+</form>
+
+{% if q %}
+
+{% if items %}
+<div class="section-heading" style="margin-top:24px;"><span class="tag">Barcodes</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Location</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' item.barcode %}">{{ item.barcode }}</a></td>
+          <td>{{ item.product.name }}</td>
+          <td>{{ item.location.name }}</td>
+          <td>
+            {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+            {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+            {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+            {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+            {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+            {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if products %}
+<div class="section-heading" style="margin-top:24px;"><span class="tag">Products</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Reference</th>
+          <th>Category</th>
+          <th>Pieces</th>
+          <th>Available</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}">{{ p.name }}</a></td>
+          <td class="mono cell-muted">{{ p.reference_id|default:"—" }}</td>
+          <td class="cell-muted">{{ p.category.name }}</td>
+          <td class="mono">{{ p.item_count }}</td>
+          <td class="mono">{{ p.available_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if clients or reseller_groups %}
+<div class="section-heading" style="margin-top:24px;"><span class="tag">Resellers</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Kind</th>
+          <th>Group</th>
+          <th>Reference</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clients %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'assignment:client_detail' c.pk %}">{{ c.name }}</a></td>
+          <td class="cell-muted">Client</td>
+          <td class="cell-muted">{% if c.group %}<a href="{% url 'assignment:group_detail' c.group.pk %}">{{ c.group.name }}</a>{% else %}Ungrouped{% endif %}</td>
+          <td class="mono cell-muted">{{ c.reference_code|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+        {% for g in reseller_groups %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'assignment:group_detail' g.pk %}">{{ g.name }}</a></td>
+          <td class="cell-muted">Group</td>
+          <td class="cell-muted">{{ g.client_count }} client{{ g.client_count|pluralize }}</td>
+          <td class="mono cell-muted">{{ g.code }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if locations %}
+<div class="section-heading" style="margin-top:24px;"><span class="tag">Locations</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Location</th>
+          <th>Code</th>
+          <th>Type</th>
+          <th>Items</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loc in locations %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'inventory:location_detail' loc.code %}">{{ loc.name }}</a></td>
+          <td class="mono cell-muted">{{ loc.code }}</td>
+          <td class="cell-muted">{{ loc.get_location_type_display }}</td>
+          <td class="mono">{{ loc.item_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if total == 0 %}
+<div class="panel" style="margin-top:24px; text-align:center; padding:40px;">
+  <i class="fa-solid fa-magnifying-glass" style="font-size:28px; color:var(--text-muted); margin-bottom:12px;"></i>
+  <p class="cell-muted">Nothing matched <b>{{ q }}</b>. Try a partial barcode, a product name, or a location code.</p>
+</div>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
