@@ -11,3 +11,6 @@ python-dateutil==2.9.0.post0
 python-decouple==3.8
 six==1.17.0
 sqlparse==0.6.0
+
+gunicorn==22.0.0
+whitenoise==6.7.0
