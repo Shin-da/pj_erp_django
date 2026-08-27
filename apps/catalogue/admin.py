@@ -36,7 +36,7 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(ProductMaster)
 class ProductMasterAdmin(admin.ModelAdmin):
-    list_display = ("name", "reference_id", "category", "selling_price", "is_active")
+    list_display = ("name", "reference_id", "category", "subcategory", "selling_price", "is_active")
     list_filter = ("category", "is_active")
-    search_fields = ("name", "reference_id")
+    search_fields = ("name", "reference_id", "subcategory")
     autocomplete_fields = ("category", "currency", "metal", "purity", "supplier")

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="mono">{{ item.barcode }}</h1>
+    <p>{{ item.product.name }}{% if item.product.reference_id %} · {{ item.product.reference_id }}{% endif %} · {{ item.product.category.name }}</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'catalogue:product_detail' item.product.pk %}" class="btn btn-ghost"><i class="fa-solid fa-gem"></i> View design</a>
+    <a href="{% url 'inventory:location_detail' item.location.code %}" class="btn btn-ghost"><i class="fa-solid fa-location-dot"></i> View location</a>
+  </div>
+</div>
+
+<div class="id-hero">
+  <div class="id-hero-cell">
+    <div class="l">Status</div>
+    <div class="v">
+      {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+      {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+      {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+      {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+      {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+      {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="id-hero-cell">
+    <div class="l">Location</div>
+    <div class="v"><a href="{% url 'inventory:location_detail' item.location.code %}">{{ item.location.name }}</a> <span class="cell-muted mono">{{ item.location.code }}</span></div>
+  </div>
+  <div class="id-hero-cell">
+    <div class="l">Selling price</div>
+    <div class="v mono">{% if item.product.selling_price %}{{ item.product.currency.symbol|default:item.product.currency.code }}{{ item.product.selling_price|floatformat:2 }}{% else %}—{% endif %}</div>
+  </div>
+  <div class="id-hero-cell">
+    <div class="l">Tag</div>
+    <div class="v">{{ item.get_reprint_status_display }}</div>
+  </div>
+</div>
+
+<div class="pd-grid" style="margin-top:16px;">
+
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:12px;">This piece</div>
+    <table class="spec-table">
+      <tr><th>Barcode</th><td class="mono cell-strong">{{ item.barcode }}</td></tr>
+      <tr><th>RFID EPC</th><td class="mono">{{ item.rfid_epc|default:"—" }}</td></tr>
+      <tr><th>Location</th><td>{{ item.location.name }} <span class="cell-muted mono">({{ item.location.code }})</span></td></tr>
+      <tr><th>Location type</th><td>{{ item.location.get_location_type_display }}</td></tr>
+      <tr><th>Status</th><td>{{ item.get_status_display }}</td></tr>
+      <tr><th>Added</th><td>{{ item.created_at|date:"M j, Y H:i" }}</td></tr>
+      <tr><th>Last updated</th><td>{{ item.updated_at|date:"M j, Y H:i" }}</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:12px;">Design</div>
+    <table class="spec-table">
+      <tr><th>Product</th><td class="cell-strong"><a href="{% url 'catalogue:product_detail' item.product.pk %}">{{ item.product.name }}</a></td></tr>
+      <tr><th>Reference ID</th><td class="mono">{{ item.product.reference_id|default:"—" }}</td></tr>
+      <tr><th>Category</th><td>{{ item.product.category.name }}</td></tr>
+      <tr><th>Metal</th><td>{{ item.product.metal.name|default:"—" }}{% if item.product.purity %} {{ item.product.purity.name }}{% endif %}</td></tr>
+      <tr><th>Supplier</th><td>{{ item.product.supplier.name|default:"—" }}</td></tr>
+      <tr><th>Net weight</th><td class="mono">{% if item.product.net_weight %}{{ item.product.net_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
+      <tr><th>Gross weight</th><td class="mono">{% if item.product.gross_weight %}{{ item.product.gross_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
+      <tr><th>Purchase price</th><td class="mono">{% if item.product.purchase_price %}{{ item.product.currency.symbol|default:item.product.currency.code }}{{ item.product.purchase_price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="section-heading" style="margin-top:28px;"><span class="tag">History</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Action</th>
+          <th>Detail</th>
+          <th>By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td class="cell-muted">{{ h.created_at|date:"M j, Y H:i" }}</td>
+          <td class="cell-strong">{{ h.action }}</td>
+          <td>{{ h.summary|default:"—" }}</td>
+          <td class="cell-muted">{% if h.actor %}{{ h.actor.get_full_name|default:h.actor.employee_code }}{% else %}—{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="cell-muted">No recorded history for this piece yet. Status changes and transfers made through the system from now on will appear here.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if siblings %}
+<div class="section-heading" style="margin-top:28px;"><span class="tag">Other pieces of this design</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Location</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in siblings %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' s.barcode %}">{{ s.barcode }}</a></td>
+          <td>{{ s.location.name }}</td>
+          <td>
+            {% if s.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+            {% elif s.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+            {% elif s.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+            {% elif s.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+            {% elif s.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+            {% else %}<span class="pill pill-neutral">{{ s.get_status_display }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if sibling_total > siblings|length %}
+  <div class="table-foot">
+    <div class="cell-muted">Showing {{ siblings|length }} of {{ sibling_total }} — <a href="{% url 'catalogue:product_detail' item.product.pk %}">see all on the design page</a></div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<style>
+  .id-hero { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .id-hero-cell .l { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-bottom:6px; }
+  .id-hero-cell .v { font-size:14px; font-weight:600; }
+  @media(max-width:900px){ .id-hero { grid-template-columns:repeat(2,1fr); } }
+
+  .pd-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:900px){ .pd-grid{ grid-template-columns:1fr; } }
+
+  .spec-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .spec-table th { text-align:left; font-weight:500; color:var(--text-muted); padding:7px 0; width:42%; border-bottom:1px solid var(--border); }
+  .spec-table td { padding:7px 0; border-bottom:1px solid var(--border); }
+  .spec-table tr:last-child th, .spec-table tr:last-child td { border-bottom:none; }
+</style>
+
+{% endblock %}

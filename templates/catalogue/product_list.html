@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Products</h1>
+    <p>Every design in the catalogue, with live piece counts rolled up from the physical stock. Search matches product names, reference IDs, and barcodes.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'inventory:location_list' %}" class="btn btn-ghost"><i class="fa-solid fa-boxes-stacked"></i> By location</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Search product name, reference, or barcode…">
+  <select name="category" class="field fbar-select">
+    <option value="">All categories</option>
+    {% for c in categories %}
+    <option value="{{ c.code }}" {% if category == c.code %}selected{% endif %}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="supplier" class="field fbar-select">
+    <option value="">All suppliers</option>
+    {% for s in suppliers %}
+    <option value="{{ s.pk }}" {% if supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="subcategory" class="field fbar-select">
+    <option value="">All sub-categories</option>
+    {% for code, label in subcategory_choices %}
+    <option value="{{ code }}" {% if subcategory == code %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="stock" class="field fbar-select">
+    <option value="">Any stock level</option>
+    <option value="AVAILABLE" {% if stock == "AVAILABLE" %}selected{% endif %}>Has available stock</option>
+    <option value="SOLD" {% if stock == "SOLD" %}selected{% endif %}>Has sold pieces</option>
+    <option value="ASSIGNED" {% if stock == "ASSIGNED" %}selected{% endif %}>Has assigned pieces</option>
+    <option value="OUT" {% if stock == "OUT" %}selected{% endif %}>Nothing available</option>
+    <option value="NONE" {% if stock == "NONE" %}selected{% endif %}>No pieces at all</option>
+  </select>
+  <select name="sort" class="field fbar-select">
+    <option value="name" {% if sort == "name" %}selected{% endif %}>Name A–Z</option>
+    <option value="-name" {% if sort == "-name" %}selected{% endif %}>Name Z–A</option>
+    <option value="-stock" {% if sort == "-stock" %}selected{% endif %}>Most pieces</option>
+    <option value="-available" {% if sort == "-available" %}selected{% endif %}>Most available</option>
+    <option value="-price" {% if sort == "-price" %}selected{% endif %}>Highest price</option>
+    <option value="price" {% if sort == "price" %}selected{% endif %}>Lowest price</option>
+  </select>
+  <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+  {% if q or category or supplier or subcategory or stock %}<a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+</form>
+
+<div class="table-wrap" style="margin-top:12px;">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Reference</th>
+          <th>Category</th>
+          <th>Metal</th>
+          <th>Selling price</th>
+          <th>Pieces</th>
+          <th>Stock</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in page_obj %}
+        <tr>
+          <td class="cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}">{{ p.name }}</a></td>
+          <td class="mono cell-muted">{{ p.reference_id|default:"—" }}</td>
+          <td class="cell-muted">{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</td>
+          <td class="cell-muted">{% if p.metal %}{{ p.metal.name }}{% if p.purity %} {{ p.purity.name }}{% endif %}{% else %}—{% endif %}</td>
+          <td class="mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
+          <td class="mono">{{ p.item_count }}</td>
+          <td>
+            {% if p.item_count == 0 %}<span class="pill pill-neutral">No pieces</span>
+            {% elif p.available_count > 0 %}<span class="pill pill-ok">{{ p.available_count }} available</span>
+            {% else %}<span class="pill pill-warn">None available</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="cell-muted">No products match.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-foot">
+    <div>{{ total_count }} product{{ total_count|pluralize }} · page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div class="pagination">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if supplier %}&supplier={{ supplier }}{% endif %}{% if stock %}&stock={{ stock }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"><button type="button">&laquo;</button></a>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if supplier %}&supplier={{ supplier }}{% endif %}{% if stock %}&stock={{ stock }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"><button type="button">&raquo;</button></a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

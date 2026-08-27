@@ -28,7 +28,11 @@ from apps.core.models import TimeStampedModel
 
 class Category(TimeStampedModel):
     name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=10, unique=True, help_text="e.g. JW, ST, FI, MT — drives ZPL label template routing.")
+    code = models.CharField(
+        max_length=32,
+        unique=True,
+        help_text="JW / ST / FI / MT — drives ZPL label template routing (legacy tbljewellery_type).",
+    )
 
     class Meta:
         verbose_name_plural = "categories"
@@ -80,6 +84,11 @@ class ProductMaster(TimeStampedModel):
     reference_id = models.CharField(max_length=100, blank=True, db_index=True)
     name = models.CharField(max_length=200)
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
+    subcategory = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Legacy tblsub_category_master name (Ring, Necklace, …). Category itself is the jewellery type (JW/ST/FI/MT) used for ZPL routing.",
+    )
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, related_name="products")
     metal = models.ForeignKey(Metal, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
     purity = models.ForeignKey(Purity, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")

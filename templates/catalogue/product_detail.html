@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ product.name }}{% if product.reference_id %} <span class="cell-muted" style="font-size:14px; font-weight:400;">{{ product.reference_id }}</span>{% endif %}</h1>
+    <p>{{ product.category.name }}{% if product.metal %} · {{ product.metal.name }}{% if product.purity %} {{ product.purity.name }}{% endif %}{% endif %} · {{ product.item_count }} physical piece{{ product.item_count|pluralize }} in the system.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> All products</a>
+  </div>
+</div>
+
+<div class="pd-grid">
+
+  <!-- ---------- Spec sheet ---------- -->
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:12px;">Specification</div>
+    <table class="spec-table">
+      <tr><th>Reference ID</th><td class="mono">{{ product.reference_id|default:"—" }}</td></tr>
+      <tr><th>Category</th><td>{{ product.category.name }} <span class="cell-muted mono">({{ product.category.code }})</span></td></tr>
+      <tr><th>Sub-category</th><td>{{ product.subcategory|default:"—" }}</td></tr>
+      <tr><th>Metal</th><td>{{ product.metal.name|default:"—" }}</td></tr>
+      <tr><th>Purity</th><td>{{ product.purity.name|default:"—" }}</td></tr>
+      <tr><th>Supplier</th><td>{{ product.supplier.name|default:"—" }}</td></tr>
+      <tr><th>Net weight</th><td class="mono">{% if product.net_weight %}{{ product.net_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
+      <tr><th>Gross weight</th><td class="mono">{% if product.gross_weight %}{{ product.gross_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
+      <tr><th>Purchase price</th><td class="mono">{% if product.purchase_price %}{{ product.currency.symbol|default:product.currency.code }}{{ product.purchase_price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+      <tr><th>Selling price</th><td class="mono cell-strong">{% if product.selling_price %}{{ product.currency.symbol|default:product.currency.code }}{{ product.selling_price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+      <tr><th>Active</th><td>{% if product.is_active %}<span class="pill pill-ok">Active</span>{% else %}<span class="pill pill-neutral">Inactive</span>{% endif %}</td></tr>
+    </table>
+  </div>
+
+  <!-- ---------- Stock rollup ---------- -->
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:12px;">Stock breakdown</div>
+    <div class="pd-stats">
+      <div class="pd-stat"><div class="n">{{ product.item_count }}</div><div class="l">Total pieces</div></div>
+      <div class="pd-stat ok"><div class="n">{{ product.available_count }}</div><div class="l">Available</div></div>
+      <div class="pd-stat info"><div class="n">{{ product.assigned_count }}</div><div class="l">Assigned</div></div>
+      <div class="pd-stat warn"><div class="n">{{ product.reserved_count }}</div><div class="l">Reserved</div></div>
+      <div class="pd-stat"><div class="n">{{ product.sold_count }}</div><div class="l">Sold</div></div>
+      <div class="pd-stat"><div class="n">{{ product.in_transit_count }}</div><div class="l">In transit</div></div>
+    </div>
+
+    <div class="kpi-label" style="margin:18px 0 8px;">Where these pieces are</div>
+    {% for loc in by_location %}
+    <div class="pd-locrow">
+      <a href="{% url 'inventory:location_detail' loc.code %}">{{ loc.name }} <span class="cell-muted mono">{{ loc.code }}</span></a>
+      <span class="mono">{{ loc.n }} <span class="cell-muted">({{ loc.n_available }} avail)</span></span>
+    </div>
+    {% empty %}
+    <p class="cell-muted" style="font-size:12px;">No physical pieces of this design exist yet.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ---------- The individual barcodes ---------- -->
+<div class="section-heading" style="margin-top:28px;"><span class="tag">Pieces</span></div>
+
+<form method="get" class="filter-bar">
+  <select name="status" class="field fbar-select">
+    <option value="">All statuses</option>
+    {% for value, label in status_choices %}
+    <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="location" class="field fbar-select">
+    <option value="">All locations</option>
+    {% for loc in locations %}
+    <option value="{{ loc.code }}" {% if location == loc.code %}selected{% endif %}>{{ loc.name }} ({{ loc.code }})</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+  {% if status or location %}<a href="{% url 'catalogue:product_detail' product.pk %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+</form>
+
+<div class="table-wrap" style="margin-top:12px;">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Barcode</th>
+          <th>Location</th>
+          <th>Status</th>
+          <th>Tag</th>
+          <th>Last updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in page_obj %}
+        <tr>
+          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' item.barcode %}">{{ item.barcode }}</a></td>
+          <td><a href="{% url 'inventory:location_detail' item.location.code %}">{{ item.location.name }}</a></td>
+          <td>
+            {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+            {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+            {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+            {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+            {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+            {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
+            {% endif %}
+          </td>
+          <td class="cell-muted">{{ item.get_reprint_status_display }}</td>
+          <td class="cell-muted">{{ item.updated_at|date:"M j, Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="cell-muted">No pieces match.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-foot">
+    <div>{{ page_obj.paginator.count }} piece{{ page_obj.paginator.count|pluralize }} · page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div class="pagination">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if status %}&status={{ status }}{% endif %}{% if location %}&location={{ location }}{% endif %}"><button type="button">&laquo;</button></a>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if status %}&status={{ status }}{% endif %}{% if location %}&location={{ location }}{% endif %}"><button type="button">&raquo;</button></a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .pd-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:900px){ .pd-grid{ grid-template-columns:1fr; } }
+
+  .spec-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .spec-table th { text-align:left; font-weight:500; color:var(--text-muted); padding:7px 0; width:42%; border-bottom:1px solid var(--border); }
+  .spec-table td { padding:7px 0; border-bottom:1px solid var(--border); }
+  .spec-table tr:last-child th, .spec-table tr:last-child td { border-bottom:none; }
+
+  .pd-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .pd-stat { background:var(--neutral-bg); border-radius:8px; padding:10px 12px; }
+  .pd-stat .n { font-size:20px; font-weight:700; line-height:1.1; }
+  .pd-stat .l { font-size:10.5px; color:var(--text-muted); margin-top:2px; }
+  .pd-stat.ok { background:var(--ok-bg); } .pd-stat.ok .n { color:var(--ok); }
+  .pd-stat.info { background:var(--info-bg); } .pd-stat.info .n { color:var(--info); }
+  .pd-stat.warn { background:var(--warn-bg); } .pd-stat.warn .n { color:var(--warn); }
+
+  .pd-locrow { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .pd-locrow:last-child { border-bottom:none; }
+</style>
+
+{% endblock %}
