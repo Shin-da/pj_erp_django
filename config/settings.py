@@ -124,6 +124,10 @@ LEGACY_MSSQL_DB = config("LEGACY_MSSQL_DB", default="")
 LEGACY_MSSQL_USER = config("LEGACY_MSSQL_USER", default="")
 LEGACY_MSSQL_PASSWORD = config("LEGACY_MSSQL_PASSWORD", default="")
 
+# Shared secret for the free-tier cron trigger (apps/core/views.sync_legacy_webhook),
+# pinged by an external scheduler (cron-job.org) instead of a paid Render Cron Job.
+SYNC_TRIGGER_TOKEN = config("SYNC_TRIGGER_TOKEN", default="")
+
 # --- Auth --------------------------------------------------------------------
 # Custom user model from day one — never swap this in later, Django makes it
 # very painful to change after the first migration. Replaces tblemployee's

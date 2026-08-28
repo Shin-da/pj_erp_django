@@ -1,4 +1,6 @@
 from decimal import Decimal
+import hmac
+import io
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import (
@@ -14,6 +16,10 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 from django.shortcuts import render
+from django.conf import settings
+from django.core.management import call_command
+from django.core.cache import cache
+from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
 
 from apps.assignment.models import AssignmentLine, AssignmentMaster, InvoiceStatus, Reseller
@@ -280,3 +286,39 @@ def home(request):
         "reserve_overdue": reserve_overdue,
     }
     return render(request, "core/home.html", context)
+
+
+def sync_legacy_webhook(request):
+    """
+    Free-tier-friendly cron trigger for `sync_legacy_mssql`.
+
+    Meant to be pinged by an external scheduler (cron-job.org, same as the
+    keep-alive pings already hitting this service) instead of paying for a
+    Render Cron Job. Protected by a shared-secret token rather than login,
+    since a scheduler can't authenticate as a user.
+
+    A simple cache lock stops two overlapping runs if the scheduler retries
+    a slow/timed-out request — not that a second run would corrupt
+    anything (the importer is upsert-safe), it just wastes a DB connection.
+    """
+    token = request.GET.get("token", "")
+    expected = getattr(settings, "SYNC_TRIGGER_TOKEN", "")
+    if not expected or not hmac.compare_digest(token, expected):
+        return HttpResponseForbidden("Forbidden")
+
+    lock_key = "sync_legacy_webhook_running"
+    if not cache.add(lock_key, "1", timeout=60 * 20):
+        return HttpResponse("Sync already in progress, skipping this run.\n", content_type="text/plain")
+
+    out = io.StringIO()
+    try:
+        call_command("sync_legacy_mssql", stdout=out, stderr=out)
+        body = out.getvalue()
+        status = 200
+    except Exception as exc:  # surfaced to the scheduler's run log, not to a browser
+        body = f"{out.getvalue()}\nERROR: {exc}"
+        status = 500
+    finally:
+        cache.delete(lock_key)
+
+    return HttpResponse(body, content_type="text/plain", status=status)
