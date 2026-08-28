@@ -1,6 +1,9 @@
 from decimal import Decimal
 import hmac
 import io
+import logging
+import threading
+import traceback
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import (
@@ -288,6 +291,25 @@ def home(request):
     return render(request, "core/home.html", context)
 
 
+_SYNC_LOCK_KEY = "sync_legacy_webhook_running"
+_SYNC_LAST_RESULT_KEY = "sync_legacy_webhook_last_result"
+logger = logging.getLogger(__name__)
+
+
+def _run_sync_in_background():
+    out = io.StringIO()
+    try:
+        call_command("sync_legacy_mssql", stdout=out, stderr=out)
+        result = f"OK {timezone.now().isoformat()}\n{out.getvalue()}"
+        logger.info("sync_legacy_mssql (webhook) completed:\n%s", out.getvalue())
+    except Exception:
+        result = f"ERROR {timezone.now().isoformat()}\n{out.getvalue()}\n{traceback.format_exc()}"
+        logger.exception("sync_legacy_mssql (webhook) failed")
+    finally:
+        cache.set(_SYNC_LAST_RESULT_KEY, result, timeout=60 * 60 * 48)
+        cache.delete(_SYNC_LOCK_KEY)
+
+
 def sync_legacy_webhook(request):
     """
     Free-tier-friendly cron trigger for `sync_legacy_mssql`.
@@ -297,28 +319,34 @@ def sync_legacy_webhook(request):
     Render Cron Job. Protected by a shared-secret token rather than login,
     since a scheduler can't authenticate as a user.
 
-    A simple cache lock stops two overlapping runs if the scheduler retries
-    a slow/timed-out request — not that a second run would corrupt
-    anything (the importer is upsert-safe), it just wastes a DB connection.
+    Fire-and-forget: cron-job.org caps its request timeout at 30 seconds
+    (even on top of Render's own gunicorn --timeout), well under how long
+    a full sync can take, so the actual import runs in a background thread
+    and this view returns immediately. Pass ?status=1 to check the last
+    completed run's output instead of starting a new one.
+
+    The cache lock stops two overlapping runs if the scheduler retries a
+    request that looked slow from its side — not that a second run would
+    corrupt anything (the importer is upsert-safe), it just wastes a DB
+    connection.
     """
     token = request.GET.get("token", "")
     expected = getattr(settings, "SYNC_TRIGGER_TOKEN", "")
     if not expected or not hmac.compare_digest(token, expected):
         return HttpResponseForbidden("Forbidden")
 
-    lock_key = "sync_legacy_webhook_running"
-    if not cache.add(lock_key, "1", timeout=60 * 20):
+    if request.GET.get("status"):
+        last = cache.get(_SYNC_LAST_RESULT_KEY, "No run recorded yet.\n")
+        running = cache.get(_SYNC_LOCK_KEY) is not None
+        return HttpResponse(f"Currently running: {running}\n\nLast result:\n{last}", content_type="text/plain")
+
+    if not cache.add(_SYNC_LOCK_KEY, "1", timeout=60 * 20):
         return HttpResponse("Sync already in progress, skipping this run.\n", content_type="text/plain")
 
-    out = io.StringIO()
-    try:
-        call_command("sync_legacy_mssql", stdout=out, stderr=out)
-        body = out.getvalue()
-        status = 200
-    except Exception as exc:  # surfaced to the scheduler's run log, not to a browser
-        body = f"{out.getvalue()}\nERROR: {exc}"
-        status = 500
-    finally:
-        cache.delete(lock_key)
+    thread = threading.Thread(target=_run_sync_in_background, daemon=True)
+    thread.start()
 
-    return HttpResponse(body, content_type="text/plain", status=status)
+    return HttpResponse(
+        "Sync started in the background. Check again with ?status=1 in a few minutes.\n",
+        content_type="text/plain",
+    )
