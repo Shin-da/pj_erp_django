@@ -1,7 +1,33 @@
 {% extends "base_auth.html" %}
+{% load static %}
 {% block title %}Sign in — Perfect Jewel ERP{% endblock %}
 {% block content %}
 
+{# Decorative slideshow — swap the filenames to change the reel. #}
+<aside class="auth-aside" aria-hidden="true">
+  <div class="auth-slideshow">
+    <span style="background-image:url('{% static 'core/img/login/pj-01.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-02.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-03.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-04.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-05.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-06.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-07.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-08.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-09.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-10.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-11.jpg' %}')"></span>
+    <span style="background-image:url('{% static 'core/img/login/pj-12.jpg' %}')"></span>
+  </div>
+  <div class="auth-aside-veil"></div>
+  <div class="auth-aside-copy">
+    <div class="auth-aside-mark">PJ</div>
+    <div class="auth-aside-name">Perfect Jewelry</div>
+    <div class="auth-aside-tag">Enterprise Inventory &amp; RFID Management</div>
+  </div>
+</aside>
+
+<main class="auth-main">
 <div class="auth-card">
 
   <div class="auth-brand">
@@ -63,6 +89,7 @@
     <span>Trouble signing in? Ask an administrator to reset your code.</span>
   </div>
 </div>
+</main>
 
 <script>
   (function () {

@@ -11,6 +11,28 @@
   </div>
 </div>
 
+{% with photos=product.images.all %}
+{% if photos %}
+<div class="panel pd-photos">
+  <div class="kpi-label" style="margin-bottom:12px;">Photos <span class="cell-muted">({{ photos|length }})</span></div>
+  <div class="pd-photo-main">
+    <img id="pdPhotoMain" src="{{ photos.0.image.url }}" alt="{{ product.name }}">
+  </div>
+  {% if photos|length > 1 %}
+  <div class="pd-photo-thumbs">
+    {% for im in photos %}
+    <button type="button" class="pd-thumb{% if forloop.first %} is-active{% endif %}" data-src="{{ im.image.url }}"
+            title="{{ im.get_kind_display }}{% if im.caption %} — {{ im.caption }}{% endif %}"
+            onclick="var m=document.getElementById('pdPhotoMain');m.src=this.dataset.src;document.querySelectorAll('.pd-thumb').forEach(function(t){t.classList.remove('is-active');});this.classList.add('is-active');">
+      <img src="{{ im.image.url }}" alt="" loading="lazy">
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endwith %}
+
 <div class="pd-grid">
 
   <!-- ---------- Spec sheet ---------- -->
@@ -142,6 +164,15 @@
 
   .pd-locrow { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
   .pd-locrow:last-child { border-bottom:none; }
+
+  .pd-photos { margin-bottom:16px; }
+  .pd-photo-main { border-radius:10px; overflow:hidden; background:var(--neutral-bg); }
+  .pd-photo-main img { display:block; width:100%; max-height:460px; object-fit:contain; }
+  .pd-photo-thumbs { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .pd-thumb { padding:0; border:2px solid transparent; border-radius:8px; overflow:hidden; cursor:pointer; background:none; line-height:0; }
+  .pd-thumb img { width:72px; height:72px; object-fit:cover; display:block; }
+  .pd-thumb.is-active { border-color:var(--brand); }
+  .pd-thumb:focus-visible { outline:2px solid var(--brand); outline-offset:1px; }
 </style>
 
 {% endblock %}

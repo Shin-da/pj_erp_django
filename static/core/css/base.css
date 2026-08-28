@@ -1950,13 +1950,12 @@ button.linkish:hover {
 }
 
 
-/* Auth */
+/* Auth — see the AUTH / SIGN-IN section further down for the split layout. */
 .auth-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
+  align-items: stretch;
 }
 
 
@@ -2215,16 +2214,153 @@ button.linkish:hover {
    support. These rules cover the fields the template now writes out
    explicitly.
    ========================================================================= */
-.auth-shell::before {
-  /* A quiet wash behind the card so the page isn't a flat expanse. Uses
-     the brand hue at very low alpha, so it reads in both themes without a
+.auth-main::before {
+  /* A quiet wash behind the card on the form column so it isn't a flat
+     expanse. Brand hue at very low alpha — reads in both themes without a
      second colour being introduced. */
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   background:
-    radial-gradient(60rem 40rem at 50% -10%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 70%);
+    radial-gradient(48rem 36rem at 120% -10%, color-mix(in srgb, var(--brand) 12%, transparent), transparent 70%);
   pointer-events: none;
+}
+
+/* ── Split sign-in: slideshow left, form right ──────────────────────────
+   The aside is always dark (photo + scrim) regardless of theme; the form
+   column follows the active theme. Below 860px the aside drops to a dim
+   fixed backdrop and the card floats over it. Slideshow is decorative
+   only — aria-hidden, and it freezes for prefers-reduced-motion. */
+.auth-aside {
+  position: relative;
+  flex: 1 1 0;
+  overflow: hidden;
+  background: #14110f;
+  display: flex;
+}
+
+.auth-slideshow {
+  position: absolute;
+  inset: 0;
+}
+
+.auth-slideshow span {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transform: scale(1.06);
+  animation: authKenBurns 84s infinite;
+  will-change: opacity, transform;
+}
+
+/* 12 frames x 7s = the 84s loop. Each holds ~4s with a ~1.5s cross-fade. */
+.auth-slideshow span:nth-child(1)  { animation-delay:  0s; }
+.auth-slideshow span:nth-child(2)  { animation-delay:  7s; }
+.auth-slideshow span:nth-child(3)  { animation-delay: 14s; }
+.auth-slideshow span:nth-child(4)  { animation-delay: 21s; }
+.auth-slideshow span:nth-child(5)  { animation-delay: 28s; }
+.auth-slideshow span:nth-child(6)  { animation-delay: 35s; }
+.auth-slideshow span:nth-child(7)  { animation-delay: 42s; }
+.auth-slideshow span:nth-child(8)  { animation-delay: 49s; }
+.auth-slideshow span:nth-child(9)  { animation-delay: 56s; }
+.auth-slideshow span:nth-child(10) { animation-delay: 63s; }
+.auth-slideshow span:nth-child(11) { animation-delay: 70s; }
+.auth-slideshow span:nth-child(12) { animation-delay: 77s; }
+
+@keyframes authKenBurns {
+  0%    { opacity: 0; transform: scale(1.06); }
+  1.8%  { opacity: 1; }
+  7.1%  { opacity: 1; }
+  8.9%  { opacity: 0; transform: scale(1.12); }
+  100%  { opacity: 0; transform: scale(1.12); }
+}
+
+.auth-aside-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(155deg, rgba(20, 17, 15, .28) 0%, rgba(20, 17, 15, .55) 55%, rgba(20, 17, 15, .82) 100%);
+}
+
+.auth-aside-copy {
+  position: relative;
+  margin-top: auto;
+  padding: 48px;
+  color: #f4ecdd;
+}
+
+.auth-aside-mark {
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--brand);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--brand);
+  margin-bottom: 18px;
+}
+
+.auth-aside-name {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: .5px;
+}
+
+.auth-aside-tag {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(231, 211, 168, .72);
+}
+
+.auth-main {
+  position: relative;
+  flex: 0 0 clamp(360px, 38vw, 520px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--bg);
+}
+
+@media (max-width: 860px) {
+  .auth-shell { display: block; }
+
+  .auth-aside {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .auth-aside-veil {
+    background: linear-gradient(155deg, rgba(20, 17, 15, .72) 0%, rgba(20, 17, 15, .88) 100%);
+  }
+
+  .auth-aside-copy { display: none; }
+
+  .auth-main {
+    z-index: 1;
+    flex: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: transparent;
+    padding: 24px;
+  }
+
+  .auth-main::before { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-slideshow span { animation: none; transform: none; }
+  .auth-slideshow span:not(:first-child) { display: none; }
+  .auth-slideshow span:first-child { opacity: 1; }
 }
 
 .auth-card {

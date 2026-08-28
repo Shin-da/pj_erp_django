@@ -155,3 +155,59 @@ class ProductMaster(TimeStampedModel):
         if self.rate_change_status == "apply" and self.update_convert_rate is not None:
             return self.update_convert_rate
         return self.convert_rate if self.convert_rate is not None else Decimal("1")
+
+
+class ProductImage(TimeStampedModel):
+    """
+    Photographs of a product design. Replaces the legacy
+    `tblproduct_master.product_image` / `.certificate_image` string columns
+    (files served from `iadmin/image/Product_Images/`) and the never-
+    populated per-item `tblproduct_detail_master.item_image`.
+
+    Attached at the design (ProductMaster) level, not the physical item:
+    the legacy schema kept the main photo there and items sharing a design
+    share its photography. A genuinely one-off shot still hangs off its
+    design — there is a ProductMaster per design already.
+
+    FileField, not ImageField, to match `assignment.ResellerLocation.logo`:
+    dimension validation would make Pillow a hard *runtime* dependency for
+    no gain. `import_product_images` resizes on the way in; nothing served
+    needs width/height.
+    """
+
+    class Kind(models.TextChoices):
+        PHOTO = "PHOTO", "Product photo"
+        CERTIFICATE = "CERT", "Certificate"
+        OTHER = "OTHER", "Other"
+
+    product = models.ForeignKey(
+        ProductMaster, on_delete=models.CASCADE, related_name="images"
+    )
+    image = models.FileField(upload_to="product_images/%Y/%m/")
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.PHOTO)
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Shown first wherever a single thumbnail is needed.",
+    )
+    caption = models.CharField(max_length=200, blank=True)
+    source_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        help_text="Original file this came from — a re-import skips a (product, source_filename) pair already stored.",
+    )
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-is_primary", "order", "id"]
+        indexes = [models.Index(fields=["product", "is_primary"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product"],
+                condition=models.Q(is_primary=True),
+                name="one_primary_image_per_product",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.product} — {self.get_kind_display()}"

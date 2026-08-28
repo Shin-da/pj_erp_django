@@ -56,6 +56,7 @@
     <table>
       <thead>
         <tr>
+          <th style="width:52px;"></th>
           <th>Product</th>
           <th>Reference</th>
           <th>Category</th>
@@ -68,6 +69,12 @@
       <tbody>
         {% for p in page_obj %}
         <tr>
+          <td style="width:52px;padding:6px;">
+            {% with im=p.images.all.0 %}
+            {% if im %}<a href="{% url 'catalogue:product_detail' p.pk %}"><img src="{{ im.image.url }}" alt="" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:6px;display:block;"></a>
+            {% else %}<span style="display:block;width:44px;height:44px;border-radius:6px;background:var(--neutral-bg);"></span>{% endif %}
+            {% endwith %}
+          </td>
           <td class="cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}">{{ p.name }}</a></td>
           <td class="mono cell-muted">{{ p.reference_id|default:"—" }}</td>
           <td class="cell-muted">{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</td>
@@ -82,7 +89,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="cell-muted">No products match.</td></tr>
+        <tr><td colspan="8" class="cell-muted">No products match.</td></tr>
         {% endfor %}
       </tbody>
     </table>

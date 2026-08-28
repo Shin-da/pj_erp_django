@@ -54,6 +54,7 @@ def product_list(request):
     """
     products = (
         ProductMaster.objects.select_related("category", "currency", "metal", "purity", "supplier")
+        .prefetch_related("images")
         .annotate(**_stock_annotations())
     )
 
