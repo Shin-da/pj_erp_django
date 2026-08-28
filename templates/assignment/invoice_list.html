@@ -467,6 +467,34 @@
   @media(max-width:1080px){ .modal-invoice { max-width:94vw; } }
   @media(max-width:1000px){ .inv-shell { grid-template-columns:1fr; } }
 
+  /* ─── Locked frame (step 2) ───────────────────────────────────
+     Desktop only (>1000px, matches the grid-collapse breakpoint).
+     The outer chrome (sidebar + topbar + page-head) is pinned and
+     the two columns each own their scroll, instead of the whole
+     page riding the body scrollbar. Every flex/grid child in the
+     chain needs min-height:0 or it refuses to shrink and the inner
+     overflow never triggers. Scoped with :has() so no other page
+     is affected; the @media print block below unlocks it again. */
+  @media (min-width: 1001px) {
+    body:has(.inv-shell) { overflow: hidden; }
+    body:has(.inv-shell) .app-shell { height: 100vh; min-height: 0; overflow: hidden; }
+    body:has(.inv-shell) .main { min-height: 0; }
+    body:has(.inv-shell) .content { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    body:has(.inv-shell) .inv-shell { flex: 1; min-height: 0; align-items: stretch; }
+    body:has(.inv-shell) .inv-list-col { min-height: 0; }
+    body:has(.inv-shell) .inv-list { flex: 1; min-height: 0; max-height: none; overflow-y: auto; }
+    body:has(.inv-shell) .inv-detail-col { min-height: 0; overflow-y: auto; }
+    body:has(.inv-shell) .inv-detail-col .panel { min-height: 100%; }
+
+    /* Invoice number + reseller + status/actions stay put while the
+       line-item table scrolls under them. Panel-coloured so scrolled
+       rows don't bleed through. */
+    body:has(.inv-shell) .inv-detail-head {
+      position: sticky; top: 0; z-index: 5;
+      background: var(--panel); padding-bottom: 12px;
+    }
+  }
+
   /* ─────────────────────────── PRINT ───────────────────────────
      Browsers drop background colours by default and most office
      printers are greyscale, so nothing here may rely on a fill to
@@ -492,6 +520,15 @@
     .inv-shell { display: block !important; }
     .inv-detail-col .panel, .panel { border: none !important; box-shadow: none !important;
       background: #fff !important; padding: 0 !important; }
+
+    /* Unlock the step-2 height chain — otherwise the sheet clips to
+       one screen. */
+    body:has(.inv-shell), .app-shell, .main, .content,
+    .inv-detail-col, .inv-list {
+      height: auto !important; min-height: 0 !important; max-height: none !important;
+      overflow: visible !important; }
+    .inv-detail-head { position: static !important; background: transparent !important;
+      padding-bottom: 0 !important; }
 
     .print-only { display: block !important; }
     .print-head { display: flex !important; justify-content: space-between; align-items: flex-start;
@@ -535,6 +572,39 @@
     .inv-payments { page-break-inside: avoid; }
   }
 </style>
+
+<script>
+/* Step 2 companion: each invoice click is a full page load, so the
+   locked list pane would otherwise snap back to the top every time.
+   Persist its scroll for the session; fall back to centring the
+   active row on a fresh visit. */
+(function(){
+  var list = document.querySelector(".inv-list");
+  if(!list) return;
+  var KEY = "invListScroll";
+  var saved = null;
+  try { saved = sessionStorage.getItem(KEY); } catch(e){}
+  if(saved !== null){
+    list.scrollTop = parseInt(saved, 10) || 0;
+  } else {
+    var active = list.querySelector(".inv-row.active");
+    if(active){
+      var lr = list.getBoundingClientRect(), ar = active.getBoundingClientRect();
+      list.scrollTop += (ar.top - lr.top) - (list.clientHeight - ar.height) / 2;
+    }
+  }
+  var t;
+  list.addEventListener("scroll", function(){
+    clearTimeout(t);
+    t = setTimeout(function(){
+      try { sessionStorage.setItem(KEY, list.scrollTop); } catch(e){}
+    }, 120);
+  }, { passive: true });
+  window.addEventListener("beforeunload", function(){
+    try { sessionStorage.setItem(KEY, list.scrollTop); } catch(e){}
+  });
+})();
+</script>
 
 <script>
 (function(){
