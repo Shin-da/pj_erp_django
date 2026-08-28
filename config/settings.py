@@ -116,6 +116,14 @@ DATABASES = {
 # stock_rfid snapshot. Used by `import_mssql_snapshot`. Never commit it.
 LEGACY_SQL_DUMP = config("LEGACY_SQL_DUMP", default="")
 
+# Live legacy iadmin MSSQL server (mssql.tag11.in) — used only by
+# `sync_legacy_mssql`, which only ever SELECTs from it.
+LEGACY_MSSQL_HOST = config("LEGACY_MSSQL_HOST", default="")
+LEGACY_MSSQL_PORT = config("LEGACY_MSSQL_PORT", default="1433")
+LEGACY_MSSQL_DB = config("LEGACY_MSSQL_DB", default="")
+LEGACY_MSSQL_USER = config("LEGACY_MSSQL_USER", default="")
+LEGACY_MSSQL_PASSWORD = config("LEGACY_MSSQL_PASSWORD", default="")
+
 # --- Auth --------------------------------------------------------------------
 # Custom user model from day one — never swap this in later, Django makes it
 # very painful to change after the first migration. Replaces tblemployee's

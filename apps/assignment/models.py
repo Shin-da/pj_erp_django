@@ -238,6 +238,10 @@ class AssignmentMaster(SoftDeleteModel):
     """
 
     reseller = models.ForeignKey(Reseller, on_delete=models.PROTECT, related_name="assignments")
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblProductAssignMaster.nid — lets a re-sync from iadmin update this exact invoice instead of duplicating it.",
+    )
     display_slot = models.ForeignKey(
         DisplaySlot, null=True, blank=True, on_delete=models.SET_NULL, related_name="assignments",
         help_text="Optional — only if this reseller has a physical display slot allotted (see class docstring).",

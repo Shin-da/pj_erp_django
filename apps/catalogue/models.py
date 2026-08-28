@@ -84,6 +84,10 @@ class Supplier(TimeStampedModel):
 
 class ProductMaster(TimeStampedModel):
     reference_id = models.CharField(max_length=100, blank=True, db_index=True)
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblproduct_master.nid — lets a re-sync from iadmin update this exact design instead of duplicating it.",
+    )
     name = models.CharField(max_length=200)
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
     subcategory = models.CharField(

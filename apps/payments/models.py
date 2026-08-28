@@ -36,6 +36,10 @@ class ResellerPayment(TimeStampedModel):
     assignment = models.ForeignKey(
         "assignment.AssignmentMaster", on_delete=models.PROTECT, related_name="payments"
     )
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblAssignPayment_transaction.nid — lets a re-sync from iadmin update this exact payment instead of duplicating it.",
+    )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     paid_on = models.DateField()
     reference_note = models.CharField(max_length=255, blank=True)
@@ -54,6 +58,10 @@ class SupplierPayment(TimeStampedModel):
     """Payment made to a supplier — replaces the supplier-side payment cluster."""
 
     supplier = models.ForeignKey("catalogue.Supplier", on_delete=models.PROTECT, related_name="payments")
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblpayment_transaction.nid — lets a re-sync from iadmin update this exact payment instead of duplicating it.",
+    )
     product = models.ForeignKey(
         "catalogue.ProductMaster", null=True, blank=True, on_delete=models.SET_NULL, related_name="supplier_payments"
     )

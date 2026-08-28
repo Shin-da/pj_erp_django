@@ -77,6 +77,10 @@ class InvalidStatusTransition(Exception):
 
 class ProductItem(TimeStampedModel):
     barcode = models.CharField(max_length=100, unique=True, db_index=True)
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblproduct_detail_master.nid — lets a re-sync from iadmin update this exact item instead of duplicating it.",
+    )
     rfid_epc = models.CharField(
         max_length=100, blank=True,
         help_text="RFID chip payload. Legacy ZPL templates wrote the barcode string itself here (^RFW,a,2,,A ^FD{barcode}) — kept as the default unless a distinct EPC scheme is adopted.",
