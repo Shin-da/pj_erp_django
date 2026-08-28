@@ -2207,3 +2207,185 @@ button.linkish:hover {
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================================
+   AUTH / SIGN-IN
+   The login page previously rendered `{{ form.as_p }}`, so the panel and
+   button picked up the design system while the inputs fell back to browser
+   defaults — labels inline with colons, hairline borders, no dark-theme
+   support. These rules cover the fields the template now writes out
+   explicitly.
+   ========================================================================= */
+.auth-shell::before {
+  /* A quiet wash behind the card so the page isn't a flat expanse. Uses
+     the brand hue at very low alpha, so it reads in both themes without a
+     second colour being introduced. */
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(60rem 40rem at 50% -10%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+.auth-card {
+  position: relative;
+  width: min(400px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px 32px 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 24px 48px -28px rgba(0, 0, 0, .45);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 26px;
+}
+
+.auth-mark {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 50%;
+  border: 1px solid var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--brand);
+}
+
+.auth-name {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.auth-sub {
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.auth-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 600;
+  margin: 0 0 20px;
+}
+
+.auth-error {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin-bottom: 18px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.auth-field .field {
+  width: 100%;
+  font-size: 14px;
+  padding: 11px 13px;
+}
+
+.auth-pw {
+  position: relative;
+  display: flex;
+}
+
+.auth-pw .field {
+  padding-right: 42px;
+}
+
+.auth-pw-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: var(--radius);
+}
+
+.auth-pw-toggle:hover { color: var(--text); }
+.auth-pw-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+.auth-caps {
+  font-size: 11px;
+  color: var(--warn);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* `display:flex` above is an author rule and outranks the browser's own
+   `[hidden] { display: none }`, so without this the Caps Lock hint shows
+   from page load and never hides however correctly the JS sets the
+   attribute. Any element that gets a display value AND uses `hidden`
+   needs this guard. */
+.auth-caps[hidden] {
+  display: none;
+}
+
+.auth-submit {
+  width: 100%;
+  padding: 12px 18px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.auth-submit:disabled { opacity: .65; cursor: progress; }
+
+.auth-foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 460px) {
+  .auth-card { padding: 26px 22px 20px; border-radius: 12px; }
+  .auth-title { font-size: 23px; }
+}

@@ -1,13 +1,117 @@
 {% extends "base_auth.html" %}
 {% block title %}Sign in — Perfect Jewel ERP{% endblock %}
 {% block content %}
-<div class="panel" style="width:min(420px,100%);">
-  <h1>Perfect Jewel ERP — Sign in</h1>
-  <form method="post">
+
+<div class="auth-card">
+
+  <div class="auth-brand">
+    <div class="auth-mark">PJ</div>
+    <div>
+      <div class="auth-name">Perfect Jewelry</div>
+      <div class="auth-sub">Enterprise System</div>
+    </div>
+  </div>
+
+  <h1 class="auth-title">Sign in</h1>
+
+  {% if form.errors %}
+  <div class="auth-error" role="alert">
+    <i class="fa-solid fa-circle-exclamation"></i>
+    <div>
+      {% if form.non_field_errors %}
+        {% for err in form.non_field_errors %}{{ err }}{% endfor %}
+      {% else %}
+        Check the employee code and password, then try again.
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" class="auth-form" novalidate>
     {% csrf_token %}
-    {{ form.non_field_errors }}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-primary">Sign in</button>
+
+    <div class="auth-field">
+      <label for="{{ form.username.id_for_label }}">Employee code</label>
+      <input type="text" name="{{ form.username.html_name }}" id="{{ form.username.id_for_label }}"
+             class="field" value="{{ form.username.value|default:'' }}"
+             inputmode="numeric" autocomplete="username" autocapitalize="off" spellcheck="false"
+             autofocus required placeholder="e.g. 1001">
+    </div>
+
+    <div class="auth-field">
+      <label for="{{ form.password.id_for_label }}">Password</label>
+      <div class="auth-pw">
+        <input type="password" name="{{ form.password.html_name }}" id="{{ form.password.id_for_label }}"
+               class="field" autocomplete="current-password" required>
+        <button type="button" class="auth-pw-toggle" id="pwToggle"
+                aria-label="Show password" aria-pressed="false" title="Show password">
+          <i class="fa-regular fa-eye"></i>
+        </button>
+      </div>
+      <div class="auth-caps" id="capsHint" hidden>
+        <i class="fa-solid fa-arrow-up"></i> Caps Lock is on
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary auth-submit" id="authSubmit">Sign in</button>
   </form>
+
+  <div class="auth-foot">
+    <span class="db-badge {% if db_is_prod %}prod{% else %}dev{% endif %}" title="{{ db_name }}">
+      {% if db_is_prod %}PROD SNAPSHOT{% else %}DEV{% endif %}
+    </span>
+    <span>Trouble signing in? Ask an administrator to reset your code.</span>
+  </div>
 </div>
+
+<script>
+  (function () {
+    var pw = document.getElementById("{{ form.password.id_for_label }}");
+    var toggle = document.getElementById("pwToggle");
+    var caps = document.getElementById("capsHint");
+
+    if (toggle && pw) {
+      toggle.addEventListener("click", function () {
+        var showing = pw.type === "text";
+        pw.type = showing ? "password" : "text";
+        toggle.setAttribute("aria-pressed", String(!showing));
+        toggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+        toggle.title = showing ? "Show password" : "Hide password";
+        toggle.innerHTML = showing
+          ? '<i class="fa-regular fa-eye"></i>'
+          : '<i class="fa-regular fa-eye-slash"></i>';
+        pw.focus();
+      });
+    }
+
+    // Caps Lock catches people out on a password field they can't read.
+    if (pw && caps) {
+      function checkCaps(e) {
+        if (typeof e.getModifierState !== "function") return;
+        caps.hidden = !e.getModifierState("CapsLock");
+      }
+      pw.addEventListener("keydown", checkCaps);
+      pw.addEventListener("keyup", checkCaps);
+      pw.addEventListener("blur", function () { caps.hidden = true; });
+    }
+
+    // Stop a double submit producing two login attempts on a slow link —
+    // this runs on a free-tier host that can cold-start for several seconds.
+    var form = document.querySelector(".auth-form");
+    var submit = document.getElementById("authSubmit");
+    if (form && submit) {
+      form.addEventListener("submit", function () {
+        submit.disabled = true;
+        submit.textContent = "Signing in…";
+        // Re-enable if the browser restores this page from cache on Back,
+        // otherwise the button stays dead and the form looks broken.
+        setTimeout(function () { submit.disabled = false; submit.textContent = "Sign in"; }, 8000);
+      });
+    }
+    window.addEventListener("pageshow", function (e) {
+      if (e.persisted && submit) { submit.disabled = false; submit.textContent = "Sign in"; }
+    });
+  })();
+</script>
+
 {% endblock %}
