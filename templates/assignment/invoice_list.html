@@ -373,11 +373,20 @@
 </div>
 
 <style>
-  .inv-shell { display:grid; grid-template-columns:340px 1fr; gap:16px; align-items:start; }
+  /* ─── Density pass (step 1) ───────────────────────────────────
+     Scoped to this screen only via :has() so it can't touch the
+     other ~130 pages. This is a whitespace trim, not a structural
+     change — delete this block to revert. The locked-frame pass
+     (independent scroll panes) is a separate, later step. */
+  body:has(.inv-shell) .content { padding: 16px 20px 20px; }
+  body:has(.inv-shell) .page-head { margin-bottom: 12px; }
+  body:has(.inv-shell) .page-head p { max-width: 70ch; }
+
+  .inv-shell { display:grid; grid-template-columns:340px 1fr; gap:14px; align-items:start; }
   .inv-list-col { display:flex; flex-direction:column; gap:10px; }
   .inv-filter { display:flex; gap:8px; }
   .inv-filter .fbar-input { flex:1; }
-  .inv-list { display:flex; flex-direction:column; gap:8px; max-height:72vh; overflow-y:auto; }
+  .inv-list { display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 150px); overflow-y:auto; }
   .inv-row { display:block; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; text-decoration:none; color:inherit; transition:border-color var(--t-fast); }
   .inv-row:hover { border-color:var(--brand); }
   .inv-row.active { border-color:var(--brand); background:var(--brand-dim); }
