@@ -563,7 +563,7 @@
     var ox = document.getElementById('tplOffsetX');
     var oy = document.getElementById('tplOffsetY');
     if (ox) ox.value = '0';
-    if (oy && !(parseInt(oy.value, 10) || 0)) oy.value = '35';
+    if (oy) oy.value = String(Math.round(55 * ((cfg.dpi || 300) / 300)));
     syncSizeInputs();
 
     var front = preset.regions.find(function (r) { return r.id === 'front'; });
@@ -607,10 +607,10 @@
       F('barcode_image', back.x + ds(8), back.y + ds(36), {
         font_size: ds(22), box_width: back.w - ds(16),
       }),
-      F('category_code', back.x + ds(8), back.y + ds(84), {
+      F('category_code', back.x + ds(8), back.y + ds(78), {
         font_size: ds(16), box_width: ds(60),
       }),
-      F('company_name', back.x + ds(8), back.y + ds(101), {
+      F('company_name', back.x + ds(8), back.y + ds(96), {
         font_size: ds(15), bold: true, align: 'C', box_width: back.w - ds(16),
       }),
     ];

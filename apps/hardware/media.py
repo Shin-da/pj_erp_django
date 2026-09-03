@@ -179,6 +179,115 @@ def get_media_profile(profile_id, width_dots=None, height_dots=None, dpi=300):
 DEFAULT_MEDIA_PROFILE = "irys_standard"
 DEFAULT_PRINTER_DPI = 300
 
+# Zebra jewellery RFID continuous stock typically starts printing a few mm
+# above the die-cut. This is the baseline Y nudge (at 300 DPI) that lands
+# front/back content on the correct faces — fine-tune further with template.offset_y.
+IRYS_REGISTRATION_OFFSET_Y_300 = 55
+
+
+def irys_registration_offset_y(dpi=None):
+    dpi = int(dpi or DEFAULT_PRINTER_DPI)
+    return int(round(IRYS_REGISTRATION_OFFSET_Y_300 * dpi / DEFAULT_PRINTER_DPI))
+
+
+def irys_jewellery_sample_layout(dpi=None):
+    """Canonical jewellery tag fields for Irys Standard at the given DPI.
+
+    Positions assume `offset_y` will include `irys_registration_offset_y(dpi)`
+    (or equal it). Keeps price/SKU on the front and PJ/barcode on the back
+    with clearance from the fold after registration.
+    """
+    dpi = int(dpi or DEFAULT_PRINTER_DPI)
+    geo = irys_standard(dpi)
+    front = next(r for r in geo["regions"] if r["id"] == "front")
+    back = next(r for r in geo["regions"] if r["id"] == "back")
+    tail = next(r for r in geo["regions"] if r["id"] == "tail")
+    s = dpi / DEFAULT_PRINTER_DPI
+
+    def ds(n):
+        return max(1, int(round(n * s)))
+
+    fields = [
+        {
+            "field_key": "subcategory",
+            "x": tail["x"] + ds(70),
+            "y": tail["y"] + ds(6),
+            "font_size": ds(24),
+            "bold": True,
+            "align": "C",
+            "box_width": max(ds(80), tail["w"] - ds(100)),
+        },
+        {
+            "field_key": "reference_id",
+            "x": front["x"] + ds(8),
+            "y": front["y"] + ds(6),
+            "font_size": ds(22),
+            "bold": True,
+            "align": "L",
+            "box_width": front["w"] - ds(16),
+        },
+        {
+            "field_key": "price_rated",
+            "x": front["x"] + ds(8),
+            "y": front["y"] + ds(38),
+            "font_size": ds(26),
+            "bold": True,
+            "align": "C",
+            "box_width": front["w"] - ds(16),
+        },
+        {
+            "field_key": "horizontal_line",
+            "x": front["x"] + ds(8),
+            "y": front["y"] + ds(74),
+            "font_size": ds(12),
+            "bold": False,
+            "align": "L",
+            "box_width": front["w"] - ds(16),
+        },
+        {
+            "field_key": "barcode_number",
+            "x": back["x"] + ds(8),
+            "y": back["y"] + ds(8),
+            "font_size": ds(22),
+            "bold": True,
+            "align": "L",
+            "box_width": back["w"] - ds(16),
+        },
+        {
+            "field_key": "barcode_image",
+            "x": back["x"] + ds(8),
+            "y": back["y"] + ds(34),
+            "font_size": ds(22),
+            "bold": False,
+            "align": "L",
+            "box_width": back["w"] - ds(16),
+        },
+        {
+            "field_key": "category_code",
+            "x": back["x"] + ds(8),
+            "y": back["y"] + ds(78),
+            "font_size": ds(16),
+            "bold": False,
+            "align": "L",
+            "box_width": ds(60),
+        },
+        {
+            "field_key": "company_name",
+            "x": back["x"] + ds(8),
+            "y": back["y"] + ds(96),
+            "font_size": ds(15),
+            "bold": True,
+            "align": "C",
+            "box_width": back["w"] - ds(16),
+        },
+    ]
+    return {
+        "geometry": geo,
+        "fields": fields,
+        "offset_y": irys_registration_offset_y(dpi),
+        "offset_x": 0,
+    }
+
 
 def scale_dot(value, from_dpi, to_dpi):
     """Scale a single dot measurement between DPI settings."""

@@ -78,7 +78,7 @@ class LabelTemplate(TimeStampedModel):
     )
     offset_y = models.IntegerField(
         default=0,
-        help_text="Print Y nudge in dots (positive shifts down). Use to align with the physical die-cut.",
+        help_text="Print Y nudge in dots (positive shifts down). Irys RFID stock usually needs ~55 at 300 DPI so content lands on the die-cut.",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="label_templates"
@@ -100,6 +100,8 @@ class LabelTemplate(TimeStampedModel):
 
     def apply_media_defaults(self):
         """Resize canvas to the selected paper profile's native size at current DPI."""
+        from .media import irys_registration_offset_y
+
         geo = get_media_profile(
             self.media_profile or DEFAULT_MEDIA_PROFILE,
             dpi=self.dpi or DEFAULT_PRINTER_DPI,
@@ -107,6 +109,10 @@ class LabelTemplate(TimeStampedModel):
         self.width_dots = geo["width_dots"]
         self.height_dots = geo["height_dots"]
         self.dpi = geo["dpi"]
+        if (self.media_profile or DEFAULT_MEDIA_PROFILE) == "irys_standard":
+            # New Irys templates start with the die-cut registration nudge.
+            if not self.offset_y:
+                self.offset_y = irys_registration_offset_y(self.dpi)
 
     def rescale_fields_to_dpi(self, new_dpi):
         """Scale every field's x/y/font/box when the printer DPI changes."""

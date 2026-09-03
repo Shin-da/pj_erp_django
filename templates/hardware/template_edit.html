@@ -56,7 +56,7 @@
   </div>
   <div>
     <div class="kpi-label" style="margin-bottom:6px;">Offset Y</div>
-    <input type="number" id="tplOffsetY" class="field" style="width:80px;" value="{{ template_obj.offset_y }}" title="Print nudge down (+) / up (−)">
+    <input type="number" id="tplOffsetY" class="field" style="width:80px;" value="{{ template_obj.offset_y }}" title="Print nudge down (+) / up (−). Irys RFID usually needs ~55 at 300 DPI.">
   </div>
   <div style="padding-bottom:2px;">
     <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
@@ -374,6 +374,6 @@
     zoom: 2.2,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}?v=8"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=9"></script>
 
 {% endblock %}
