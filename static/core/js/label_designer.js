@@ -559,13 +559,18 @@
     cfg.widthDots = preset.width_dots;
     cfg.heightDots = preset.height_dots;
     cfg.geometry = JSON.parse(JSON.stringify(preset));
+    // Typical Zebra jewellery RFID needs a small downward nudge onto the die-cut.
+    var ox = document.getElementById('tplOffsetX');
+    var oy = document.getElementById('tplOffsetY');
+    if (ox) ox.value = '0';
+    if (oy && !(parseInt(oy.value, 10) || 0)) oy.value = '35';
     syncSizeInputs();
 
     var front = preset.regions.find(function (r) { return r.id === 'front'; });
     var back = preset.regions.find(function (r) { return r.id === 'back'; });
     var tail = preset.regions.find(function (r) { return r.id === 'tail'; });
-    // Sample was tuned at 203 DPI — scale fonts/gaps to current DPI.
-    var s = (cfg.dpi || 300) / 203;
+    // Tuned for 300 DPI faces (~295×154); scale if the template DPI differs.
+    var s = (cfg.dpi || 300) / 300;
     function ds(n) { return Math.max(1, Math.round(n * s)); }
     var id = -1;
     function F(key, x, y, opts) {
@@ -575,31 +580,39 @@
         field_key: key,
         static_text: opts.static_text || '',
         x: x, y: y,
-        font_size: opts.font_size || ds(14),
+        font_size: opts.font_size || ds(20),
         bold: !!opts.bold,
         align: opts.align || 'L',
-        box_width: opts.box_width || ds(90),
+        box_width: opts.box_width || ds(120),
         visible: true,
         order: 0,
       };
     }
     cfg.fields = [
-      F('subcategory', tail.x + ds(48), tail.y + Math.max(1, Math.floor((tail.h - ds(12)) / 2)), {
-        font_size: ds(14), bold: true, align: 'C', box_width: Math.max(ds(80), tail.w - ds(70)),
+      F('subcategory', tail.x + ds(70), tail.y + ds(6), {
+        font_size: ds(24), bold: true, align: 'C', box_width: Math.max(ds(80), tail.w - ds(100)),
       }),
-      F('reference_id', front.x + ds(4), front.y + ds(4), { font_size: ds(16), bold: true, box_width: ds(110) }),
-      F('colour', front.x + front.w - ds(54), front.y + ds(4), { font_size: ds(14), align: 'R', box_width: ds(50) }),
-      F('metal_purity', front.x + ds(4), front.y + ds(22), { font_size: ds(12), box_width: ds(50) }),
-      F('weight', front.x + ds(58), front.y + ds(22), { font_size: ds(12), box_width: ds(55) }),
-      F('metal', front.x + front.w - ds(50), front.y + ds(22), { font_size: ds(12), align: 'R', box_width: ds(46) }),
-      F('stone', front.x + ds(4), front.y + ds(38), { font_size: ds(11), box_width: front.w - ds(8) }),
-      F('price_rated', front.x + ds(4), front.y + ds(58), { font_size: ds(16), bold: true, align: 'C', box_width: front.w - ds(8) }),
-      F('horizontal_line', front.x + ds(4), front.y + front.h - ds(4), { font_size: ds(10), box_width: front.w - ds(8) }),
-      F('barcode_number', back.x + ds(4), back.y + ds(4), { font_size: ds(14), bold: true, box_width: ds(120) }),
-      F('barcode_image', back.x + ds(4), back.y + ds(22), { font_size: ds(16), box_width: back.w - ds(8) }),
-      F('category_code', back.x + ds(4), back.y + ds(62), { font_size: ds(12), box_width: ds(40) }),
-      F('size', back.x + ds(50), back.y + ds(62), { font_size: ds(12), box_width: ds(60) }),
-      F('company_name', back.x + ds(4), back.y + back.h - ds(18), { font_size: ds(12), bold: true, align: 'C', box_width: back.w - ds(8) }),
+      F('reference_id', front.x + ds(8), front.y + ds(6), {
+        font_size: ds(22), bold: true, box_width: front.w - ds(16),
+      }),
+      F('price_rated', front.x + ds(8), front.y + ds(40), {
+        font_size: ds(26), bold: true, align: 'C', box_width: front.w - ds(16),
+      }),
+      F('horizontal_line', front.x + ds(8), front.y + ds(76), {
+        font_size: ds(12), box_width: front.w - ds(16),
+      }),
+      F('barcode_number', back.x + ds(8), back.y + ds(8), {
+        font_size: ds(22), bold: true, box_width: back.w - ds(16),
+      }),
+      F('barcode_image', back.x + ds(8), back.y + ds(36), {
+        font_size: ds(22), box_width: back.w - ds(16),
+      }),
+      F('category_code', back.x + ds(8), back.y + ds(84), {
+        font_size: ds(16), box_width: ds(60),
+      }),
+      F('company_name', back.x + ds(8), back.y + ds(101), {
+        font_size: ds(15), bold: true, align: 'C', box_width: back.w - ds(16),
+      }),
     ];
     selectedId = null;
     applyZoom();
