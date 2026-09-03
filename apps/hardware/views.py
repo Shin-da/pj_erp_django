@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 
 from apps.inventory.models import ProductItem
 
-from .media import MEDIA_PROFILES, get_media_profile
+from .media import DEFAULT_PRINTER_DPI, MEDIA_PROFILES, get_media_profile
 from .models import LabelField, LabelTemplate
 from .zpl import SAMPLE_FIELD_VALUES, build_zpl, render_field_text, resolve_field_values
 
@@ -161,7 +161,8 @@ def template_edit(request, pk):
         "sample_values_json": json.dumps(SAMPLE_FIELD_VALUES),
         "geometry_json": json.dumps(geometry),
         "media_profiles_json": json.dumps({
-            pid: get_media_profile(pid) for pid in MEDIA_PROFILES
+            pid: get_media_profile(pid, dpi=tpl.dpi or DEFAULT_PRINTER_DPI)
+            for pid in MEDIA_PROFILES
         }),
     })
 
@@ -198,6 +199,8 @@ def template_save(request, pk):
         if media_profile in valid_media:
             tpl.media_profile = media_profile
 
+        # Field coords in the payload are already in the chosen DPI space
+        # (designer rescales client-side when DPI changes).
         if "dpi" in payload:
             try:
                 tpl.dpi = max(100, min(600, int(payload.get("dpi") or tpl.dpi)))
@@ -207,7 +210,7 @@ def template_save(request, pk):
         for attr in ("offset_x", "offset_y"):
             if attr in payload:
                 try:
-                    setattr(tpl, attr, max(-500, min(500, int(payload.get(attr) or 0))))
+                    setattr(tpl, attr, max(-800, min(800, int(payload.get(attr) or 0))))
                 except (TypeError, ValueError):
                     pass
 

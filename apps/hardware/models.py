@@ -28,7 +28,7 @@ from django.db import models
 
 from apps.core.models import TimeStampedModel
 
-from .media import DEFAULT_MEDIA_PROFILE, get_media_profile
+from .media import DEFAULT_MEDIA_PROFILE, DEFAULT_PRINTER_DPI, get_media_profile, scale_dot
 
 
 class LabelTemplate(TimeStampedModel):
@@ -61,16 +61,16 @@ class LabelTemplate(TimeStampedModel):
         help_text="Paper die-cut overlay in the designer (Irys jewellery RFID vs free rectangle).",
     )
     dpi = models.PositiveIntegerField(
-        default=203,
-        help_text="Printer DPI used to convert mm↔dots for the paper outline (Zebra desktop default is 203).",
+        default=DEFAULT_PRINTER_DPI,
+        help_text="Must match the Zebra printer DPI (jewellery RFID units are usually 300). Wrong DPI compresses both faces into one panel.",
     )
     width_dots = models.PositiveIntegerField(
-        default=600,
-        help_text="Label width in printer dots — matches the ZPL ^PW command. Irys Standard @ 203 DPI ≈ 600 (75 mm).",
+        default=886,
+        help_text="Label width in printer dots — matches the ZPL ^PW command. Irys Standard @ 300 DPI ≈ 886 (75 mm).",
     )
     height_dots = models.PositiveIntegerField(
-        default=208,
-        help_text="Label height in printer dots (designer canvas). Continuous RFID stock does not emit ^LL.",
+        default=308,
+        help_text="Label height in printer dots (designer canvas). Continuous RFID stock does not emit ^LL. Irys @ 300 DPI ≈ 308 (26 mm).",
     )
     offset_x = models.IntegerField(
         default=0,
@@ -95,16 +95,34 @@ class LabelTemplate(TimeStampedModel):
             self.media_profile or DEFAULT_MEDIA_PROFILE,
             width_dots=self.width_dots,
             height_dots=self.height_dots,
-            dpi=self.dpi or 203,
+            dpi=self.dpi or DEFAULT_PRINTER_DPI,
         )
 
     def apply_media_defaults(self):
-        """Resize canvas to the selected paper profile's native size."""
-        geo = get_media_profile(self.media_profile or DEFAULT_MEDIA_PROFILE, dpi=self.dpi or 203)
+        """Resize canvas to the selected paper profile's native size at current DPI."""
+        geo = get_media_profile(
+            self.media_profile or DEFAULT_MEDIA_PROFILE,
+            dpi=self.dpi or DEFAULT_PRINTER_DPI,
+        )
         self.width_dots = geo["width_dots"]
         self.height_dots = geo["height_dots"]
         self.dpi = geo["dpi"]
 
+    def rescale_fields_to_dpi(self, new_dpi):
+        """Scale every field's x/y/font/box when the printer DPI changes."""
+        old = self.dpi or DEFAULT_PRINTER_DPI
+        new = int(new_dpi or DEFAULT_PRINTER_DPI)
+        if old == new:
+            return
+        for f in self.fields.all():
+            f.x = scale_dot(f.x, old, new)
+            f.y = scale_dot(f.y, old, new)
+            f.font_size = max(8, scale_dot(f.font_size, old, new))
+            f.box_width = max(10, scale_dot(f.box_width, old, new))
+            f.save(update_fields=["x", "y", "font_size", "box_width", "updated_at"])
+        self.dpi = new
+        self.offset_x = scale_dot(self.offset_x, old, new)
+        self.offset_y = scale_dot(self.offset_y, old, new)
 
 class LabelField(TimeStampedModel):
     class FieldKey(models.TextChoices):

@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Label designer</h1>
-    <p>Drag fields onto the Irys tag outline (tail · front · back). Coordinates are printer dots at the template DPI.</p>
+    <p>Drag fields onto the Irys tag outline (tail · front · back). Coordinates are printer dots — set DPI to match your Zebra (usually <strong>300</strong> for jewellery RFID).</p>
   </div>
   <div class="page-head-actions">
     <a href="{% url 'hardware:template_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back</a>
@@ -32,6 +32,14 @@
       {% for value, label in media_profiles %}
       <option value="{{ value }}" {% if value == template_obj.media_profile %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
+    </select>
+  </div>
+  <div>
+    <div class="kpi-label" style="margin-bottom:6px;">Printer DPI</div>
+    <select id="tplDpi" class="field" style="min-width:100px;" title="Must match the Zebra (jewellery RFID is usually 300)">
+      <option value="203" {% if template_obj.dpi == 203 %}selected{% endif %}>203</option>
+      <option value="300" {% if template_obj.dpi == 300 %}selected{% endif %}>300</option>
+      <option value="600" {% if template_obj.dpi == 600 %}selected{% endif %}>600</option>
     </select>
   </div>
   <div>
@@ -363,9 +371,9 @@
     offsetX: {{ template_obj.offset_x }},
     offsetY: {{ template_obj.offset_y }},
     dpi: {{ template_obj.dpi }},
-    zoom: 3,
+    zoom: 2.2,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}?v=6"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=7"></script>
 
 {% endblock %}

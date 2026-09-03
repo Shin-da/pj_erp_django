@@ -20,6 +20,131 @@
     return match ? match.pop() : '';
   }
 
+  function mmToDots(mm, dpi) {
+    return Math.round(mm * (dpi || 300) / 25.4);
+  }
+
+  function scaleDot(value, fromDpi, toDpi) {
+    fromDpi = fromDpi || 300;
+    toDpi = toDpi || 300;
+    if (fromDpi === toDpi) return Math.round(value || 0);
+    return Math.round((value || 0) * toDpi / fromDpi);
+  }
+
+  /** Rebuild Irys / blank geometry at an arbitrary printer DPI (matches media.py). */
+  function buildMediaProfile(profileId, dpi, widthDots, heightDots) {
+    dpi = parseInt(dpi, 10) || 300;
+    if (profileId === 'irys_standard') {
+      var tailW = mmToDots(50, dpi);
+      var faceW = mmToDots(25, dpi);
+      var faceH = mmToDots(13, dpi);
+      var width = tailW + faceW;
+      var height = faceH * 2;
+      var tailH = mmToDots(4, dpi);
+      var tailY = Math.floor((faceH - tailH) / 2);
+      var tipW = mmToDots(6, dpi);
+      var base = {
+        id: 'irys_standard',
+        label: 'Irys Standard RFID (25×13 mm closed + 50 mm tail)',
+        dpi: dpi,
+        width_mm: Math.round(width * 25.4 / dpi * 10) / 10,
+        height_mm: Math.round(height * 25.4 / dpi * 10) / 10,
+        width_dots: width,
+        height_dots: height,
+        regions: [
+          { id: 'tail', label: 'Tail', hint: 'On the front face only', x: 0, y: tailY, w: tailW, h: tailH },
+          { id: 'front', label: 'Front', hint: 'Tail attached', x: tailW, y: 0, w: faceW, h: faceH },
+          { id: 'back', label: 'Back', hint: 'No tail', x: tailW, y: faceH, w: faceW, h: faceH },
+        ],
+        outline: [
+          [0, tailY + Math.floor(tailH / 2)],
+          [tipW, tailY],
+          [tailW, tailY],
+          [tailW, 0],
+          [width, 0],
+          [width, height],
+          [tailW, height],
+          [tailW, tailY + tailH],
+          [tipW, tailY + tailH],
+        ],
+        fold_y: faceH,
+      };
+      if (widthDots && heightDots && (widthDots !== width || heightDots !== height)) {
+        var sx = widthDots / width;
+        var sy = heightDots / height;
+        base.width_dots = widthDots;
+        base.height_dots = heightDots;
+        base.width_mm = Math.round(widthDots * 25.4 / dpi * 10) / 10;
+        base.height_mm = Math.round(heightDots * 25.4 / dpi * 10) / 10;
+        base.regions = base.regions.map(function (r) {
+          return {
+            id: r.id, label: r.label, hint: r.hint,
+            x: Math.round(r.x * sx), y: Math.round(r.y * sy),
+            w: Math.round(r.w * sx), h: Math.round(r.h * sy),
+          };
+        });
+        base.outline = base.outline.map(function (p) {
+          return [Math.round(p[0] * sx), Math.round(p[1] * sy)];
+        });
+        base.fold_y = Math.round(base.fold_y * sy);
+      }
+      return base;
+    }
+    var w = widthDots || mmToDots(75, dpi);
+    var h = heightDots || mmToDots(26, dpi);
+    return {
+      id: 'blank',
+      label: 'Blank rectangle (free design)',
+      dpi: dpi,
+      width_mm: Math.round(w * 25.4 / dpi * 10) / 10,
+      height_mm: Math.round(h * 25.4 / dpi * 10) / 10,
+      width_dots: w,
+      height_dots: h,
+      regions: [{ id: 'body', label: 'Label', hint: 'Full printable area', x: 0, y: 0, w: w, h: h }],
+      outline: [[0, 0], [w, 0], [w, h], [0, h]],
+      fold_y: null,
+    };
+  }
+
+  function refreshMediaCatalog(dpi) {
+    cfg.mediaProfiles = {
+      irys_standard: buildMediaProfile('irys_standard', dpi),
+      blank: buildMediaProfile('blank', dpi),
+    };
+  }
+
+  function applyDpi(newDpi, opts) {
+    opts = opts || {};
+    newDpi = parseInt(newDpi, 10) || 300;
+    var oldDpi = cfg.dpi || 300;
+    if (newDpi === oldDpi && !opts.force) return;
+    if (oldDpi !== newDpi) {
+      cfg.fields.forEach(function (f) {
+        f.x = scaleDot(f.x, oldDpi, newDpi);
+        f.y = scaleDot(f.y, oldDpi, newDpi);
+        f.font_size = Math.max(8, scaleDot(f.font_size, oldDpi, newDpi));
+        f.box_width = Math.max(10, scaleDot(f.box_width, oldDpi, newDpi));
+      });
+      var ox = document.getElementById('tplOffsetX');
+      var oy = document.getElementById('tplOffsetY');
+      if (ox) ox.value = scaleDot(parseInt(ox.value, 10) || 0, oldDpi, newDpi);
+      if (oy) oy.value = scaleDot(parseInt(oy.value, 10) || 0, oldDpi, newDpi);
+    }
+    cfg.dpi = newDpi;
+    refreshMediaCatalog(newDpi);
+    var preset = cfg.mediaProfiles[cfg.mediaProfile] || cfg.mediaProfiles.irys_standard;
+    if (opts.keepSize) {
+      cfg.geometry = buildMediaProfile(cfg.mediaProfile, newDpi, cfg.widthDots, cfg.heightDots);
+    } else {
+      cfg.widthDots = preset.width_dots;
+      cfg.heightDots = preset.height_dots;
+      cfg.geometry = JSON.parse(JSON.stringify(preset));
+    }
+    syncSizeInputs();
+    applyZoom();
+    renderProps();
+  }
+
   function fieldById(id) {
     return cfg.fields.find(function (f) { return f.id === id; });
   }
@@ -61,7 +186,8 @@
       var mmW = cfg.geometry && cfg.geometry.width_mm;
       var mmH = cfg.geometry && cfg.geometry.height_mm;
       sizeLabel.textContent = w + '×' + h + ' dots'
-        + (mmW && mmH ? ' · ~' + mmW + '×' + mmH + ' mm' : '');
+        + (mmW && mmH ? ' · ~' + mmW + '×' + mmH + ' mm' : '')
+        + ' · ' + (cfg.dpi || 300) + ' dpi';
     }
     renderCanvas();
   }
@@ -372,17 +498,17 @@
   if (mediaSelect) {
     mediaSelect.addEventListener('change', function () {
       var pid = mediaSelect.value;
+      refreshMediaCatalog(cfg.dpi || 300);
       var preset = cfg.mediaProfiles[pid];
       if (!preset) return;
-      if (!confirm('Switch paper to "' + preset.label + '" and resize the canvas to '
-        + preset.width_dots + '×' + preset.height_dots + ' dots? Field positions are kept.')) {
+      if (!confirm('Switch paper to "' + (preset.label || pid) + '" and resize the canvas to match? Field positions stay as-is.')) {
         mediaSelect.value = cfg.mediaProfile;
         return;
       }
       cfg.mediaProfile = pid;
       cfg.widthDots = preset.width_dots;
       cfg.heightDots = preset.height_dots;
-      cfg.geometry = preset;
+      cfg.geometry = JSON.parse(JSON.stringify(preset));
       syncSizeInputs();
       applyZoom();
     });
@@ -391,56 +517,29 @@
   function onSizeChange() {
     cfg.widthDots = parseInt(widthInput.value, 10) || cfg.widthDots;
     cfg.heightDots = parseInt(heightInput.value, 10) || cfg.heightDots;
-    cfg.geometry = (window.HARDWARE_DESIGNER_rebuildGeometry
-      && window.HARDWARE_DESIGNER_rebuildGeometry(cfg.mediaProfile, cfg.widthDots, cfg.heightDots))
-      || cfg.geometry;
-    // Rebuild geometry client-side from stored profiles when possible
-    var preset = cfg.mediaProfiles[cfg.mediaProfile];
-    if (preset && cfg.mediaProfile === 'blank') {
-      cfg.geometry = {
-        id: 'blank',
-        label: preset.label,
-        dpi: preset.dpi,
-        width_mm: Math.round(cfg.widthDots * 25.4 / (preset.dpi || 203) * 10) / 10,
-        height_mm: Math.round(cfg.heightDots * 25.4 / (preset.dpi || 203) * 10) / 10,
-        width_dots: cfg.widthDots,
-        height_dots: cfg.heightDots,
-        regions: [{ id: 'body', label: 'Label', hint: 'Full printable area', x: 0, y: 0, w: cfg.widthDots, h: cfg.heightDots }],
-        outline: [[0, 0], [cfg.widthDots, 0], [cfg.widthDots, cfg.heightDots], [0, cfg.heightDots]],
-        fold_y: null,
-      };
-    } else if (preset && cfg.mediaProfile === 'irys_standard') {
-      var sx = cfg.widthDots / preset.width_dots;
-      var sy = cfg.heightDots / preset.height_dots;
-      cfg.geometry = {
-        id: preset.id,
-        label: preset.label,
-        dpi: preset.dpi,
-        width_mm: Math.round(cfg.widthDots * 25.4 / (preset.dpi || 203) * 10) / 10,
-        height_mm: Math.round(cfg.heightDots * 25.4 / (preset.dpi || 203) * 10) / 10,
-        width_dots: cfg.widthDots,
-        height_dots: cfg.heightDots,
-        regions: preset.regions.map(function (r) {
-          return {
-            id: r.id, label: r.label, hint: r.hint,
-            x: Math.round(r.x * sx), y: Math.round(r.y * sy),
-            w: Math.round(r.w * sx), h: Math.round(r.h * sy),
-          };
-        }),
-        outline: preset.outline.map(function (p) {
-          return [Math.round(p[0] * sx), Math.round(p[1] * sy)];
-        }),
-        fold_y: preset.fold_y != null ? Math.round(preset.fold_y * sy) : null,
-      };
-    }
+    cfg.geometry = buildMediaProfile(cfg.mediaProfile, cfg.dpi || 300, cfg.widthDots, cfg.heightDots);
     applyZoom();
   }
 
   if (widthInput) widthInput.addEventListener('change', onSizeChange);
   if (heightInput) heightInput.addEventListener('change', onSizeChange);
 
+  var dpiSelect = document.getElementById('tplDpi');
+  if (dpiSelect) {
+    dpiSelect.addEventListener('change', function () {
+      var next = parseInt(dpiSelect.value, 10) || 300;
+      if (next === (cfg.dpi || 300)) return;
+      if (!confirm('Switch to ' + next + ' DPI? Field positions will be rescaled to keep the same physical layout. Jewellery RFID Zebras are usually 300.')) {
+        dpiSelect.value = String(cfg.dpi || 300);
+        return;
+      }
+      applyDpi(next);
+    });
+  }
+
   document.getElementById('fitIrysBtn') && document.getElementById('fitIrysBtn').addEventListener('click', function () {
-    mediaSelect.value = 'irys_standard';
+    refreshMediaCatalog(cfg.dpi || 300);
+    if (mediaSelect) mediaSelect.value = 'irys_standard';
     cfg.mediaProfile = 'irys_standard';
     var preset = cfg.mediaProfiles.irys_standard;
     cfg.widthDots = preset.width_dots;
@@ -453,7 +552,7 @@
   /* -------- Sample jewellery layout -------- */
   document.getElementById('loadSampleBtn') && document.getElementById('loadSampleBtn').addEventListener('click', function () {
     if (!confirm('Replace current fields with the Irys jewellery sample layout (front / back / tail)?')) return;
-    // Ensure Irys paper
+    refreshMediaCatalog(cfg.dpi || 300);
     var preset = cfg.mediaProfiles.irys_standard;
     cfg.mediaProfile = 'irys_standard';
     if (mediaSelect) mediaSelect.value = 'irys_standard';
@@ -465,6 +564,9 @@
     var front = preset.regions.find(function (r) { return r.id === 'front'; });
     var back = preset.regions.find(function (r) { return r.id === 'back'; });
     var tail = preset.regions.find(function (r) { return r.id === 'tail'; });
+    // Sample was tuned at 203 DPI — scale fonts/gaps to current DPI.
+    var s = (cfg.dpi || 300) / 203;
+    function ds(n) { return Math.max(1, Math.round(n * s)); }
     var id = -1;
     function F(key, x, y, opts) {
       opts = opts || {};
@@ -473,34 +575,31 @@
         field_key: key,
         static_text: opts.static_text || '',
         x: x, y: y,
-        font_size: opts.font_size || 14,
+        font_size: opts.font_size || ds(14),
         bold: !!opts.bold,
         align: opts.align || 'L',
-        box_width: opts.box_width || 90,
+        box_width: opts.box_width || ds(90),
         visible: true,
         order: 0,
       };
     }
     cfg.fields = [
-      // Tail — on the front face only (pointed strip left of Front)
-      F('subcategory', tail.x + 48, tail.y + Math.max(1, Math.floor((tail.h - 12) / 2)), {
-        font_size: 14, bold: true, align: 'C', box_width: Math.max(80, tail.w - 70),
+      F('subcategory', tail.x + ds(48), tail.y + Math.max(1, Math.floor((tail.h - ds(12)) / 2)), {
+        font_size: ds(14), bold: true, align: 'C', box_width: Math.max(ds(80), tail.w - ds(70)),
       }),
-      // Front
-      F('reference_id', front.x + 4, front.y + 4, { font_size: 16, bold: true, box_width: 110 }),
-      F('colour', front.x + front.w - 54, front.y + 4, { font_size: 14, align: 'R', box_width: 50 }),
-      F('metal_purity', front.x + 4, front.y + 22, { font_size: 12, box_width: 50 }),
-      F('weight', front.x + 58, front.y + 22, { font_size: 12, box_width: 55 }),
-      F('metal', front.x + front.w - 50, front.y + 22, { font_size: 12, align: 'R', box_width: 46 }),
-      F('stone', front.x + 4, front.y + 38, { font_size: 11, box_width: front.w - 8 }),
-      F('price_rated', front.x + 4, front.y + 58, { font_size: 16, bold: true, align: 'C', box_width: front.w - 8 }),
-      F('horizontal_line', front.x + 4, front.y + front.h - 4, { font_size: 10, box_width: front.w - 8 }),
-      // Back
-      F('barcode_number', back.x + 4, back.y + 4, { font_size: 14, bold: true, box_width: 120 }),
-      F('barcode_image', back.x + 4, back.y + 22, { font_size: 16, box_width: back.w - 8 }),
-      F('category_code', back.x + 4, back.y + 62, { font_size: 12, box_width: 40 }),
-      F('size', back.x + 50, back.y + 62, { font_size: 12, box_width: 60 }),
-      F('company_name', back.x + 4, back.y + back.h - 18, { font_size: 12, bold: true, align: 'C', box_width: back.w - 8 }),
+      F('reference_id', front.x + ds(4), front.y + ds(4), { font_size: ds(16), bold: true, box_width: ds(110) }),
+      F('colour', front.x + front.w - ds(54), front.y + ds(4), { font_size: ds(14), align: 'R', box_width: ds(50) }),
+      F('metal_purity', front.x + ds(4), front.y + ds(22), { font_size: ds(12), box_width: ds(50) }),
+      F('weight', front.x + ds(58), front.y + ds(22), { font_size: ds(12), box_width: ds(55) }),
+      F('metal', front.x + front.w - ds(50), front.y + ds(22), { font_size: ds(12), align: 'R', box_width: ds(46) }),
+      F('stone', front.x + ds(4), front.y + ds(38), { font_size: ds(11), box_width: front.w - ds(8) }),
+      F('price_rated', front.x + ds(4), front.y + ds(58), { font_size: ds(16), bold: true, align: 'C', box_width: front.w - ds(8) }),
+      F('horizontal_line', front.x + ds(4), front.y + front.h - ds(4), { font_size: ds(10), box_width: front.w - ds(8) }),
+      F('barcode_number', back.x + ds(4), back.y + ds(4), { font_size: ds(14), bold: true, box_width: ds(120) }),
+      F('barcode_image', back.x + ds(4), back.y + ds(22), { font_size: ds(16), box_width: back.w - ds(8) }),
+      F('category_code', back.x + ds(4), back.y + ds(62), { font_size: ds(12), box_width: ds(40) }),
+      F('size', back.x + ds(50), back.y + ds(62), { font_size: ds(12), box_width: ds(60) }),
+      F('company_name', back.x + ds(4), back.y + back.h - ds(18), { font_size: ds(12), bold: true, align: 'C', box_width: back.w - ds(8) }),
     ];
     selectedId = null;
     applyZoom();
@@ -519,7 +618,7 @@
       media_profile: cfg.mediaProfile,
       width_dots: cfg.widthDots,
       height_dots: cfg.heightDots,
-      dpi: cfg.dpi || 203,
+      dpi: cfg.dpi || 300,
       offset_x: parseInt((document.getElementById('tplOffsetX') || {}).value, 10) || 0,
       offset_y: parseInt((document.getElementById('tplOffsetY') || {}).value, 10) || 0,
       fields: cfg.fields.map(function (f) {
@@ -555,6 +654,11 @@
           if (data.width_dots) cfg.widthDots = data.width_dots;
           if (data.height_dots) cfg.heightDots = data.height_dots;
           if (data.media_profile) cfg.mediaProfile = data.media_profile;
+          if (typeof data.dpi === 'number') {
+            cfg.dpi = data.dpi;
+            if (dpiSelect) dpiSelect.value = String(data.dpi);
+            refreshMediaCatalog(data.dpi);
+          }
           if (typeof data.offset_x === 'number' && document.getElementById('tplOffsetX')) {
             document.getElementById('tplOffsetX').value = data.offset_x;
           }
@@ -573,6 +677,7 @@
       });
   });
 
+  refreshMediaCatalog(cfg.dpi || 300);
   syncSizeInputs();
   applyZoom();
   renderProps();
