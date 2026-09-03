@@ -19,6 +19,14 @@ FIELD_LIST_VALUES = (
     "bold", "align", "box_width", "visible", "order",
 )
 
+
+def _region_at(geometry, x, y):
+    """Return the die-cut region label covering (x, y), if any."""
+    for r in (geometry or {}).get("regions") or []:
+        if r["x"] <= x <= r["x"] + r["w"] and r["y"] <= y <= r["y"] + r["h"]:
+            return r.get("label") or r.get("id") or ""
+    return ""
+
 # Palette order — matches how staff think about a jewellery tag.
 FIELD_PALETTE_GROUPS = [
     ("Identity", [
@@ -338,6 +346,7 @@ def print_labels(request):
             for f in tpl.fields.filter(visible=True).order_by("order", "id"):
                 px = max(0, f.x + ox)
                 py = max(0, f.y + oy)
+                region = _region_at(geometry, px, py)
                 if f.field_key == "horizontal_line":
                     preview_fields.append({
                         "key": f.field_key,
@@ -352,6 +361,7 @@ def print_labels(request):
                         "is_line": True,
                         "is_barcode": False,
                         "blank": False,
+                        "region": region,
                     })
                     continue
                 text = render_field_text(f, values)
@@ -371,6 +381,7 @@ def print_labels(request):
                     "is_line": False,
                     "is_barcode": f.field_key == "barcode_image",
                     "blank": False,
+                    "region": region,
                 })
 
             preview_items.append({

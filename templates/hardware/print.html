@@ -82,52 +82,96 @@
 </div>
 <div class="label-preview-container">
   {% for p in preview_items %}
-  <div class="tag-preview-card">
+  <div class="tag-preview-card" data-preview-card>
     <div class="tag-preview-meta">
       <div>
-        <div class="mono cell-strong">{{ p.barcode }}</div>
+        <div class="mono cell-strong" style="font-size:15px;">{{ p.barcode }}</div>
         <div class="cell-muted" style="font-size:11px;">{{ p.template_name }}
           · {{ p.width_dots }}×{{ p.height_dots }} dots
           {% if p.width_mm %}· ~{{ p.width_mm }}×{{ p.height_mm }} mm{% endif %}
           · {{ p.dpi }} dpi
         </div>
       </div>
-      {% if p.offset_x or p.offset_y %}
-      <span class="pill" style="font-size:10px;">offset {{ p.offset_x }},{{ p.offset_y }}</span>
-      {% endif %}
+      <div class="tag-preview-toolbar">
+        {% if p.offset_x or p.offset_y %}
+        <span class="pill" style="font-size:10px;">offset {{ p.offset_x }},{{ p.offset_y }}</span>
+        {% endif %}
+        <button type="button" class="btn btn-ghost btn-sm" data-zoom-out title="Zoom out">−</button>
+        <span class="mono zoom-label" data-zoom-label style="font-size:11px; min-width:42px; text-align:center;">—</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-zoom-in title="Zoom in">+</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-zoom-fit title="Fit width">Fit</button>
+        <label class="zone-toggle">
+          <input type="checkbox" data-toggle-zones checked> Zones
+        </label>
+      </div>
     </div>
 
-    <div class="tag-preview-stage" data-w="{{ p.width_dots }}" data-h="{{ p.height_dots }}">
-      <div class="tag-preview-scaler">
-        <div class="tag-preview-canvas"
-          style="width:{{ p.width_dots }}px; height:{{ p.height_dots }}px;{% if p.geometry.outline %} clip-path: polygon({% for pt in p.geometry.outline %}{{ pt.0 }}px {{ pt.1 }}px{% if not forloop.last %}, {% endif %}{% endfor %});{% endif %}">
-          {% for r in p.geometry.regions %}
-          <div class="tag-zone tag-zone-{{ r.id }}"
-            style="left:{{ r.x }}px; top:{{ r.y }}px; width:{{ r.w }}px; height:{{ r.h }}px;"
-            title="{{ r.hint|default:r.label }}">
-            <span class="tag-zone-label">{{ r.label }}</span>
+    <div class="tag-preview-body">
+      <div class="tag-preview-stage" data-w="{{ p.width_dots }}" data-h="{{ p.height_dots }}" data-stage>
+        <div class="tag-preview-scaler" data-scaler>
+          <div class="tag-preview-canvas" data-show-zones="1"
+            style="width:{{ p.width_dots }}px; height:{{ p.height_dots }}px;{% if p.geometry.outline %} clip-path: polygon({% for pt in p.geometry.outline %}{{ pt.0 }}px {{ pt.1 }}px{% if not forloop.last %}, {% endif %}{% endfor %});{% endif %}">
+            {% for r in p.geometry.regions %}
+            <div class="tag-zone tag-zone-{{ r.id }}"
+              style="left:{{ r.x }}px; top:{{ r.y }}px; width:{{ r.w }}px; height:{{ r.h }}px;"
+              title="{{ r.hint|default:r.label }}">
+              <span class="tag-zone-label">{{ r.label }}</span>
+            </div>
+            {% endfor %}
+            {% if p.geometry.fold_y != None %}
+            {% for r in p.geometry.regions %}
+              {% if r.id == "front" %}
+              <div class="tag-fold" style="top:{{ p.geometry.fold_y }}px; left:{{ r.x }}px; width:{{ r.w }}px;"></div>
+              {% endif %}
+            {% endfor %}
+            {% endif %}
+            {% for f in p.fields %}
+              {% if f.is_line %}
+              <div class="tag-field is-line" title="{{ f.label }}{% if f.region %} · {{ f.region }}{% endif %}"
+                style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:2px;"></div>
+              {% elif f.is_barcode %}
+              <div class="tag-field is-barcode" title="{{ f.label }}{% if f.region %} · {{ f.region }}{% endif %}" data-text="{{ f.text }}"
+                style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.font_size|add:18 }}px;"></div>
+              {% else %}
+              <div class="tag-field" title="{{ f.label }}{% if f.region %} · {{ f.region }}{% endif %} ({{ f.x }},{{ f.y }})"
+                style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; font-size:{{ f.font_size }}px; font-weight:{% if f.bold %}700{% else %}400{% endif %}; text-align:{% if f.align == 'C' %}center{% elif f.align == 'R' %}right{% else %}left{% endif %};">{{ f.text }}</div>
+              {% endif %}
+            {% endfor %}
           </div>
-          {% endfor %}
-          {% if p.geometry.fold_y != None %}
-          {% for r in p.geometry.regions %}
-            {% if r.id == "front" %}
-            <div class="tag-fold" style="top:{{ p.geometry.fold_y }}px; left:{{ r.x }}px; width:{{ r.w }}px;"></div>
-            {% endif %}
-          {% endfor %}
-          {% endif %}
-          {% for f in p.fields %}
-            {% if f.is_line %}
-            <div class="tag-field is-line" title="{{ f.label }}"
-              style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.font_size|default:10|floatformat:0 }}px; max-height:3px;"></div>
-            {% elif f.is_barcode %}
-            <div class="tag-field is-barcode" title="{{ f.label }}" data-text="{{ f.text }}"
-              style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.font_size|add:14 }}px; font-size:{{ f.font_size }}px;"></div>
-            {% else %}
-            <div class="tag-field" title="{{ f.label }}"
-              style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; font-size:{{ f.font_size }}px; font-weight:{% if f.bold %}700{% else %}400{% endif %}; text-align:{% if f.align == 'C' %}center{% elif f.align == 'R' %}right{% else %}left{% endif %};">{{ f.text }}</div>
-            {% endif %}
-          {% endfor %}
         </div>
+      </div>
+
+      <div class="tag-field-panel">
+        <div class="kpi-label" style="margin-bottom:8px;">Printed fields</div>
+        <div class="tag-field-table-wrap">
+          <table class="tag-field-table">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                <th>Field</th>
+                <th>Value</th>
+                <th class="mono">X,Y</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in p.fields %}
+              <tr>
+                <td>{% if f.region %}<span class="zone-chip zone-chip-{{ f.region|lower }}">{{ f.region }}</span>{% else %}<span class="cell-muted">—</span>{% endif %}</td>
+                <td>{{ f.label }}</td>
+                <td class="mono">{% if f.is_line %}<span class="cell-muted">— line —</span>{% elif f.is_barcode %}▮▮ {{ f.text }}{% else %}{{ f.text }}{% endif %}</td>
+                <td class="mono cell-muted">{{ f.x }},{{ f.y }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="cell-muted">No printable fields for this item.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if p.blank_fields %}
+        <div class="blank-note">
+          Blank on this item (skipped): {{ p.blank_fields|join:", " }}
+        </div>
+        {% endif %}
       </div>
     </div>
 
@@ -137,12 +181,6 @@
       <span><i class="swatch swatch-back"></i> Back</span>
       <span><i class="swatch swatch-fold"></i> Fold</span>
     </div>
-
-    {% if p.blank_fields %}
-    <div class="cell-muted" style="font-size:11px; margin-top:8px;">
-      Blank on this item (not printed): {{ p.blank_fields|join:", " }}
-    </div>
-    {% endif %}
   </div>
   {% empty %}
   <div class="cell-muted">No labels to preview.</div>
@@ -154,59 +192,99 @@
 <style>
   .label-preview-container {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 16px;
     margin-top: 12px;
   }
   .tag-preview-card {
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: 10px;
+    padding: 14px 16px 16px;
     background: var(--surface);
-    width: min(100%, 720px);
+    width: 100%;
   }
   .tag-preview-meta {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: 12px;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .tag-preview-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .zone-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    margin-left: 4px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .tag-preview-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.9fr);
+    gap: 14px;
+    align-items: stretch;
+  }
+  @media (max-width: 960px) {
+    .tag-preview-body { grid-template-columns: 1fr; }
   }
   .tag-preview-stage {
-    background: linear-gradient(135deg, #e8e4dc, #d9d3c8);
-    border-radius: 8px;
-    padding: 16px;
-    overflow: hidden;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,255,255,.35), transparent 45%),
+      linear-gradient(135deg, #ebe6dc, #d4cec2);
+    border-radius: 10px;
+    padding: 20px;
+    overflow: auto;
+    min-height: 180px;
+    border: 1px solid rgba(0,0,0,.06);
   }
   .tag-preview-scaler { transform-origin: top left; }
   .tag-preview-canvas {
     position: relative;
     background: #fff;
-    filter: drop-shadow(0 6px 14px rgba(0,0,0,.14));
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,.16));
+  }
+  .tag-preview-canvas[data-show-zones="0"] .tag-zone {
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .tag-preview-canvas[data-show-zones="0"] .tag-zone-label,
+  .tag-preview-canvas[data-show-zones="0"] .tag-fold {
+    opacity: 0;
   }
   .tag-zone {
     position: absolute;
     box-sizing: border-box;
     pointer-events: none;
+    transition: background .15s, border-color .15s, opacity .15s;
   }
   .tag-zone-label {
     position: absolute;
-    top: 2px;
-    left: 3px;
-    font-size: 8px;
-    letter-spacing: .04em;
+    top: 3px;
+    left: 4px;
+    font-size: 7px;
+    letter-spacing: .05em;
     text-transform: uppercase;
-    color: rgba(0,0,0,.32);
+    color: rgba(0,0,0,.28);
+    font-weight: 600;
   }
-  .tag-zone-tail { background: rgba(120,160,200,.16); border: 1px dashed rgba(60,100,140,.45); }
-  .tag-zone-front { background: rgba(200,170,90,.13); border: 1px solid rgba(160,120,40,.32); }
-  .tag-zone-back { background: rgba(140,180,120,.13); border: 1px solid rgba(80,120,60,.32); }
-  .tag-zone-body { background: rgba(0,0,0,.02); border: 1px dashed rgba(0,0,0,.15); }
+  .tag-zone-tail { background: rgba(120,160,200,.14); border: 1px dashed rgba(60,100,140,.4); }
+  .tag-zone-front { background: rgba(200,170,90,.11); border: 1px solid rgba(160,120,40,.28); }
+  .tag-zone-back { background: rgba(140,180,120,.11); border: 1px solid rgba(80,120,60,.28); }
+  .tag-zone-body { background: rgba(0,0,0,.02); border: 1px dashed rgba(0,0,0,.12); }
   .tag-fold {
     position: absolute;
     height: 0;
-    border-top: 1px dashed rgba(180,40,40,.55);
+    border-top: 1px dashed rgba(180,40,40,.5);
     z-index: 2;
+    transition: opacity .15s;
   }
   .tag-field {
     position: absolute;
@@ -220,33 +298,83 @@
   }
   .tag-field.is-line { background: #222; padding: 0; min-height: 1px; }
   .tag-field.is-barcode {
-    font-family: var(--font-mono, monospace);
-    letter-spacing: .04em;
-    border: 1px solid #bbb;
-    background: repeating-linear-gradient(90deg, #111 0 1px, #fff 1px 3px);
-    color: transparent;
-    text-shadow: none;
+    border: 1px solid #aaa;
+    background: repeating-linear-gradient(90deg, #111 0 1.5px, #fff 1.5px 3.5px);
     position: relative;
   }
   .tag-field.is-barcode::after {
     content: attr(data-text);
     position: absolute;
-    left: 2px;
-    right: 2px;
-    bottom: 1px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1px 2px;
     color: #111;
-    background: rgba(255,255,255,.9);
-    font-size: 9px;
+    background: rgba(255,255,255,.92);
+    font-size: 8px;
+    font-family: var(--font-mono, monospace);
     letter-spacing: 0;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
   }
+  .tag-field-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--bg-soft, rgba(0,0,0,.02));
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .tag-field-table-wrap {
+    overflow: auto;
+    max-height: 320px;
+    flex: 1;
+  }
+  .tag-field-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .tag-field-table th {
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted, #888);
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface, #fff);
+  }
+  .tag-field-table td {
+    padding: 6px;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    vertical-align: top;
+  }
+  .zone-chip {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .zone-chip-tail { background: rgba(120,160,200,.25); color: #2a4a66; }
+  .zone-chip-front { background: rgba(200,170,90,.28); color: #6a5218; }
+  .zone-chip-back { background: rgba(140,180,120,.28); color: #2f5530; }
+  .blank-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted, #888);
+    line-height: 1.4;
+  }
   .tag-preview-legend {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    margin-top: 10px;
+    margin-top: 12px;
     font-size: 11px;
     color: var(--muted, #888);
   }
@@ -280,7 +408,7 @@
     white-space: pre-wrap;
   }
   @media print {
-    .page-head, .page-head-actions, form#printForm, .panel:has(#selected_device), #zplPreview {
+    .page-head, .page-head-actions, form#printForm, .panel:has(#selected_device), #zplPreview, .tag-preview-toolbar {
       display: none !important;
     }
   }
@@ -365,24 +493,62 @@
     );
   }
 
-  function fitPreviews() {
-    document.querySelectorAll('.tag-preview-stage').forEach(function (stage) {
-      var w = parseInt(stage.dataset.w, 10) || 600;
-      var h = parseInt(stage.dataset.h, 10) || 208;
-      var scaler = stage.querySelector('.tag-preview-scaler');
-      if (!scaler) return;
-      var available = Math.max(120, stage.clientWidth - 8);
-      var scale = Math.min(3, available / w);
-      scaler.style.transform = 'scale(' + scale + ')';
-      scaler.style.width = w + 'px';
-      stage.style.height = Math.ceil(h * scale + 12) + 'px';
+  function applyCardZoom(card, scale) {
+    var stage = card.querySelector('[data-stage]');
+    var scaler = card.querySelector('[data-scaler]');
+    var label = card.querySelector('[data-zoom-label]');
+    if (!stage || !scaler) return;
+    var w = parseInt(stage.dataset.w, 10) || 600;
+    var h = parseInt(stage.dataset.h, 10) || 208;
+    scale = Math.max(1, Math.min(6, Math.round(scale * 100) / 100));
+    card.dataset.zoom = String(scale);
+    scaler.style.transform = 'scale(' + scale + ')';
+    scaler.style.width = w + 'px';
+    stage.style.height = Math.ceil(h * scale + 24) + 'px';
+    if (label) label.textContent = scale.toFixed(1) + '×';
+  }
+
+  function fitCard(card) {
+    var stage = card.querySelector('[data-stage]');
+    if (!stage) return;
+    var w = parseInt(stage.dataset.w, 10) || 600;
+    var available = Math.max(200, stage.clientWidth - 16);
+    // Prefer a readable size — Irys tags are tiny in dots.
+    var scale = Math.max(2.2, Math.min(4.5, available / w));
+    applyCardZoom(card, scale);
+  }
+
+  function initPreviewCards() {
+    document.querySelectorAll('[data-preview-card]').forEach(function (card) {
+      fitCard(card);
+
+      var zoomIn = card.querySelector('[data-zoom-in]');
+      var zoomOut = card.querySelector('[data-zoom-out]');
+      var zoomFit = card.querySelector('[data-zoom-fit]');
+      var zones = card.querySelector('[data-toggle-zones]');
+      var canvas = card.querySelector('.tag-preview-canvas');
+
+      if (zoomIn) zoomIn.addEventListener('click', function () {
+        applyCardZoom(card, (parseFloat(card.dataset.zoom) || 2.5) + 0.25);
+      });
+      if (zoomOut) zoomOut.addEventListener('click', function () {
+        applyCardZoom(card, (parseFloat(card.dataset.zoom) || 2.5) - 0.25);
+      });
+      if (zoomFit) zoomFit.addEventListener('click', function () { fitCard(card); });
+      if (zones && canvas) {
+        zones.addEventListener('change', function () {
+          canvas.setAttribute('data-show-zones', zones.checked ? '1' : '0');
+        });
+      }
     });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     setup();
-    fitPreviews();
-    window.addEventListener('resize', fitPreviews);
+    initPreviewCards();
+    window.addEventListener('resize', function () {
+      document.querySelectorAll('[data-preview-card]').forEach(fitCard);
+    });
   });
 </script>
 
