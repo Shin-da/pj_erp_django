@@ -520,6 +520,8 @@
       width_dots: cfg.widthDots,
       height_dots: cfg.heightDots,
       dpi: cfg.dpi || 203,
+      offset_x: parseInt((document.getElementById('tplOffsetX') || {}).value, 10) || 0,
+      offset_y: parseInt((document.getElementById('tplOffsetY') || {}).value, 10) || 0,
       fields: cfg.fields.map(function (f) {
         return {
           id: f.id > 0 ? f.id : null,
@@ -553,6 +555,12 @@
           if (data.width_dots) cfg.widthDots = data.width_dots;
           if (data.height_dots) cfg.heightDots = data.height_dots;
           if (data.media_profile) cfg.mediaProfile = data.media_profile;
+          if (typeof data.offset_x === 'number' && document.getElementById('tplOffsetX')) {
+            document.getElementById('tplOffsetX').value = data.offset_x;
+          }
+          if (typeof data.offset_y === 'number' && document.getElementById('tplOffsetY')) {
+            document.getElementById('tplOffsetY').value = data.offset_y;
+          }
           syncSizeInputs();
           applyZoom();
           setTimeout(function () { status.textContent = ''; }, 2000);

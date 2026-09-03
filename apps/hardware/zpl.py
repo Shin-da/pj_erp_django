@@ -3,14 +3,13 @@ ZPL (Zebra Programming Language) generation for the customizable label
 designer.
 
 The printer-setup preamble and the RFID-write command in `build_zpl` below
-are kept verbatim from the legacy `PrintBarcode.aspx.cs`
-(`GenerateJewelleryZPL` and its siblings) — those are printer/media-specific
-commands already proven against Shin's actual Zebra hardware, not legacy
-cruft to redesign. Everything else is new: legacy hardcoded five fixed
-field layouts directly in C#; this reads an editable `LabelTemplate` +
-`LabelField` set instead.
+are kept from the legacy `PrintBarcode.aspx.cs` (`GenerateJewelleryZPL` and
+its siblings) — those are printer/media-specific commands already proven
+against Shin's Zebra hardware. Field placement is driven by editable
+`LabelTemplate` + `LabelField` rows.
 """
 
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 COMPANY_NAME_DEFAULT = "PERFECT JEWELRY"
@@ -126,11 +125,22 @@ def render_field_text(field, values):
     return text
 
 
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
 def _zpl_escape(text):
-    # ZPL treats ^ and ~ as command-prefix characters even inside an ^FD
-    # payload on some firmware — strip them rather than risk a caret in a
-    # product name corrupting the label.
-    return (text or "").replace("^", "").replace("~", "")
+    """
+    Sanitize a payload for ^FD.
+
+    ZPL treats ^ and ~ as command prefixes. Newlines/control chars must also
+    be stripped — if they leak into the BrowserPrint payload (e.g. via
+    Django escapejs turning \\n into the literal characters \\u000A), the
+    printer prints garbage like \"RNu000A\" and can scramble following fields.
+    """
+    cleaned = (text or "").replace("^", "").replace("~", "").replace("\\", "")
+    cleaned = cleaned.replace("\r", " ").replace("\n", " ")
+    cleaned = _CTRL_RE.sub("", cleaned)
+    return cleaned.strip()
 
 
 def build_zpl(template, values):
@@ -138,13 +148,20 @@ def build_zpl(template, values):
     Render one full ZPL label (^XA...^XZ) for `template` using a resolved
     {field_key: text} map from `resolve_field_values`.
     """
+    # Continuous RFID stock: do NOT emit ^LL — legacy PrintBarcode.aspx.cs
+    # never did, and a wrong length shifts the die-cut relative to the print.
+    use_label_length = getattr(template, "media_profile", "") == "blank"
+
     lines = [
         "^XA",
         "^MFN,N",
         "^PR2,2,2",
         "~SD30",
         f"^PW{template.width_dots}",
-        f"^LL{template.height_dots}",
+    ]
+    if use_label_length:
+        lines.append(f"^LL{template.height_dots}")
+    lines += [
         "^LH0,0",
         "^RS8,,,1,,,,",
         "^RFW,a,2,,A",
@@ -152,23 +169,26 @@ def build_zpl(template, values):
         "^FS",
     ]
 
+    ox = int(getattr(template, "offset_x", 0) or 0)
+    oy = int(getattr(template, "offset_y", 0) or 0)
+
     for field in template.fields.filter(visible=True).order_by("order", "id"):
+        x = max(0, field.x + ox)
+        y = max(0, field.y + oy)
+
         if field.field_key == "barcode_image":
             barcode_value = _zpl_escape(values.get("barcode_number", ""))
             if not barcode_value:
                 continue
-            # Height scales with font_size so the designer control is meaningful.
+            # Module width must be an integer on most Zebra firmware.
             bar_h = max(20, min(80, field.font_size * 2))
-            lines.append(
-                f"^FO{field.x},{field.y}^BY1.5,2^BCN,{bar_h},N,N,N,A^FD{barcode_value}"
-            )
+            lines.append(f"^FO{x},{y}^BY2,2^BCN,{bar_h},N,N,N,A^FD{barcode_value}")
             lines.append("^FS")
             continue
 
         if field.field_key == "horizontal_line":
-            # Graphic box 1-dot tall = hairline across box_width.
             thickness = max(1, min(6, field.font_size // 10 or 1))
-            lines.append(f"^FO{field.x},{field.y}^GB{field.box_width},{thickness},{thickness}^FS")
+            lines.append(f"^FO{x},{y}^GB{field.box_width},{thickness},{thickness}^FS")
             continue
 
         text = _zpl_escape(render_field_text(field, values))
@@ -177,11 +197,13 @@ def build_zpl(template, values):
 
         font_h = field.font_size
         font_w = field.font_size + 4 if field.bold else field.font_size
+        # Single-line field block; keep data on one ^FD line (no embedded newlines).
         lines.append(
-            f"^FO{field.x},{field.y}^FB{field.box_width},1,,{field.align},^A0N,{font_h},{font_w}^FD{text}"
+            f"^FO{x},{y}^FB{field.box_width},1,,{field.align},^A0N,{font_h},{font_w}^FD{text}^FS"
         )
-        lines.append("^FS")
 
     lines.append("^PQ1,0,1,Y")
     lines.append("^XZ")
+    # Join with real newlines for BrowserPrint; the print page must deliver
+    # this string without escapejs turning them into literal \u000A text.
     return "\n".join(lines)

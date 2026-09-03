@@ -42,6 +42,14 @@
     <div class="kpi-label" style="margin-bottom:6px;">Height (dots)</div>
     <input type="number" id="tplHeight" class="field" style="width:90px;" value="{{ template_obj.height_dots }}">
   </div>
+  <div>
+    <div class="kpi-label" style="margin-bottom:6px;">Offset X</div>
+    <input type="number" id="tplOffsetX" class="field" style="width:80px;" value="{{ template_obj.offset_x }}" title="Print nudge right (+) / left (−)">
+  </div>
+  <div>
+    <div class="kpi-label" style="margin-bottom:6px;">Offset Y</div>
+    <input type="number" id="tplOffsetY" class="field" style="width:80px;" value="{{ template_obj.offset_y }}" title="Print nudge down (+) / up (−)">
+  </div>
   <div style="padding-bottom:2px;">
     <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
       <input type="checkbox" id="tplIsDefault" {% if template_obj.is_default %}checked{% endif %}>
@@ -352,10 +360,12 @@
     mediaProfile: "{{ template_obj.media_profile }}",
     widthDots: {{ template_obj.width_dots }},
     heightDots: {{ template_obj.height_dots }},
+    offsetX: {{ template_obj.offset_x }},
+    offsetY: {{ template_obj.offset_y }},
     dpi: {{ template_obj.dpi }},
     zoom: 3,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}?v=5"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=6"></script>
 
 {% endblock %}

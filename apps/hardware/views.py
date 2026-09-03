@@ -196,6 +196,13 @@ def template_save(request, pk):
             except (TypeError, ValueError):
                 pass
 
+        for attr in ("offset_x", "offset_y"):
+            if attr in payload:
+                try:
+                    setattr(tpl, attr, max(-500, min(500, int(payload.get(attr) or 0))))
+                except (TypeError, ValueError):
+                    pass
+
         resize_to_profile = bool(payload.get("resize_to_profile"))
         if resize_to_profile:
             tpl.apply_media_defaults()
@@ -253,6 +260,8 @@ def template_save(request, pk):
         "height_dots": tpl.height_dots,
         "dpi": tpl.dpi,
         "media_profile": tpl.media_profile,
+        "offset_x": tpl.offset_x,
+        "offset_y": tpl.offset_y,
         "geometry": geometry,
     })
 
@@ -322,36 +331,46 @@ def print_labels(request):
             values = resolve_field_values(item)
             zpl_chunks.append(build_zpl(tpl, values))
             geometry = tpl.media_geometry()
+            ox = int(getattr(tpl, "offset_x", 0) or 0)
+            oy = int(getattr(tpl, "offset_y", 0) or 0)
             preview_fields = []
+            blank_keys = []
             for f in tpl.fields.filter(visible=True).order_by("order", "id"):
+                px = max(0, f.x + ox)
+                py = max(0, f.y + oy)
                 if f.field_key == "horizontal_line":
                     preview_fields.append({
                         "key": f.field_key,
+                        "label": f.get_field_key_display(),
                         "text": "",
-                        "x": f.x,
-                        "y": f.y,
+                        "x": px,
+                        "y": py,
                         "font_size": f.font_size,
                         "bold": f.bold,
                         "align": f.align,
                         "box_width": f.box_width,
                         "is_line": True,
                         "is_barcode": False,
+                        "blank": False,
                     })
                     continue
                 text = render_field_text(f, values)
                 if not text and f.field_key != "barcode_image":
+                    blank_keys.append(f.get_field_key_display())
                     continue
                 preview_fields.append({
                     "key": f.field_key,
+                    "label": f.get_field_key_display(),
                     "text": text,
-                    "x": f.x,
-                    "y": f.y,
+                    "x": px,
+                    "y": py,
                     "font_size": f.font_size,
                     "bold": f.bold,
                     "align": f.align,
                     "box_width": f.box_width,
                     "is_line": False,
                     "is_barcode": f.field_key == "barcode_image",
+                    "blank": False,
                 })
 
             preview_items.append({
@@ -359,8 +378,15 @@ def print_labels(request):
                 "template_name": tpl.name,
                 "width_dots": tpl.width_dots,
                 "height_dots": tpl.height_dots,
+                "dpi": tpl.dpi,
+                "width_mm": geometry.get("width_mm"),
+                "height_mm": geometry.get("height_mm"),
+                "media_profile": tpl.media_profile,
+                "offset_x": ox,
+                "offset_y": oy,
                 "geometry": geometry,
                 "fields": preview_fields,
+                "blank_fields": blank_keys,
             })
 
         if skipped_no_template:

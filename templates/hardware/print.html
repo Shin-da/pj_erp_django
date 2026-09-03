@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Print labels</h1>
-    <p>Paste barcodes, pick a template (or let each item use its category's default), preview on the Irys outline, then print to a Zebra via BrowserPrint.</p>
+    <p>Paste barcodes, preview on the Irys die-cut (tail · front · back), then print to a Zebra via BrowserPrint.</p>
   </div>
   <div class="page-head-actions">
     <a href="{% url 'hardware:template_list' %}" class="btn btn-ghost"><i class="fa-solid fa-pen"></i> Manage templates</a>
@@ -62,13 +62,20 @@
         class="fa-solid fa-arrows-rotate"></i> Refresh</button>
     <button type="button" class="btn btn-primary btn-sm" onclick="printBarcodesToPrinter()"><i
         class="fa-solid fa-print"></i> Print to Zebra</button>
-    <button type="button" class="btn btn-ghost btn-sm" onclick="window.print()"><i
-        class="fa-solid fa-globe"></i> Browser print</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="toggleZpl()"><i
+        class="fa-solid fa-code"></i> Show ZPL</button>
   </div>
+  <p class="cell-muted" style="font-size:11.5px; margin:10px 0 0;">
+    Check the die-cut preview below before printing. If text sits high/low on the physical tag, nudge
+    <b>offset X/Y</b> on the template (designer or admin), save, and reload preview.
+  </p>
 </div>
 
-<input type="hidden" id="zplData" value="{{ zpl_data|escapejs }}">
+{# Real newlines must stay intact — escapejs turned them into literal \u000A on the printer. #}
+{{ zpl_data|json_script:"zpl-data" }}
 <input type="hidden" id="productCount" value="{{ product_count }}">
+
+<pre id="zplPreview" class="zpl-preview" hidden></pre>
 
 <div class="section-heading" style="margin-top:20px;">
   <span class="tag">Preview ({{ product_count }} label{{ product_count|pluralize }})</span>
@@ -77,14 +84,27 @@
   {% for p in preview_items %}
   <div class="tag-preview-card">
     <div class="tag-preview-meta">
-      <span class="mono cell-strong">{{ p.barcode }}</span>
-      <span class="cell-muted">{{ p.template_name }}</span>
+      <div>
+        <div class="mono cell-strong">{{ p.barcode }}</div>
+        <div class="cell-muted" style="font-size:11px;">{{ p.template_name }}
+          · {{ p.width_dots }}×{{ p.height_dots }} dots
+          {% if p.width_mm %}· ~{{ p.width_mm }}×{{ p.height_mm }} mm{% endif %}
+          · {{ p.dpi }} dpi
+        </div>
+      </div>
+      {% if p.offset_x or p.offset_y %}
+      <span class="pill" style="font-size:10px;">offset {{ p.offset_x }},{{ p.offset_y }}</span>
+      {% endif %}
     </div>
+
     <div class="tag-preview-stage" data-w="{{ p.width_dots }}" data-h="{{ p.height_dots }}">
       <div class="tag-preview-scaler">
-        <div class="tag-preview-canvas" style="width:{{ p.width_dots }}px; height:{{ p.height_dots }}px;{% if p.geometry.outline %} clip-path: polygon({% for pt in p.geometry.outline %}{{ pt.0 }}px {{ pt.1 }}px{% if not forloop.last %}, {% endif %}{% endfor %});{% endif %}">
+        <div class="tag-preview-canvas"
+          style="width:{{ p.width_dots }}px; height:{{ p.height_dots }}px;{% if p.geometry.outline %} clip-path: polygon({% for pt in p.geometry.outline %}{{ pt.0 }}px {{ pt.1 }}px{% if not forloop.last %}, {% endif %}{% endfor %});{% endif %}">
           {% for r in p.geometry.regions %}
-          <div class="tag-zone tag-zone-{{ r.id }}" style="left:{{ r.x }}px; top:{{ r.y }}px; width:{{ r.w }}px; height:{{ r.h }}px;">
+          <div class="tag-zone tag-zone-{{ r.id }}"
+            style="left:{{ r.x }}px; top:{{ r.y }}px; width:{{ r.w }}px; height:{{ r.h }}px;"
+            title="{{ r.hint|default:r.label }}">
             <span class="tag-zone-label">{{ r.label }}</span>
           </div>
           {% endfor %}
@@ -97,16 +117,32 @@
           {% endif %}
           {% for f in p.fields %}
             {% if f.is_line %}
-            <div class="tag-field is-line" style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:1px;"></div>
+            <div class="tag-field is-line" title="{{ f.label }}"
+              style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.font_size|default:10|floatformat:0 }}px; max-height:3px;"></div>
             {% elif f.is_barcode %}
-            <div class="tag-field is-barcode" style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; font-size:{{ f.font_size|floatformat:0 }}px;">▮▮ {{ f.text }}</div>
+            <div class="tag-field is-barcode" title="{{ f.label }}" data-text="{{ f.text }}"
+              style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.font_size|add:14 }}px; font-size:{{ f.font_size }}px;"></div>
             {% else %}
-            <div class="tag-field" style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; font-size:{{ f.font_size }}px; font-weight:{% if f.bold %}700{% else %}400{% endif %}; text-align:{% if f.align == 'C' %}center{% elif f.align == 'R' %}right{% else %}left{% endif %};">{{ f.text }}</div>
+            <div class="tag-field" title="{{ f.label }}"
+              style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; font-size:{{ f.font_size }}px; font-weight:{% if f.bold %}700{% else %}400{% endif %}; text-align:{% if f.align == 'C' %}center{% elif f.align == 'R' %}right{% else %}left{% endif %};">{{ f.text }}</div>
             {% endif %}
           {% endfor %}
         </div>
       </div>
     </div>
+
+    <div class="tag-preview-legend">
+      <span><i class="swatch swatch-tail"></i> Tail (front only)</span>
+      <span><i class="swatch swatch-front"></i> Front</span>
+      <span><i class="swatch swatch-back"></i> Back</span>
+      <span><i class="swatch swatch-fold"></i> Fold</span>
+    </div>
+
+    {% if p.blank_fields %}
+    <div class="cell-muted" style="font-size:11px; margin-top:8px;">
+      Blank on this item (not printed): {{ p.blank_fields|join:", " }}
+    </div>
+    {% endif %}
   </div>
   {% empty %}
   <div class="cell-muted">No labels to preview.</div>
@@ -125,31 +161,28 @@
   .tag-preview-card {
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px;
+    padding: 12px;
     background: var(--surface);
-    width: min(100%, 640px);
+    width: min(100%, 720px);
   }
   .tag-preview-meta {
     display: flex;
     justify-content: space-between;
     gap: 8px;
-    font-size: 11px;
-    margin-bottom: 8px;
+    align-items: flex-start;
+    margin-bottom: 10px;
   }
   .tag-preview-stage {
     background: linear-gradient(135deg, #e8e4dc, #d9d3c8);
-    border-radius: 6px;
-    padding: 14px;
+    border-radius: 8px;
+    padding: 16px;
     overflow: hidden;
   }
-  .tag-preview-scaler {
-    width: 100%;
-    transform-origin: top left;
-  }
+  .tag-preview-scaler { transform-origin: top left; }
   .tag-preview-canvas {
     position: relative;
     background: #fff;
-    filter: drop-shadow(0 4px 10px rgba(0,0,0,.14));
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,.14));
   }
   .tag-zone {
     position: absolute;
@@ -158,38 +191,96 @@
   }
   .tag-zone-label {
     position: absolute;
-    top: 1px;
-    left: 2px;
-    font-size: 7px;
+    top: 2px;
+    left: 3px;
+    font-size: 8px;
     letter-spacing: .04em;
     text-transform: uppercase;
-    color: rgba(0,0,0,.3);
+    color: rgba(0,0,0,.32);
   }
-  .tag-zone-tail { background: rgba(120,160,200,.15); border: 1px dashed rgba(60,100,140,.4); }
-  .tag-zone-front { background: rgba(200,170,90,.12); border: 1px solid rgba(160,120,40,.3); }
-  .tag-zone-back { background: rgba(140,180,120,.12); border: 1px solid rgba(80,120,60,.3); }
+  .tag-zone-tail { background: rgba(120,160,200,.16); border: 1px dashed rgba(60,100,140,.45); }
+  .tag-zone-front { background: rgba(200,170,90,.13); border: 1px solid rgba(160,120,40,.32); }
+  .tag-zone-back { background: rgba(140,180,120,.13); border: 1px solid rgba(80,120,60,.32); }
+  .tag-zone-body { background: rgba(0,0,0,.02); border: 1px dashed rgba(0,0,0,.15); }
   .tag-fold {
     position: absolute;
     height: 0;
-    border-top: 1px dashed rgba(180,40,40,.5);
+    border-top: 1px dashed rgba(180,40,40,.55);
+    z-index: 2;
   }
   .tag-field {
     position: absolute;
-    line-height: 1.1;
+    line-height: 1.05;
     white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
     color: #111;
+    z-index: 3;
+    box-sizing: border-box;
   }
-  .tag-field.is-line { background: #222; padding: 0; }
+  .tag-field.is-line { background: #222; padding: 0; min-height: 1px; }
   .tag-field.is-barcode {
     font-family: var(--font-mono, monospace);
-    letter-spacing: .06em;
-    border: 1px solid #ccc;
-    background: #fafafa;
-    padding: 1px 2px;
+    letter-spacing: .04em;
+    border: 1px solid #bbb;
+    background: repeating-linear-gradient(90deg, #111 0 1px, #fff 1px 3px);
+    color: transparent;
+    text-shadow: none;
+    position: relative;
+  }
+  .tag-field.is-barcode::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 1px;
+    color: #111;
+    background: rgba(255,255,255,.9);
+    font-size: 9px;
+    letter-spacing: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .tag-preview-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted, #888);
+  }
+  .tag-preview-legend .swatch {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    margin-right: 4px;
+    vertical-align: -1px;
+    border-radius: 2px;
+  }
+  .swatch-tail { background: rgba(120,160,200,.45); border: 1px solid rgba(60,100,140,.5); }
+  .swatch-front { background: rgba(200,170,90,.45); border: 1px solid rgba(160,120,40,.45); }
+  .swatch-back { background: rgba(140,180,120,.45); border: 1px solid rgba(80,120,60,.45); }
+  .swatch-fold {
+    width: 16px !important;
+    height: 0 !important;
+    border-top: 1px dashed rgba(180,40,40,.7);
+    border-radius: 0;
+    vertical-align: 3px;
+  }
+  .zpl-preview {
+    margin-top: 12px;
+    padding: 12px;
+    max-height: 240px;
+    overflow: auto;
+    font-size: 11px;
+    background: #111;
+    color: #c6f6d5;
+    border-radius: 6px;
+    white-space: pre-wrap;
   }
   @media print {
-    .page-head, .page-head-actions, form#printForm, .panel:has(#selected_device) {
+    .page-head, .page-head-actions, form#printForm, .panel:has(#selected_device), #zplPreview {
       display: none !important;
     }
   }
@@ -199,6 +290,16 @@
 <script>
   var selected_device = null;
   var devices = [];
+
+  function getZpl() {
+    var el = document.getElementById('zpl-data');
+    if (!el) return '';
+    try {
+      return JSON.parse(el.textContent) || '';
+    } catch (e) {
+      return '';
+    }
+  }
 
   function setup() {
     if (typeof BrowserPrint === 'undefined') {
@@ -232,19 +333,27 @@
     alert("Printer error: " + err);
   }
 
-  function printBarcodesToPrinter() {
-    var zplField = document.getElementById('zplData');
-    var countField = document.getElementById('productCount');
-    if (!zplField) return;
+  function toggleZpl() {
+    var pre = document.getElementById('zplPreview');
+    if (!pre) return;
+    if (pre.hidden) {
+      pre.textContent = getZpl();
+      pre.hidden = false;
+    } else {
+      pre.hidden = true;
+    }
+  }
 
-    var zpl = zplField.value;
+  function printBarcodesToPrinter() {
+    var countField = document.getElementById('productCount');
+    var zpl = getZpl();
     var count = countField ? countField.value : "0";
 
     if (!selected_device) {
       alert("Please select a printer.");
       return;
     }
-    if (!zpl || zpl.trim() === "") {
+    if (!zpl || String(zpl).trim() === "") {
       alert("No labels to print.");
       return;
     }
@@ -256,19 +365,24 @@
     );
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    setup();
+  function fitPreviews() {
     document.querySelectorAll('.tag-preview-stage').forEach(function (stage) {
       var w = parseInt(stage.dataset.w, 10) || 600;
       var h = parseInt(stage.dataset.h, 10) || 208;
       var scaler = stage.querySelector('.tag-preview-scaler');
       if (!scaler) return;
-      var available = stage.clientWidth - 4;
-      var scale = Math.min(2.5, available / w);
+      var available = Math.max(120, stage.clientWidth - 8);
+      var scale = Math.min(3, available / w);
       scaler.style.transform = 'scale(' + scale + ')';
       scaler.style.width = w + 'px';
-      stage.style.height = Math.ceil(h * scale + 8) + 'px';
+      stage.style.height = Math.ceil(h * scale + 12) + 'px';
     });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    setup();
+    fitPreviews();
+    window.addEventListener('resize', fitPreviews);
   });
 </script>
 

@@ -74,8 +74,8 @@ def irys_standard(dpi=203):
                 "h": face_h,
             },
         ],
-        # Die-cut silhouette including the pointed tail tip (printer still
-        # uses a rectangular ^PW/^LL). Clockwise from the tip.
+        # Die-cut silhouette including the pointed tail tip. Continuous RFID
+        # media uses ^PW only (no ^LL) so the sensor keeps registration.
         "outline": [
             [0, tail_y + tail_h // 2],
             [tip_w, tail_y],

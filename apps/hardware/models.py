@@ -70,7 +70,15 @@ class LabelTemplate(TimeStampedModel):
     )
     height_dots = models.PositiveIntegerField(
         default=208,
-        help_text="Label height in printer dots — emitted as ^LL. Irys Standard @ 203 DPI ≈ 208 (26 mm flat).",
+        help_text="Label height in printer dots (designer canvas). Continuous RFID stock does not emit ^LL.",
+    )
+    offset_x = models.IntegerField(
+        default=0,
+        help_text="Print X nudge in dots (positive shifts right). Use to align with the physical die-cut.",
+    )
+    offset_y = models.IntegerField(
+        default=0,
+        help_text="Print Y nudge in dots (positive shifts down). Use to align with the physical die-cut.",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="label_templates"
