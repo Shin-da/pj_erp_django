@@ -179,14 +179,20 @@ def get_media_profile(profile_id, width_dots=None, height_dots=None, dpi=300):
 DEFAULT_MEDIA_PROFILE = "irys_standard"
 DEFAULT_PRINTER_DPI = 300
 
-# Zebra jewellery RFID continuous stock typically starts printing a few mm
-# above the die-cut. Baseline Y nudge at 300 DPI — fine-tune with template.offset_y.
+# Zebra jewellery RFID continuous stock registration nudges at 300 DPI.
+# Positive Y shifts print down; negative X shifts print left onto the die-cut.
 IRYS_REGISTRATION_OFFSET_Y_300 = 55
+IRYS_REGISTRATION_OFFSET_X_300 = -18
 
 
 def irys_registration_offset_y(dpi=None):
     dpi = int(dpi or DEFAULT_PRINTER_DPI)
     return int(round(IRYS_REGISTRATION_OFFSET_Y_300 * dpi / DEFAULT_PRINTER_DPI))
+
+
+def irys_registration_offset_x(dpi=None):
+    dpi = int(dpi or DEFAULT_PRINTER_DPI)
+    return int(round(IRYS_REGISTRATION_OFFSET_X_300 * dpi / DEFAULT_PRINTER_DPI))
 
 
 def irys_jewellery_sample_layout(dpi=None):
@@ -290,7 +296,7 @@ def irys_jewellery_sample_layout(dpi=None):
         "geometry": geo,
         "fields": fields,
         "offset_y": irys_registration_offset_y(dpi),
-        "offset_x": 0,
+        "offset_x": irys_registration_offset_x(dpi),
         "width_dots": geo["width_dots"],
         "height_dots": geo["height_dots"],
         "dpi": dpi,
