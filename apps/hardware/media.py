@@ -180,8 +180,7 @@ DEFAULT_MEDIA_PROFILE = "irys_standard"
 DEFAULT_PRINTER_DPI = 300
 
 # Zebra jewellery RFID continuous stock typically starts printing a few mm
-# above the die-cut. This is the baseline Y nudge (at 300 DPI) that lands
-# front/back content on the correct faces — fine-tune further with template.offset_y.
+# above the die-cut. Baseline Y nudge at 300 DPI — fine-tune with template.offset_y.
 IRYS_REGISTRATION_OFFSET_Y_300 = 55
 
 
@@ -191,11 +190,13 @@ def irys_registration_offset_y(dpi=None):
 
 
 def irys_jewellery_sample_layout(dpi=None):
-    """Canonical jewellery tag fields for Irys Standard at the given DPI.
+    """Canonical jewellery tag layout for Irys Standard (print-accurate).
 
-    Positions assume `offset_y` will include `irys_registration_offset_y(dpi)`
-    (or equal it). Keeps price/SKU on the front and PJ/barcode on the back
-    with clearance from the fold after registration.
+    Design coordinates are relative to the die-cut (what preview shows).
+    `offset_y` is printer registration only (added in ZPL). Tuned so:
+      Tail  — subcategory centred in the strip
+      Front — SKU, price, divider (clear of the fold)
+      Back  — PJ#, barcode, category, company (barcode fully below the fold)
     """
     dpi = int(dpi or DEFAULT_PRINTER_DPI)
     geo = irys_standard(dpi)
@@ -207,21 +208,25 @@ def irys_jewellery_sample_layout(dpi=None):
     def ds(n):
         return max(1, int(round(n * s)))
 
+    # Keep type small enough for 25×13 mm faces at 300 DPI.
+    sub_font = ds(22)
+    tail_pad = max(2, (tail["h"] - sub_font) // 2)
+
     fields = [
         {
             "field_key": "subcategory",
-            "x": tail["x"] + ds(70),
-            "y": tail["y"] + ds(6),
-            "font_size": ds(24),
+            "x": ds(80),
+            "y": tail["y"] + tail_pad,
+            "font_size": sub_font,
             "bold": True,
             "align": "C",
-            "box_width": max(ds(80), tail["w"] - ds(100)),
+            "box_width": max(ds(80), tail["w"] - ds(110)),
         },
         {
             "field_key": "reference_id",
             "x": front["x"] + ds(8),
-            "y": front["y"] + ds(6),
-            "font_size": ds(22),
+            "y": front["y"] + ds(8),
+            "font_size": ds(20),
             "bold": True,
             "align": "L",
             "box_width": front["w"] - ds(16),
@@ -229,8 +234,8 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "price_rated",
             "x": front["x"] + ds(8),
-            "y": front["y"] + ds(38),
-            "font_size": ds(26),
+            "y": front["y"] + ds(40),
+            "font_size": ds(24),
             "bold": True,
             "align": "C",
             "box_width": front["w"] - ds(16),
@@ -238,7 +243,7 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "horizontal_line",
             "x": front["x"] + ds(8),
-            "y": front["y"] + ds(74),
+            "y": front["y"] + ds(76),
             "font_size": ds(12),
             "bold": False,
             "align": "L",
@@ -247,8 +252,8 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "barcode_number",
             "x": back["x"] + ds(8),
-            "y": back["y"] + ds(8),
-            "font_size": ds(22),
+            "y": back["y"] + ds(10),
+            "font_size": ds(20),
             "bold": True,
             "align": "L",
             "box_width": back["w"] - ds(16),
@@ -256,8 +261,8 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "barcode_image",
             "x": back["x"] + ds(8),
-            "y": back["y"] + ds(34),
-            "font_size": ds(22),
+            "y": back["y"] + ds(38),
+            "font_size": ds(20),
             "bold": False,
             "align": "L",
             "box_width": back["w"] - ds(16),
@@ -265,8 +270,8 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "category_code",
             "x": back["x"] + ds(8),
-            "y": back["y"] + ds(78),
-            "font_size": ds(16),
+            "y": back["y"] + ds(90),
+            "font_size": ds(14),
             "bold": False,
             "align": "L",
             "box_width": ds(60),
@@ -274,8 +279,8 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "company_name",
             "x": back["x"] + ds(8),
-            "y": back["y"] + ds(96),
-            "font_size": ds(15),
+            "y": back["y"] + ds(112),
+            "font_size": ds(14),
             "bold": True,
             "align": "C",
             "box_width": back["w"] - ds(16),
@@ -286,6 +291,9 @@ def irys_jewellery_sample_layout(dpi=None):
         "fields": fields,
         "offset_y": irys_registration_offset_y(dpi),
         "offset_x": 0,
+        "width_dots": geo["width_dots"],
+        "height_dots": geo["height_dots"],
+        "dpi": dpi,
     }
 
 

@@ -549,71 +549,46 @@
     applyZoom();
   });
 
-  /* -------- Sample jewellery layout -------- */
+  /* -------- Sample jewellery layout (server canonical — matches print) -------- */
   document.getElementById('loadSampleBtn') && document.getElementById('loadSampleBtn').addEventListener('click', function () {
     if (!confirm('Replace current fields with the Irys jewellery sample layout (front / back / tail)?')) return;
-    refreshMediaCatalog(cfg.dpi || 300);
-    var preset = cfg.mediaProfiles.irys_standard;
+    var sample = cfg.sampleLayout;
+    if (!sample || !sample.fields || !sample.fields.length) {
+      alert('Sample layout is not available — reload the page and try again.');
+      return;
+    }
+    refreshMediaCatalog(sample.dpi || cfg.dpi || 300);
+    cfg.dpi = sample.dpi || cfg.dpi || 300;
+    if (dpiSelect) dpiSelect.value = String(cfg.dpi);
     cfg.mediaProfile = 'irys_standard';
     if (mediaSelect) mediaSelect.value = 'irys_standard';
-    cfg.widthDots = preset.width_dots;
-    cfg.heightDots = preset.height_dots;
-    cfg.geometry = JSON.parse(JSON.stringify(preset));
-    // Typical Zebra jewellery RFID needs a small downward nudge onto the die-cut.
+    cfg.widthDots = sample.width_dots || cfg.mediaProfiles.irys_standard.width_dots;
+    cfg.heightDots = sample.height_dots || cfg.mediaProfiles.irys_standard.height_dots;
+    cfg.geometry = sample.geometry
+      ? JSON.parse(JSON.stringify(sample.geometry))
+      : JSON.parse(JSON.stringify(cfg.mediaProfiles.irys_standard));
     var ox = document.getElementById('tplOffsetX');
     var oy = document.getElementById('tplOffsetY');
-    if (ox) ox.value = '0';
-    if (oy) oy.value = String(Math.round(55 * ((cfg.dpi || 300) / 300)));
+    if (ox) ox.value = String(sample.offset_x != null ? sample.offset_x : 0);
+    if (oy) oy.value = String(sample.offset_y != null ? sample.offset_y : 55);
     syncSizeInputs();
 
-    var front = preset.regions.find(function (r) { return r.id === 'front'; });
-    var back = preset.regions.find(function (r) { return r.id === 'back'; });
-    var tail = preset.regions.find(function (r) { return r.id === 'tail'; });
-    // Tuned for 300 DPI faces (~295×154); scale if the template DPI differs.
-    var s = (cfg.dpi || 300) / 300;
-    function ds(n) { return Math.max(1, Math.round(n * s)); }
     var id = -1;
-    function F(key, x, y, opts) {
-      opts = opts || {};
+    cfg.fields = sample.fields.map(function (row) {
       return {
         id: id--,
-        field_key: key,
-        static_text: opts.static_text || '',
-        x: x, y: y,
-        font_size: opts.font_size || ds(20),
-        bold: !!opts.bold,
-        align: opts.align || 'L',
-        box_width: opts.box_width || ds(120),
+        field_key: row.field_key,
+        static_text: row.static_text || '',
+        x: row.x,
+        y: row.y,
+        font_size: row.font_size,
+        bold: !!row.bold,
+        align: row.align || 'L',
+        box_width: row.box_width,
         visible: true,
         order: 0,
       };
-    }
-    cfg.fields = [
-      F('subcategory', tail.x + ds(70), tail.y + ds(6), {
-        font_size: ds(24), bold: true, align: 'C', box_width: Math.max(ds(80), tail.w - ds(100)),
-      }),
-      F('reference_id', front.x + ds(8), front.y + ds(6), {
-        font_size: ds(22), bold: true, box_width: front.w - ds(16),
-      }),
-      F('price_rated', front.x + ds(8), front.y + ds(40), {
-        font_size: ds(26), bold: true, align: 'C', box_width: front.w - ds(16),
-      }),
-      F('horizontal_line', front.x + ds(8), front.y + ds(76), {
-        font_size: ds(12), box_width: front.w - ds(16),
-      }),
-      F('barcode_number', back.x + ds(8), back.y + ds(8), {
-        font_size: ds(22), bold: true, box_width: back.w - ds(16),
-      }),
-      F('barcode_image', back.x + ds(8), back.y + ds(36), {
-        font_size: ds(22), box_width: back.w - ds(16),
-      }),
-      F('category_code', back.x + ds(8), back.y + ds(78), {
-        font_size: ds(16), box_width: ds(60),
-      }),
-      F('company_name', back.x + ds(8), back.y + ds(96), {
-        font_size: ds(15), bold: true, align: 'C', box_width: back.w - ds(16),
-      }),
-    ];
+    });
     selectedId = null;
     applyZoom();
     renderProps();

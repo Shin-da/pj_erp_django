@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 
 from apps.inventory.models import ProductItem
 
-from .media import DEFAULT_PRINTER_DPI, MEDIA_PROFILES, get_media_profile
+from .media import DEFAULT_PRINTER_DPI, MEDIA_PROFILES, get_media_profile, irys_jewellery_sample_layout
 from .models import LabelField, LabelTemplate
 from .zpl import SAMPLE_FIELD_VALUES, build_zpl, render_field_text, resolve_field_values
 
@@ -101,6 +101,8 @@ def template_create(request):
     tpl = LabelTemplate(name=name, category=category, media_profile=media_profile, created_by=request.user)
     tpl.apply_media_defaults()
     tpl.save()
+    if tpl.media_profile == LabelTemplate.MediaProfile.IRYS_STANDARD:
+        tpl.apply_jewellery_sample_layout()
     messages.success(request, f'Template "{tpl.name}" created — design it below.')
     return redirect("hardware:template_edit", pk=tpl.pk)
 
@@ -164,6 +166,7 @@ def template_edit(request, pk):
             pid: get_media_profile(pid, dpi=tpl.dpi or DEFAULT_PRINTER_DPI)
             for pid in MEDIA_PROFILES
         }),
+        "sample_layout_json": json.dumps(irys_jewellery_sample_layout(tpl.dpi or DEFAULT_PRINTER_DPI)),
     })
 
 

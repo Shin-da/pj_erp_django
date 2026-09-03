@@ -363,6 +363,7 @@
       {% for value, label in field_choices %}"{{ value }}": "{{ label }}"{% if not forloop.last %},{% endif %}{% endfor %}
     },
     sampleValues: {{ sample_values_json | safe }},
+    sampleLayout: {{ sample_layout_json | safe }},
     geometry: {{ geometry_json | safe }},
     mediaProfiles: {{ media_profiles_json | safe }},
     mediaProfile: "{{ template_obj.media_profile }}",
@@ -374,6 +375,6 @@
     zoom: 2.2,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}?v=9"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=10"></script>
 
 {% endblock %}

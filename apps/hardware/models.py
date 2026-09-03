@@ -114,6 +114,46 @@ class LabelTemplate(TimeStampedModel):
             if not self.offset_y:
                 self.offset_y = irys_registration_offset_y(self.dpi)
 
+    def apply_jewellery_sample_layout(self):
+        """Replace fields with the canonical print-accurate Irys jewellery sample."""
+        from .media import irys_jewellery_sample_layout
+
+        layout = irys_jewellery_sample_layout(self.dpi or DEFAULT_PRINTER_DPI)
+        geo = layout["geometry"]
+        self.media_profile = "irys_standard"
+        self.dpi = layout["dpi"]
+        self.width_dots = layout["width_dots"]
+        self.height_dots = layout["height_dots"]
+        self.offset_x = layout["offset_x"]
+        self.offset_y = layout["offset_y"]
+        self.save(
+            update_fields=[
+                "media_profile",
+                "dpi",
+                "width_dots",
+                "height_dots",
+                "offset_x",
+                "offset_y",
+                "updated_at",
+            ]
+        )
+        self.fields.all().delete()
+        for order, row in enumerate(layout["fields"]):
+            LabelField.objects.create(
+                template=self,
+                order=order,
+                visible=True,
+                static_text="",
+                field_key=row["field_key"],
+                x=row["x"],
+                y=row["y"],
+                font_size=row["font_size"],
+                bold=row["bold"],
+                align=row["align"],
+                box_width=row["box_width"],
+            )
+        return layout
+
     def rescale_fields_to_dpi(self, new_dpi):
         """Scale every field's x/y/font/box when the printer DPI changes."""
         old = self.dpi or DEFAULT_PRINTER_DPI
