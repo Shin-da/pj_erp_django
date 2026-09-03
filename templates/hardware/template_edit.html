@@ -5,21 +5,18 @@
 <div class="page-head">
   <div>
     <h1>Label designer</h1>
-    <p>Drag fields to position them. Coordinates are in printer dots (the Zebra's own coordinate system) — this
-      canvas isn't to physical scale.</p>
+    <p>Drag fields onto the Irys tag outline (tail · front · back). Coordinates are printer dots at the template DPI.</p>
   </div>
   <div class="page-head-actions">
-    <a href="{% url 'hardware:template_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i>
-      Back</a>
-    <a href="{% url 'hardware:print_labels' %}" class="btn btn-primary"><i class="fa-solid fa-print"></i> Print
-      labels</a>
+    <a href="{% url 'hardware:template_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back</a>
+    <a href="{% url 'hardware:print_labels' %}" class="btn btn-primary"><i class="fa-solid fa-print"></i> Print labels</a>
   </div>
 </div>
 
-<div class="panel" style="margin-bottom:16px; display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end;">
+<div class="panel designer-toolbar">
   <div>
     <div class="kpi-label" style="margin-bottom:6px;">Template name</div>
-    <input type="text" id="tplName" class="field" value="{{ template_obj.name }}" style="min-width:220px;">
+    <input type="text" id="tplName" class="field" value="{{ template_obj.name }}" style="min-width:200px;">
   </div>
   <div>
     <div class="kpi-label" style="margin-bottom:6px;">Category</div>
@@ -30,47 +27,88 @@
     </select>
   </div>
   <div>
+    <div class="kpi-label" style="margin-bottom:6px;">Paper</div>
+    <select id="tplMedia" class="field" style="min-width:220px;">
+      {% for value, label in media_profiles %}
+      <option value="{{ value }}" {% if value == template_obj.media_profile %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <div class="kpi-label" style="margin-bottom:6px;">Width (dots)</div>
+    <input type="number" id="tplWidth" class="field" style="width:90px;" value="{{ template_obj.width_dots }}">
+  </div>
+  <div>
+    <div class="kpi-label" style="margin-bottom:6px;">Height (dots)</div>
+    <input type="number" id="tplHeight" class="field" style="width:90px;" value="{{ template_obj.height_dots }}">
+  </div>
+  <div style="padding-bottom:2px;">
     <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
       <input type="checkbox" id="tplIsDefault" {% if template_obj.is_default %}checked{% endif %}>
-      Use automatically for this category
+      Auto-use for category
     </label>
   </div>
-  <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+  <div class="designer-toolbar-actions">
+    <button type="button" id="loadSampleBtn" class="btn btn-ghost btn-sm" title="Load the jewellery sample matching today's layout">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Sample layout
+    </button>
+    <button type="button" id="fitIrysBtn" class="btn btn-ghost btn-sm">
+      <i class="fa-solid fa-ruler-combined"></i> Reset Irys size
+    </button>
     <span id="saveStatus" class="cell-muted" style="font-size:11.5px;"></span>
-    <button type="button" id="saveBtn" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save
-      layout</button>
+    <button type="button" id="saveBtn" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save layout</button>
   </div>
 </div>
 
 <div class="designer-grid">
 
   <div class="panel">
-    <div class="kpi-label" style="margin-bottom:10px;">Add a field</div>
-    <div id="fieldPalette" style="display:flex; flex-direction:column; gap:6px;">
-      {% for value, label in field_choices %}
-      <button type="button" class="btn btn-ghost btn-sm" style="justify-content:flex-start;"
-        data-add-field="{{ value }}">
-        <i class="fa-solid fa-plus"></i> {{ label }}
+    <div class="kpi-label" style="margin-bottom:8px;">Add a field</div>
+    <p class="cell-muted" style="font-size:11.5px; margin:0 0 10px;">Click to add, or drag onto the tag.</p>
+    {% for group in palette_groups %}
+    <div class="palette-group">
+      <div class="palette-group-title">{{ group.group }}</div>
+      {% for f in group.fields %}
+      <button type="button" class="btn btn-ghost btn-sm palette-btn" data-add-field="{{ f.key }}">
+        <i class="fa-solid fa-plus"></i> {{ f.label }}
       </button>
       {% endfor %}
     </div>
+    {% endfor %}
   </div>
 
   <div class="panel" style="overflow:auto;">
-    <div class="kpi-label" style="margin-bottom:10px;">Label preview
-      <span class="cell-muted">({{ template_obj.width_dots }}×{{ template_obj.height_dots }} dots)</span>
+    <div class="canvas-toolbar">
+      <div class="kpi-label" style="margin:0;">Label preview
+        <span id="canvasSizeLabel" class="cell-muted"></span>
+      </div>
+      <div class="zoom-controls">
+        <button type="button" id="zoomOut" class="btn btn-ghost btn-sm" title="Zoom out">−</button>
+        <span id="zoomLabel" class="mono" style="font-size:11px; min-width:36px; text-align:center;">2×</span>
+        <button type="button" id="zoomIn" class="btn btn-ghost btn-sm" title="Zoom in">+</button>
+      </div>
     </div>
-    <div id="labelCanvas" class="label-canvas"
-      style="width:{{ template_obj.width_dots }}px; height:{{ template_obj.height_dots }}px;"></div>
+    <p id="regionHint" class="cell-muted" style="font-size:11.5px; margin:6px 0 10px;">Click a zone or add a field. Drag to position.</p>
+    <div id="labelCanvasWrap" class="label-canvas-wrap">
+      <div id="labelCanvas" class="label-canvas"></div>
+    </div>
+    <div class="legend-row">
+      <span class="legend-swatch legend-tail"></span> Tail (front only)
+      <span class="legend-swatch legend-front"></span> Front (tail attached)
+      <span class="legend-swatch legend-back"></span> Back (no tail)
+      <span class="legend-fold"></span> Fold line
+    </div>
   </div>
 
   <div class="panel" id="propPanel">
     <div class="kpi-label" style="margin-bottom:10px;">Field properties</div>
-    <div id="propEmpty" class="cell-muted" style="font-size:12.5px;">Select a field on the canvas, or add one from
-      the palette.</div>
+    <div id="propEmpty" class="cell-muted" style="font-size:12.5px;">Select a field on the canvas, or add one from the palette.</div>
     <div id="propForm" style="display:none;">
+      <div class="kpi-label" style="margin-bottom:4px;">Field</div>
+      <div id="propKeyLabel" class="cell-strong" style="font-size:13px; margin-bottom:10px;"></div>
+
       <div class="kpi-label" style="margin:10px 0 4px;">Custom text / label prefix</div>
-      <input type="text" id="propText" class="field" style="width:100%;">
+      <input type="text" id="propText" class="field" style="width:100%;" placeholder="Optional prefix, or full text for Custom text">
 
       <div style="display:flex; gap:8px; margin-top:10px;">
         <div style="flex:1;">
@@ -113,51 +151,190 @@
         <i class="fa-solid fa-trash"></i> Remove field
       </button>
     </div>
+
+    <div class="panel" style="margin-top:16px; padding:10px; background:var(--bg-soft, transparent);">
+      <div class="kpi-label" style="margin-bottom:6px;">Data notes</div>
+      <ul class="cell-muted" style="font-size:11.5px; margin:0; padding-left:16px; line-height:1.45;">
+        <li><b>Colour / stone / size / quality</b> print blank until those columns exist on the product master.</li>
+        <li><b>Subcategory</b> is what legacy tags often printed on the tail (e.g. BNG). The tail is on the front face only.</li>
+        <li><b>Supplier code</b> uses the supplier reference code (falls back to name).</li>
+        <li><b>Selling price × rate</b> multiplies by the product convert rate.</li>
+      </ul>
+    </div>
   </div>
 </div>
 
 <style>
+  .designer-toolbar {
+    margin-bottom: 16px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .designer-toolbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .designer-grid {
     display: grid;
-    grid-template-columns: 220px 1fr 260px;
+    grid-template-columns: 210px minmax(320px, 1fr) 260px;
     gap: 16px;
     align-items: start;
   }
-
+  .palette-group { margin-bottom: 12px; }
+  .palette-group-title {
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted, #888);
+    margin-bottom: 6px;
+  }
+  .palette-btn {
+    width: 100%;
+    justify-content: flex-start;
+    margin-bottom: 4px;
+  }
+  .canvas-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .zoom-controls { display: flex; align-items: center; gap: 4px; }
+  .label-canvas-wrap {
+    overflow: auto;
+    max-height: 70vh;
+    padding: 18px;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(0,0,0,.03), transparent 50%),
+      linear-gradient(135deg, #e8e4dc 0%, #d9d3c8 100%);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
   .label-canvas {
     position: relative;
-    background: #fff;
-    border: 1px dashed var(--border);
-    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 20px 20px;
+    background: transparent;
+    margin: 0 auto;
   }
-
+  .label-paper-outline {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: #fff;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,.16));
+  }
+  .label-zone {
+    position: absolute;
+    box-sizing: border-box;
+  }
+  .label-zone-tail {
+    background: rgba(120, 160, 200, .18);
+    border: 1px dashed rgba(60, 100, 140, .55);
+  }
+  .label-zone-front {
+    background: rgba(200, 170, 90, .14);
+    border: 1px solid rgba(160, 120, 40, .35);
+  }
+  .label-zone-back {
+    background: rgba(140, 180, 120, .14);
+    border: 1px solid rgba(80, 120, 60, .35);
+  }
+  .label-zone-body {
+    background: rgba(0,0,0,.02);
+    border: 1px dashed var(--border);
+  }
+  .label-zone-tag {
+    position: absolute;
+    top: 2px;
+    left: 3px;
+    font-size: 9px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: rgba(0,0,0,.35);
+    pointer-events: none;
+  }
+  .label-fold-line {
+    position: absolute;
+    height: 0;
+    border-top: 1px dashed rgba(180, 40, 40, .55);
+    z-index: 2;
+  }
   .label-field-box {
     position: absolute;
     border: 1px solid var(--brand-strong);
-    background: var(--brand-soft);
+    background: rgba(255, 248, 230, .92);
     color: #111;
-    padding: 2px 4px;
-    font-size: 11px;
+    padding: 1px 3px;
+    line-height: 1.15;
     white-space: nowrap;
-    cursor: move;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: grab;
     user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    z-index: 3;
+    box-sizing: border-box;
+    pointer-events: auto;
   }
-
+  .label-field-box.dragging {
+    cursor: grabbing;
+    z-index: 6;
+    opacity: .95;
+  }
   .label-field-box.selected {
     outline: 2px solid var(--brand-strong);
     z-index: 5;
   }
-
   .label-field-box.hidden-field {
     opacity: .35;
     border-style: dashed;
   }
-
+  .label-field-box.is-line {
+    padding: 0;
+    background: #222;
+    border: none;
+    min-height: 1px;
+  }
+  .label-field-box.is-barcode {
+    font-family: var(--font-mono, monospace);
+    letter-spacing: .08em;
+    background: rgba(255,255,255,.95);
+  }
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted, #888);
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .legend-tail { background: rgba(120, 160, 200, .45); border: 1px solid rgba(60, 100, 140, .55); }
+  .legend-front { background: rgba(200, 170, 90, .45); border: 1px solid rgba(160, 120, 40, .45); }
+  .legend-back { background: rgba(140, 180, 120, .45); border: 1px solid rgba(80, 120, 60, .45); }
+  .legend-fold {
+    display: inline-block;
+    width: 18px;
+    border-top: 1px dashed rgba(180, 40, 40, .7);
+    margin: 0 4px 0 0;
+    vertical-align: middle;
+  }
   @media(max-width:1100px) {
-    .designer-grid {
-      grid-template-columns: 1fr;
-    }
+    .designer-grid { grid-template-columns: 1fr; }
   }
 </style>
 
@@ -167,11 +344,18 @@
     saveUrl: "{% url 'hardware:template_save' template_obj.pk %}",
     fields: {{ fields_json | safe }},
     fieldLabels: {
-    {% for value, label in field_choices %}"{{ value }}": "{{ label }}"{% if not forloop.last %},{% endif %}{% endfor %}
+      {% for value, label in field_choices %}"{{ value }}": "{{ label }}"{% if not forloop.last %},{% endif %}{% endfor %}
     },
     sampleValues: {{ sample_values_json | safe }},
+    geometry: {{ geometry_json | safe }},
+    mediaProfiles: {{ media_profiles_json | safe }},
+    mediaProfile: "{{ template_obj.media_profile }}",
+    widthDots: {{ template_obj.width_dots }},
+    heightDots: {{ template_obj.height_dots }},
+    dpi: {{ template_obj.dpi }},
+    zoom: 3,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=5"></script>
 
 {% endblock %}

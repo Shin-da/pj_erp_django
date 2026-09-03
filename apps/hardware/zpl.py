@@ -8,68 +8,107 @@ are kept verbatim from the legacy `PrintBarcode.aspx.cs`
 commands already proven against Shin's actual Zebra hardware, not legacy
 cruft to redesign. Everything else is new: legacy hardcoded five fixed
 field layouts directly in C#; this reads an editable `LabelTemplate` +
-`LabelField` set instead. The field-placement math here has NOT been
-verified against a physical printer yet — test a real print before relying
-on a layout for daily use.
+`LabelField` set instead.
 """
+
+from decimal import Decimal, ROUND_HALF_UP
 
 COMPANY_NAME_DEFAULT = "PERFECT JEWELRY"
 
 # Placeholder text shown in the designer canvas (no real product is loaded
 # there) — purely a preview aid, never sent to a printer.
 SAMPLE_FIELD_VALUES = {
-    "barcode_number": "PJ000123",
-    "barcode_image": "PJ000123",
-    "reference_id": "REF-4821",
+    "barcode_number": "PJ21258",
+    "barcode_image": "PJ21258",
+    "reference_id": "ER858LE1",
     "product_name": "Solitaire Ring",
+    "supplier_code": "BNG",
+    "supplier_name": "Bangalore Supply",
+    "subcategory": "BR",
+    "category_code": "JW",
     "metal": "Gold",
     "metal_purity": "18K",
-    "stone": "Diamond",
+    "stone": "0.12 / 0.45",
     "colour": "Pink",
     "quality": "VS1",
     "weight": "3.25 g",
-    "price": "12,500.00",
-    "currency": "PHP",
+    "gross_weight": "3.80 g",
+    "price": "15,525.00",
+    "price_rated": "15,525.00",
+    "currency": "USD",
     "size": "US 7",
     "company_name": COMPANY_NAME_DEFAULT,
     "static_text": "",
+    "horizontal_line": "—",
 }
+
+
+def _fmt_money(amount):
+    if amount is None:
+        return ""
+    return f"{amount:,.2f}"
+
+
+def _fmt_weight(value):
+    if value is None:
+        return ""
+    return f"{value:.2f} g"
 
 
 def resolve_field_values(item):
     """
     Build the {field_key: display_text} map for one real ProductItem.
 
-    Colour/quality/stone/size aren't real columns on catalogue.ProductMaster
-    yet — they were placeholder-mapped (or dropped) during the legacy data
-    import (django-rebuild-plan.md §13's "known gaps"). Those fields
-    resolve to an empty string here rather than a guess; you can still
-    place them on a template, they'll just render blank until that data
-    exists in the schema.
+    Colour / quality / stone / size are not real columns on
+    catalogue.ProductMaster yet (legacy import gaps). Those keys resolve
+    to empty strings rather than invented placeholders — you can still
+    place them on a template; they'll print blank until that data exists.
     """
     product = item.product
     metal_name = product.metal.name if product.metal_id else ""
     purity_name = product.purity.name if product.purity_id else ""
-    weight = f"{product.net_weight:.2f} g" if product.net_weight is not None else ""
-    price = f"{product.selling_price:,.2f}" if product.selling_price is not None else ""
-    currency_code = product.currency.code if product.currency_id else ""
+    supplier = product.supplier
+    supplier_code = ""
+    supplier_name = ""
+    if supplier:
+        supplier_code = (supplier.reference_code or "").strip() or (supplier.name or "")[:12]
+        supplier_name = supplier.name or ""
+
+    price = product.selling_price
+    rate = product.effective_rate if hasattr(product, "effective_rate") else Decimal("1")
+    if rate is None:
+        rate = Decimal("1")
+    rated = None
+    if price is not None:
+        rated = (price * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    category_code = ""
+    if product.category_id:
+        category_code = product.category.code or ""
 
     return {
-        "barcode_number": item.barcode,
-        "barcode_image": item.barcode,
+        "barcode_number": item.barcode or "",
+        "barcode_image": item.barcode or "",
         "reference_id": product.reference_id or "",
         "product_name": product.name or "",
+        "supplier_code": supplier_code,
+        "supplier_name": supplier_name,
+        "subcategory": product.subcategory or "",
+        "category_code": category_code,
         "metal": metal_name,
         "metal_purity": purity_name,
         "stone": "",
         "colour": "",
         "quality": "",
-        "weight": weight,
-        "price": price,
-        "currency": currency_code,
+        "weight": _fmt_weight(product.net_weight),
+        "gross_weight": _fmt_weight(product.gross_weight),
+        "price": _fmt_money(price),
+        "price_rated": _fmt_money(rated),
+        "currency": product.currency.code if product.currency_id else "",
         "size": "",
         "company_name": COMPANY_NAME_DEFAULT,
         "static_text": "",
+        "horizontal_line": "",
     }
 
 
@@ -77,6 +116,8 @@ def render_field_text(field, values):
     """Resolve one LabelField's on-label text given a resolved value map."""
     if field.field_key == "static_text":
         return field.static_text
+    if field.field_key == "horizontal_line":
+        return "—"
     text = values.get(field.field_key, "")
     if field.static_text:
         # static_text doubles as an optional label/prefix on any field,
@@ -103,6 +144,7 @@ def build_zpl(template, values):
         "^PR2,2,2",
         "~SD30",
         f"^PW{template.width_dots}",
+        f"^LL{template.height_dots}",
         "^LH0,0",
         "^RS8,,,1,,,,",
         "^RFW,a,2,,A",
@@ -115,8 +157,18 @@ def build_zpl(template, values):
             barcode_value = _zpl_escape(values.get("barcode_number", ""))
             if not barcode_value:
                 continue
-            lines.append(f"^FO{field.x},{field.y}^BY2,2^A0N,12,20^BCN,40,N,N,N,A^FD{barcode_value}")
+            # Height scales with font_size so the designer control is meaningful.
+            bar_h = max(20, min(80, field.font_size * 2))
+            lines.append(
+                f"^FO{field.x},{field.y}^BY1.5,2^BCN,{bar_h},N,N,N,A^FD{barcode_value}"
+            )
             lines.append("^FS")
+            continue
+
+        if field.field_key == "horizontal_line":
+            # Graphic box 1-dot tall = hairline across box_width.
+            thickness = max(1, min(6, field.font_size // 10 or 1))
+            lines.append(f"^FO{field.x},{field.y}^GB{field.box_width},{thickness},{thickness}^FS")
             continue
 
         text = _zpl_escape(render_field_text(field, values))
@@ -124,7 +176,7 @@ def build_zpl(template, values):
             continue
 
         font_h = field.font_size
-        font_w = field.font_size + 6 if field.bold else field.font_size
+        font_w = field.font_size + 4 if field.bold else field.font_size
         lines.append(
             f"^FO{field.x},{field.y}^FB{field.box_width},1,,{field.align},^A0N,{font_h},{font_w}^FD{text}"
         )

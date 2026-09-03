@@ -4,12 +4,10 @@
 <div class="page-head">
   <div>
     <h1>Tag Printing</h1>
-    <p>Design label layouts and print Zebra RFID tags for scanned barcodes. Field placement is new and hasn't been
-      verified on a physical printer yet — test a real print before relying on a layout for daily use.</p>
+    <p>Design Irys RFID jewellery tag layouts and print to a Zebra over BrowserPrint. Start from the sample layout, then tweak freely.</p>
   </div>
   <div class="page-head-actions">
-    <a href="{% url 'hardware:print_labels' %}" class="btn btn-primary"><i class="fa-solid fa-print"></i> Print
-      labels</a>
+    <a href="{% url 'hardware:print_labels' %}" class="btn btn-primary"><i class="fa-solid fa-print"></i> Print labels</a>
   </div>
 </div>
 
@@ -31,6 +29,11 @@
       <option value="{{ value }}">{{ label }}</option>
       {% endfor %}
     </select>
+    <select name="media_profile" class="field" style="min-width:220px;">
+      {% for value, label in media_profiles %}
+      <option value="{{ value }}" {% if value == "irys_standard" %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Create &amp; design</button>
   </form>
 </div>
@@ -43,6 +46,7 @@
         <tr>
           <th>Name</th>
           <th>Category</th>
+          <th>Paper</th>
           <th>Fields</th>
           <th>Default?</th>
           <th>Size (dots)</th>
@@ -54,6 +58,7 @@
         <tr>
           <td class="cell-strong">{{ t.name }}</td>
           <td>{{ t.get_category_display }}</td>
+          <td class="cell-muted" style="font-size:12px;">{{ t.get_media_profile_display }}</td>
           <td class="mono">{{ t.fields.all|length }}</td>
           <td>
             {% if t.is_default %}<span class="pill pill-ok">Default</span>{% else %}<span
@@ -78,7 +83,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="6" class="cell-muted">No templates yet — create one above.</td>
+          <td colspan="7" class="cell-muted">No templates yet — create one above.</td>
         </tr>
         {% endfor %}
       </tbody>
