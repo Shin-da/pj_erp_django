@@ -347,22 +347,28 @@ def print_labels(request):
             preview_fields = []
             blank_keys = []
             for f in tpl.fields.filter(visible=True).order_by("order", "id"):
-                px = max(0, f.x + ox)
-                py = max(0, f.y + oy)
-                region = _region_at(geometry, px, py)
+                # Preview is die-cut WYSIWYG: place fields at design coords so
+                # zones match the physical tag. Offset X/Y is printer registration
+                # applied only in ZPL (TOF → die-cut), not a layout shift on-tag.
+                dx, dy = f.x, f.y
+                px, py = max(0, dx + ox), max(0, dy + oy)
+                region = _region_at(geometry, dx, dy)
                 if f.field_key == "horizontal_line":
                     preview_fields.append({
                         "key": f.field_key,
                         "label": f.get_field_key_display(),
                         "text": "",
-                        "x": px,
-                        "y": py,
+                        "x": dx,
+                        "y": dy,
+                        "print_x": px,
+                        "print_y": py,
                         "font_size": f.font_size,
                         "bold": f.bold,
                         "align": f.align,
                         "box_width": f.box_width,
                         "is_line": True,
                         "is_barcode": False,
+                        "barcode_height": 0,
                         "blank": False,
                         "region": region,
                     })
@@ -371,18 +377,25 @@ def print_labels(request):
                 if not text and f.field_key != "barcode_image":
                     blank_keys.append(f.get_field_key_display())
                     continue
+                barcode_height = 0
+                if f.field_key == "barcode_image":
+                    # Match apps.hardware.zpl.build_zpl bar height.
+                    barcode_height = max(20, min(80, f.font_size * 2))
                 preview_fields.append({
                     "key": f.field_key,
                     "label": f.get_field_key_display(),
                     "text": text,
-                    "x": px,
-                    "y": py,
+                    "x": dx,
+                    "y": dy,
+                    "print_x": px,
+                    "print_y": py,
                     "font_size": f.font_size,
                     "bold": f.bold,
                     "align": f.align,
                     "box_width": f.box_width,
                     "is_line": False,
                     "is_barcode": f.field_key == "barcode_image",
+                    "barcode_height": barcode_height,
                     "blank": False,
                     "region": region,
                 })

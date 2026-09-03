@@ -66,9 +66,9 @@
         class="fa-solid fa-code"></i> Show ZPL</button>
   </div>
   <p class="cell-muted" style="font-size:11.5px; margin:10px 0 0;">
-    Check the die-cut preview below before printing. Irys jewellery RFID should show
-    <b>300 dpi · ~886×308</b> and Offset Y around <b>55</b>. If the barcode still sits on the
-    fold, raise Offset Y in the designer, save, and reprint.
+    Check the die-cut preview below before printing — it shows layout <b>on the tag</b>
+    (front / back / tail). Irys should be <b>300 dpi · ~886×308</b>; Offset Y (~55) is only a
+    printer registration nudge and does not move fields in this preview.
   </p>
 </div>
 
@@ -95,7 +95,7 @@
       </div>
       <div class="tag-preview-toolbar">
         {% if p.offset_x or p.offset_y %}
-        <span class="pill" style="font-size:10px;">offset {{ p.offset_x }},{{ p.offset_y }}</span>
+        <span class="pill" style="font-size:10px;" title="Added to ZPL coordinates only — preview stays on the die-cut layout">print offset {{ p.offset_x }},{{ p.offset_y }}</span>
         {% endif %}
         <button type="button" class="btn btn-ghost btn-sm" data-zoom-out title="Zoom out">−</button>
         <span class="mono zoom-label" data-zoom-label style="font-size:11px; min-width:42px; text-align:center;">—</span>
@@ -132,9 +132,9 @@
                 style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:2px;"></div>
               {% elif f.is_barcode %}
               <div class="tag-field is-barcode" title="{{ f.label }}{% if f.region %} · {{ f.region }}{% endif %}" data-text="{{ f.text }}"
-                style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.font_size|add:18 }}px;"></div>
+                style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; height:{{ f.barcode_height }}px;"></div>
               {% else %}
-              <div class="tag-field" title="{{ f.label }}{% if f.region %} · {{ f.region }}{% endif %} ({{ f.x }},{{ f.y }})"
+              <div class="tag-field" title="{{ f.label }}{% if f.region %} · {{ f.region }}{% endif %} · design {{ f.x }},{{ f.y }} · print {{ f.print_x }},{{ f.print_y }}"
                 style="left:{{ f.x }}px; top:{{ f.y }}px; width:{{ f.box_width }}px; font-size:{{ f.font_size }}px; font-weight:{% if f.bold %}700{% else %}400{% endif %}; text-align:{% if f.align == 'C' %}center{% elif f.align == 'R' %}right{% else %}left{% endif %};">{{ f.text }}</div>
               {% endif %}
             {% endfor %}
@@ -151,7 +151,8 @@
                 <th>Zone</th>
                 <th>Field</th>
                 <th>Value</th>
-                <th class="mono">X,Y</th>
+                <th class="mono">Design</th>
+                <th class="mono">Print</th>
               </tr>
             </thead>
             <tbody>
@@ -161,9 +162,10 @@
                 <td>{{ f.label }}</td>
                 <td class="mono">{% if f.is_line %}<span class="cell-muted">— line —</span>{% elif f.is_barcode %}▮▮ {{ f.text }}{% else %}{{ f.text }}{% endif %}</td>
                 <td class="mono cell-muted">{{ f.x }},{{ f.y }}</td>
+                <td class="mono cell-muted">{{ f.print_x }},{{ f.print_y }}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="4" class="cell-muted">No printable fields for this item.</td></tr>
+              <tr><td colspan="5" class="cell-muted">No printable fields for this item.</td></tr>
               {% endfor %}
             </tbody>
           </table>
