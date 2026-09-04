@@ -7,7 +7,7 @@
   <!-- ================= SIDEBAR ================= -->
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
-      <div class="mark">PJ</div>
+      <div class="mark"><img src="{% static 'core/img/brand/pj-mark.png' %}" alt="Perfect Jewelry"></div>
       <div>
         <div class="name">Perfect Jewelry</div>
         <div class="sub">Enterprise System</div>
@@ -48,6 +48,10 @@
           class="nav-item top-level{% if request.resolver_match.app_name == 'hardware' %} active{% endif %}">
           <i class="fa-solid fa-tag"></i> <span class="nav-label">Tag Printing</span>
         </a>
+        <a href="{% url 'core:db_sync_status' %}" title="DB Sync Status"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'db_sync_status' or request.resolver_match.url_name == 'db_sync_run' %} active{% endif %}">
+          <i class="fa-solid fa-database"></i> <span class="nav-label">DB Sync</span>
+        </a>
       </div>
     </div>
 
@@ -76,12 +80,16 @@
       <div class="topbar-search">
         <div class="search-box" data-suggest-url="{% url 'core:search_suggest' %}" data-search-url="{% url 'core:search' %}">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" autocomplete="off" spellcheck="false" placeholder="Search barcode, product, location…">
+          <input type="text" autocomplete="off" spellcheck="false" placeholder="Barcode, invoice, product, location…" aria-label="Global search">
           <kbd>/</kbd>
+          <button type="button" class="search-close" id="searchClose" aria-label="Close search"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
 
       <div class="topbar-right">
+        <button class="icon-btn search-toggle" id="searchToggle" aria-label="Open search" title="Search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
         <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme">
           <i class="fa-solid fa-moon"></i>
           <i class="fa-solid fa-sun"></i>

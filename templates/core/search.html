@@ -4,154 +4,282 @@
 <div class="page-head">
   <div>
     <h1>Search</h1>
-    <p>{% if q %}{{ total }} result{{ total|pluralize }} for <b>{{ q }}</b>.{% else %}Type a barcode, product name, reference ID, or location.{% endif %}</p>
+    <p>
+      {% if q %}
+        {{ total }} result{{ total|pluralize }} for <b>{{ q }}</b>.
+      {% else %}
+        Search barcodes, RFID, products, invoices, resellers, and locations.
+      {% endif %}
+    </p>
   </div>
 </div>
 
-<form method="get" class="filter-bar">
-  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Barcode, product name, reference, location…" autofocus>
+<form method="get" class="filter-bar search-page-form" role="search">
+  <div class="search-page-input-wrap">
+    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+    <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Barcode, RFID, product, invoice (RE…), reseller, location…" autofocus autocomplete="off" spellcheck="false">
+    {% if q %}
+    <a href="{% url 'core:search' %}" class="search-page-clear" title="Clear" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></a>
+    {% endif %}
+  </div>
   <button type="submit" class="btn btn-primary btn-sm">Search</button>
 </form>
 
-{% if q %}
-
-{% if items %}
-<div class="section-heading" style="margin-top:24px;"><span class="tag">Barcodes</span></div>
-<div class="table-wrap">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Barcode</th>
-          <th>Product</th>
-          <th>Location</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in items %}
-        <tr>
-          <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' item.barcode %}">{{ item.barcode }}</a></td>
-          <td>{{ item.product.name }}</td>
-          <td>{{ item.location.name }}</td>
-          <td>
-            {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
-            {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
-            {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
-            {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
-            {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
-            {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% if not q %}
+<div class="search-hints">
+  <div class="search-hint">
+    <i class="fa-solid fa-barcode"></i>
+    <div>
+      <strong>Barcode / RFID</strong>
+      <span>Exact scan jumps straight to the piece</span>
+    </div>
+  </div>
+  <div class="search-hint">
+    <i class="fa-solid fa-gem"></i>
+    <div>
+      <strong>Products</strong>
+      <span>Name, reference ID, subcategory, or piece barcode</span>
+    </div>
+  </div>
+  <div class="search-hint">
+    <i class="fa-solid fa-file-invoice"></i>
+    <div>
+      <strong>Invoices</strong>
+      <span>Invoice number (RE… / RN…) or reseller name</span>
+    </div>
+  </div>
+  <div class="search-hint">
+    <i class="fa-solid fa-users"></i>
+    <div>
+      <strong>Resellers &amp; locations</strong>
+      <span>Client, group, or location name/code</span>
+    </div>
   </div>
 </div>
+{% endif %}
+
+{% if q %}
+
+{% if total > 0 %}
+<nav class="search-jump" aria-label="Result groups">
+  <a href="#sr-all" class="search-jump-chip active" data-jump="all">All <span>{{ total }}</span></a>
+  {% if counts.items %}<a href="#sr-items" class="search-jump-chip" data-jump="items">Barcodes <span>{{ counts.items }}</span></a>{% endif %}
+  {% if counts.products %}<a href="#sr-products" class="search-jump-chip" data-jump="products">Products <span>{{ counts.products }}</span></a>{% endif %}
+  {% if counts.invoices %}<a href="#sr-invoices" class="search-jump-chip" data-jump="invoices">Invoices <span>{{ counts.invoices }}</span></a>{% endif %}
+  {% if counts.resellers %}<a href="#sr-resellers" class="search-jump-chip" data-jump="resellers">Resellers <span>{{ counts.resellers }}</span></a>{% endif %}
+  {% if counts.locations %}<a href="#sr-locations" class="search-jump-chip" data-jump="locations">Locations <span>{{ counts.locations }}</span></a>{% endif %}
+</nav>
+{% endif %}
+
+<div id="sr-all"></div>
+
+{% if items %}
+<section class="search-section" id="sr-items" data-group="items">
+  <div class="section-heading"><span class="tag">Barcodes</span><span class="search-section-count">{{ counts.items }}</span></div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Barcode</th>
+            <th>Product</th>
+            <th>Location</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' item.barcode %}">{{ item.barcode }}</a></td>
+            <td>{{ item.product.name }}</td>
+            <td>{{ item.location.name }}</td>
+            <td>
+              {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+              {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+              {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+              {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+              {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+              {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
 {% endif %}
 
 {% if products %}
-<div class="section-heading" style="margin-top:24px;"><span class="tag">Products</span></div>
-<div class="table-wrap">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Product</th>
-          <th>Reference</th>
-          <th>Category</th>
-          <th>Pieces</th>
-          <th>Available</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in products %}
-        <tr>
-          <td class="cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}">{{ p.name }}</a></td>
-          <td class="mono cell-muted">{{ p.reference_id|default:"—" }}</td>
-          <td class="cell-muted">{{ p.category.name }}</td>
-          <td class="mono">{{ p.item_count }}</td>
-          <td class="mono">{{ p.available_count }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<section class="search-section" id="sr-products" data-group="products">
+  <div class="section-heading"><span class="tag">Products</span><span class="search-section-count">{{ counts.products }}</span></div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Reference</th>
+            <th>Category</th>
+            <th>Pieces</th>
+            <th>Available</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in products %}
+          <tr>
+            <td class="cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}">{{ p.name }}</a></td>
+            <td class="mono cell-muted">{{ p.reference_id|default:"—" }}</td>
+            <td class="cell-muted">{{ p.category.name }}</td>
+            <td class="mono">{{ p.item_count }}</td>
+            <td class="mono">{{ p.available_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
+</section>
+{% endif %}
+
+{% if invoices %}
+<section class="search-section" id="sr-invoices" data-group="invoices">
+  <div class="section-heading"><span class="tag">Invoices</span><span class="search-section-count">{{ counts.invoices }}</span></div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Reseller</th>
+            <th>Status</th>
+            <th>Lines</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in invoices %}
+          <tr>
+            <td class="mono cell-strong"><a href="{% url 'assignment:invoice_detail' inv.pk %}">{{ inv.invoice_number|default:inv.pk }}</a></td>
+            <td>{{ inv.reseller.name }}</td>
+            <td>
+              {% if inv.invoice_status == "DRAFT" %}<span class="pill pill-warn">Draft</span>
+              {% elif inv.invoice_status == "COMPLETE" %}<span class="pill pill-ok">Complete</span>
+              {% elif inv.invoice_status == "CANCELLED" %}<span class="pill pill-danger">Cancelled</span>
+              {% else %}<span class="pill pill-neutral">{{ inv.get_invoice_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="mono">{{ inv.line_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
 {% endif %}
 
 {% if clients or reseller_groups %}
-<div class="section-heading" style="margin-top:24px;"><span class="tag">Resellers</span></div>
-<div class="table-wrap">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Kind</th>
-          <th>Group</th>
-          <th>Reference</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in clients %}
-        <tr>
-          <td class="cell-strong"><a href="{% url 'assignment:client_detail' c.pk %}">{{ c.name }}</a></td>
-          <td class="cell-muted">Client</td>
-          <td class="cell-muted">{% if c.group %}<a href="{% url 'assignment:group_detail' c.group.pk %}">{{ c.group.name }}</a>{% else %}Ungrouped{% endif %}</td>
-          <td class="mono cell-muted">{{ c.reference_code|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-        {% for g in reseller_groups %}
-        <tr>
-          <td class="cell-strong"><a href="{% url 'assignment:group_detail' g.pk %}">{{ g.name }}</a></td>
-          <td class="cell-muted">Group</td>
-          <td class="cell-muted">{{ g.client_count }} client{{ g.client_count|pluralize }}</td>
-          <td class="mono cell-muted">{{ g.code }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<section class="search-section" id="sr-resellers" data-group="resellers">
+  <div class="section-heading"><span class="tag">Resellers</span><span class="search-section-count">{{ counts.resellers }}</span></div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Kind</th>
+            <th>Group</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in clients %}
+          <tr>
+            <td class="cell-strong"><a href="{% url 'assignment:client_detail' c.pk %}">{{ c.name }}</a></td>
+            <td class="cell-muted">Client</td>
+            <td class="cell-muted">{% if c.group %}<a href="{% url 'assignment:group_detail' c.group.pk %}">{{ c.group.name }}</a>{% else %}Ungrouped{% endif %}</td>
+            <td class="mono cell-muted">{{ c.reference_code|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+          {% for g in reseller_groups %}
+          <tr>
+            <td class="cell-strong"><a href="{% url 'assignment:group_detail' g.pk %}">{{ g.name }}</a></td>
+            <td class="cell-muted">Group</td>
+            <td class="cell-muted">{{ g.client_count }} client{{ g.client_count|pluralize }}</td>
+            <td class="mono cell-muted">{{ g.code }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
+</section>
 {% endif %}
 
 {% if locations %}
-<div class="section-heading" style="margin-top:24px;"><span class="tag">Locations</span></div>
-<div class="table-wrap">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Location</th>
-          <th>Code</th>
-          <th>Type</th>
-          <th>Items</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for loc in locations %}
-        <tr>
-          <td class="cell-strong"><a href="{% url 'inventory:location_detail' loc.code %}">{{ loc.name }}</a></td>
-          <td class="mono cell-muted">{{ loc.code }}</td>
-          <td class="cell-muted">{{ loc.get_location_type_display }}</td>
-          <td class="mono">{{ loc.item_count }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<section class="search-section" id="sr-locations" data-group="locations">
+  <div class="section-heading"><span class="tag">Locations</span><span class="search-section-count">{{ counts.locations }}</span></div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Items</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for loc in locations %}
+          <tr>
+            <td class="cell-strong"><a href="{% url 'inventory:location_detail' loc.code %}">{{ loc.name }}</a></td>
+            <td class="mono cell-muted">{{ loc.code }}</td>
+            <td class="cell-muted">{{ loc.get_location_type_display }}</td>
+            <td class="mono">{{ loc.item_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
+</section>
 {% endif %}
 
 {% if total == 0 %}
-<div class="panel" style="margin-top:24px; text-align:center; padding:40px;">
-  <i class="fa-solid fa-magnifying-glass" style="font-size:28px; color:var(--text-muted); margin-bottom:12px;"></i>
-  <p class="cell-muted">Nothing matched <b>{{ q }}</b>. Try a partial barcode, a product name, or a location code.</p>
+<div class="panel search-empty">
+  <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+  <p>Nothing matched <b>{{ q }}</b>.</p>
+  <ul class="search-empty-tips">
+    <li>Try a partial barcode (e.g. <span class="mono">PJ100</span>)</li>
+    <li>Invoice numbers like <span class="mono">RE00128</span> or <span class="mono">RN00004</span></li>
+    <li>Product name, reference ID, reseller, or location code</li>
+  </ul>
 </div>
 {% endif %}
 
 {% endif %}
+
+<script>
+(function () {
+  var chips = document.querySelectorAll('.search-jump-chip');
+  if (!chips.length) return;
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (c) { c.classList.remove('active'); });
+      chip.classList.add('active');
+      var jump = chip.getAttribute('data-jump');
+      if (jump === 'all') {
+        document.querySelectorAll('.search-section').forEach(function (s) { s.hidden = false; });
+        return;
+      }
+      document.querySelectorAll('.search-section').forEach(function (s) {
+        s.hidden = s.getAttribute('data-group') !== jump;
+      });
+    });
+  });
+})();
+</script>
 
 {% endblock %}
