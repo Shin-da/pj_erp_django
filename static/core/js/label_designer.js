@@ -161,6 +161,10 @@
     if (f.field_key === 'barcode_image') {
       return '▮▮ ' + (sample || 'BARCODE');
     }
+    // Stone sample already includes G-/D- — don't double a G/D prefix.
+    if (f.field_key === 'stone' && sample && /^[GD]\s*[-–—]?$/i.test((f.static_text || '').trim())) {
+      return sample;
+    }
     return f.static_text ? (f.static_text + sample) : sample || base;
   }
 

@@ -27,13 +27,13 @@ SAMPLE_FIELD_VALUES = {
     "category_code": "JW",
     "metal": "Gold",
     "metal_purity": "18K",
-    "stone": "0.12 / 0.45",
+    "stone": "G-0.12/0.45",
     "colour": "Pink",
     "quality": "VS1",
     "weight": "3.25 g",
     "gross_weight": "3.80 g",
-    "price": "15,525.00",
-    "price_rated": "15,525.00",
+    "price": "15525",
+    "price_rated": "15525",
     "currency": "USD",
     "size": "US 7",
     "company_name": COMPANY_NAME_DEFAULT,
@@ -43,15 +43,52 @@ SAMPLE_FIELD_VALUES = {
 
 
 def _fmt_money(amount):
+    """Tag prices: whole number, rounded, no commas/decimals (e.g. 15525)."""
     if amount is None:
         return ""
-    return f"{amount:,.2f}"
+    whole = Decimal(amount).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return f"{int(whole)}"
 
 
 def _fmt_weight(value):
     if value is None:
         return ""
     return f"{value:.2f} g"
+
+
+_STONE_PREFIX_RE = re.compile(r"^[GD]\s*[-–—]?\s*", re.IGNORECASE)
+
+
+def _stone_weight_prefix(metal_name="", category_code="", product_name="", reference_id=""):
+    """
+    Jewellery tags use G- for gold stone/metal weight and D- for diamond.
+    Prefer explicit metal/name hints; SN (stone) category defaults to diamond.
+    """
+    blob = " ".join(
+        str(part or "") for part in (metal_name, product_name, reference_id, category_code)
+    ).lower()
+    if any(token in blob for token in ("diamond", "dia", "diawt", "lab grown", "lab-grown")):
+        return "D-"
+    if category_code and str(category_code).upper() in {"SN", "ST", "SPP"}:
+        return "D-"
+    if any(token in blob for token in ("gold", "18k", "14k", "22k", "9k", "yg", "wg", "rg")):
+        return "G-"
+    if metal_name:
+        return "G-"
+    return "G-"
+
+
+def _fmt_stone_weight(raw, metal_name="", category_code="", product_name="", reference_id=""):
+    """Print stone weight as G-{value} or D-{value}."""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    # Drop a manual G-/D- so we never print G-G-…
+    rest = _STONE_PREFIX_RE.sub("", text).strip()
+    if not rest:
+        return ""
+    prefix = _stone_weight_prefix(metal_name, category_code, product_name, reference_id)
+    return f"{prefix}{rest}"
 
 
 def resolve_field_values(item):
@@ -62,6 +99,8 @@ def resolve_field_values(item):
     catalogue.ProductMaster yet (legacy import gaps). Those keys resolve
     to empty strings rather than invented placeholders — you can still
     place them on a template; they'll print blank until that data exists.
+    Stone values (when present) are always printed as G-… / D-….
+    Prices are whole numbers with no commas.
     """
     product = item.product
     metal_name = product.metal.name if product.metal_id else ""
@@ -85,6 +124,12 @@ def resolve_field_values(item):
     if product.category_id:
         category_code = product.category.code or ""
 
+    # Stone column not on ProductMaster yet — keep empty until imported.
+    # Formatting helper is ready so any future value prints as G-/D-.
+    stone_raw = getattr(product, "stone", None) or getattr(product, "stone_weight", None) or ""
+    if not isinstance(stone_raw, str):
+        stone_raw = str(stone_raw) if stone_raw not in (None, "") else ""
+
     return {
         "barcode_number": item.barcode or "",
         "barcode_image": item.barcode or "",
@@ -96,7 +141,13 @@ def resolve_field_values(item):
         "category_code": category_code,
         "metal": metal_name,
         "metal_purity": purity_name,
-        "stone": "",
+        "stone": _fmt_stone_weight(
+            stone_raw,
+            metal_name=metal_name or purity_name,
+            category_code=category_code,
+            product_name=product.name or "",
+            reference_id=product.reference_id or "",
+        ),
         "colour": "",
         "quality": "",
         "weight": _fmt_weight(product.net_weight),
@@ -118,6 +169,13 @@ def render_field_text(field, values):
     if field.field_key == "horizontal_line":
         return "—"
     text = values.get(field.field_key, "")
+    if not text:
+        return ""
+    # Stone already carries G-/D- — ignore a redundant G/D prefix in static_text.
+    if field.field_key == "stone":
+        prefix = (field.static_text or "").strip()
+        if prefix and re.fullmatch(r"[GD]\s*[-–—]?", prefix, flags=re.IGNORECASE):
+            return text
     if field.static_text:
         # static_text doubles as an optional label/prefix on any field,
         # e.g. static_text="Price: " placed on the `price` field.
