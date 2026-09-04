@@ -7,7 +7,7 @@
   <!-- ================= SIDEBAR ================= -->
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
-      <div class="mark"><img src="{% static 'core/img/brand/pj-mark.png' %}" alt="Perfect Jewelry"></div>
+      <div class="mark">PJ</div>
       <div>
         <div class="name">Perfect Jewelry</div>
         <div class="sub">Enterprise System</div>
@@ -47,10 +47,6 @@
         <a href="{% url 'hardware:print_labels' %}" title="Tag Printing"
           class="nav-item top-level{% if request.resolver_match.app_name == 'hardware' %} active{% endif %}">
           <i class="fa-solid fa-tag"></i> <span class="nav-label">Tag Printing</span>
-        </a>
-        <a href="{% url 'core:db_sync_status' %}" title="DB Sync Status"
-          class="nav-item top-level{% if request.resolver_match.url_name == 'db_sync_status' or request.resolver_match.url_name == 'db_sync_run' %} active{% endif %}">
-          <i class="fa-solid fa-database"></i> <span class="nav-label">DB Sync</span>
         </a>
       </div>
     </div>
