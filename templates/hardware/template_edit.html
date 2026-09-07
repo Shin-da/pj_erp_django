@@ -171,11 +171,11 @@
     <div class="panel" style="margin-top:16px; padding:10px; background:var(--bg-soft, transparent);">
       <div class="kpi-label" style="margin-bottom:6px;">Data notes</div>
       <ul class="cell-muted" style="font-size:11.5px; margin:0; padding-left:16px; line-height:1.45;">
-        <li><b>Stone</b> prints as <b>G-…</b> for gold or <b>D-…</b> for diamond (from metal/name). Clear the prefix field — it is added automatically.</li>
+        <li><b>Stone</b> prints <b>D-…</b> for diamond weight and/or <b>G-…</b> for gold weight (from legacy metal/stone detail tables).</li>
         <li><b>Selling price / × rate</b> print as whole numbers (no commas or decimals), rounded.</li>
         <li><b>Subcategory</b> is what legacy tags often printed on the tail (e.g. BNG). The tail is on the front face only.</li>
         <li><b>Supplier code</b> uses the supplier reference code (falls back to name).</li>
-        <li><b>Colour / size / quality</b> print blank until those columns exist on the product master.</li>
+        <li><b>Colour / size / quality</b> come from the product master when synced from iadmin.</li>
       </ul>
     </div>
   </div>
@@ -376,6 +376,6 @@
     zoom: 2.2,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}?v=11"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=12"></script>
 
 {% endblock %}

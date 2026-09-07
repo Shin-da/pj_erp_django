@@ -182,7 +182,7 @@ DEFAULT_PRINTER_DPI = 300
 # Zebra jewellery RFID continuous stock registration nudges at 300 DPI.
 # Positive Y shifts print down; negative X shifts print left onto the die-cut.
 IRYS_REGISTRATION_OFFSET_Y_300 = 55
-IRYS_REGISTRATION_OFFSET_X_300 = -18
+IRYS_REGISTRATION_OFFSET_X_300 = -35
 
 
 def irys_registration_offset_y(dpi=None):
@@ -238,9 +238,18 @@ def irys_jewellery_sample_layout(dpi=None):
             "box_width": front["w"] - ds(16),
         },
         {
+            "field_key": "stone",
+            "x": front["x"] + ds(8),
+            "y": front["y"] + ds(34),
+            "font_size": ds(16),
+            "bold": False,
+            "align": "L",
+            "box_width": front["w"] - ds(16),
+        },
+        {
             "field_key": "price_rated",
             "x": front["x"] + ds(8),
-            "y": front["y"] + ds(40),
+            "y": front["y"] + ds(56),
             "font_size": ds(24),
             "bold": True,
             "align": "C",
@@ -249,7 +258,7 @@ def irys_jewellery_sample_layout(dpi=None):
         {
             "field_key": "horizontal_line",
             "x": front["x"] + ds(8),
-            "y": front["y"] + ds(76),
+            "y": front["y"] + ds(88),
             "font_size": ds(12),
             "bold": False,
             "align": "L",

@@ -27,7 +27,7 @@ SAMPLE_FIELD_VALUES = {
     "category_code": "JW",
     "metal": "Gold",
     "metal_purity": "18K",
-    "stone": "G-0.12/0.45",
+    "stone": "D-0.12/G-0.45",
     "colour": "Pink",
     "quality": "VS1",
     "weight": "3.25 g",
@@ -91,15 +91,46 @@ def _fmt_stone_weight(raw, metal_name="", category_code="", product_name="", ref
     return f"{prefix}{rest}"
 
 
+def _fmt_stone_label(product):
+    """Build tag stone line: D-{diamond} and/or G-{gold}, slash-separated."""
+    parts = []
+    diamond = (getattr(product, "diamond_weight", None) or "").strip()
+    gold = (getattr(product, "gold_weight", None) or "").strip()
+    legacy = (getattr(product, "stone", None) or "").strip()
+
+    def clean(value):
+        return _STONE_PREFIX_RE.sub("", value).strip()
+
+    if diamond:
+        rest = clean(diamond)
+        if rest:
+            parts.append(f"D-{rest}")
+    if gold:
+        rest = clean(gold)
+        if rest:
+            parts.append(f"G-{rest}")
+    if parts:
+        return "/".join(parts)
+    # Fallback: legacy free-text stone column with metal-based prefix.
+    if legacy:
+        metal_name = product.metal.name if getattr(product, "metal_id", None) else ""
+        purity_name = product.purity.name if getattr(product, "purity_id", None) else ""
+        category_code = product.category.code if getattr(product, "category_id", None) else ""
+        return _fmt_stone_weight(
+            legacy,
+            metal_name=metal_name or purity_name,
+            category_code=category_code or "",
+            product_name=product.name or "",
+            reference_id=product.reference_id or "",
+        )
+    return ""
+
+
 def resolve_field_values(item):
     """
     Build the {field_key: display_text} map for one real ProductItem.
 
-    Colour / quality / stone / size are not real columns on
-    catalogue.ProductMaster yet (legacy import gaps). Those keys resolve
-    to empty strings rather than invented placeholders — you can still
-    place them on a template; they'll print blank until that data exists.
-    Stone values (when present) are always printed as G-… / D-….
+    Stone prints as D-… / G-… from imported diamond_weight / gold_weight.
     Prices are whole numbers with no commas.
     """
     product = item.product
@@ -124,12 +155,6 @@ def resolve_field_values(item):
     if product.category_id:
         category_code = product.category.code or ""
 
-    # Stone column not on ProductMaster yet — keep empty until imported.
-    # Formatting helper is ready so any future value prints as G-/D-.
-    stone_raw = getattr(product, "stone", None) or getattr(product, "stone_weight", None) or ""
-    if not isinstance(stone_raw, str):
-        stone_raw = str(stone_raw) if stone_raw not in (None, "") else ""
-
     return {
         "barcode_number": item.barcode or "",
         "barcode_image": item.barcode or "",
@@ -141,21 +166,15 @@ def resolve_field_values(item):
         "category_code": category_code,
         "metal": metal_name,
         "metal_purity": purity_name,
-        "stone": _fmt_stone_weight(
-            stone_raw,
-            metal_name=metal_name or purity_name,
-            category_code=category_code,
-            product_name=product.name or "",
-            reference_id=product.reference_id or "",
-        ),
-        "colour": "",
-        "quality": "",
+        "stone": _fmt_stone_label(product),
+        "colour": (getattr(product, "colour", None) or "").strip(),
+        "quality": (getattr(product, "quality", None) or "").strip(),
         "weight": _fmt_weight(product.net_weight),
         "gross_weight": _fmt_weight(product.gross_weight),
         "price": _fmt_money(price),
         "price_rated": _fmt_money(rated),
         "currency": product.currency.code if product.currency_id else "",
-        "size": "",
+        "size": (getattr(product, "size", None) or "").strip(),
         "company_name": COMPANY_NAME_DEFAULT,
         "static_text": "",
         "horizontal_line": "",

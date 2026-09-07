@@ -105,6 +105,27 @@ class ProductMaster(TimeStampedModel):
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    # Tag / jewellery attribute columns from tblproduct_master + detail tables.
+    # `gold_weight` / `diamond_weight` are the numbers printed as G-… / D-… on tags.
+    colour = models.CharField(max_length=50, blank=True)
+    size = models.CharField(max_length=50, blank=True)
+    quality = models.CharField(max_length=50, blank=True)
+    stone = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Legacy tblproduct_master.stone (often empty).",
+    )
+    gold_weight = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Metal weight from tbljewellery_metal_details — printed as G-{value}.",
+    )
+    diamond_weight = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Diamond carat/weight from tbljewellery_stone_details — printed as D-{value}.",
+    )
+
     # ---- Rates the legacy invoice multiplies prices by ----------------
     #
     # Every amount on `ResellerPaymentInvoice.aspx` is

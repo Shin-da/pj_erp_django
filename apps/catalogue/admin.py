@@ -63,7 +63,7 @@ class ProductImageInline(admin.TabularInline):
 class ProductMasterAdmin(admin.ModelAdmin):
     list_display = (
         "name", "reference_id", "category", "subcategory",
-        "selling_price", "image_count", "is_active",
+        "gold_weight", "diamond_weight", "selling_price", "image_count", "is_active",
     )
     list_filter = ("category", "is_active")
     search_fields = ("name", "reference_id", "subcategory")
