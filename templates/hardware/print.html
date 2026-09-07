@@ -8,6 +8,7 @@
     <p>Paste barcodes, preview on the Irys die-cut (tail · front · back), then print to a Zebra via BrowserPrint.</p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'hardware:print_history' %}" class="btn btn-ghost"><i class="fa-solid fa-clock-rotate-left"></i> Print history</a>
     <a href="{% url 'hardware:template_list' %}" class="btn btn-ghost"><i class="fa-solid fa-pen"></i> Manage templates</a>
   </div>
 </div>
@@ -74,7 +75,9 @@
 
 {# Real newlines must stay intact — escapejs turned them into literal \u000A on the printer. #}
 {{ zpl_data|json_script:"zpl-data" }}
+{{ print_payload|json_script:"print-payload" }}
 <input type="hidden" id="productCount" value="{{ product_count }}">
+<input type="hidden" id="printLogUrl" value="{% url 'hardware:print_log' %}">
 
 <pre id="zplPreview" class="zpl-preview" hidden></pre>
 
@@ -91,6 +94,15 @@
           · {{ p.width_dots }}×{{ p.height_dots }} dots
           {% if p.width_mm %}· ~{{ p.width_mm }}×{{ p.height_mm }} mm{% endif %}
           · {{ p.dpi }} dpi
+        </div>
+        <div style="font-size:11px; margin-top:4px;">
+          {% if p.print_count %}
+          Printed <b>{{ p.print_count }}</b> time{{ p.print_count|pluralize }}
+          {% if p.last_printed_at %}· last {{ p.last_printed_at|date:"Y-m-d H:i" }}{% endif %}
+          · <a href="{% url 'hardware:print_history' %}?q={{ p.barcode|urlencode }}">history</a>
+          {% else %}
+          <span class="cell-muted">Never printed</span>
+          {% endif %}
         </div>
       </div>
       <div class="tag-preview-toolbar">
@@ -432,6 +444,42 @@
     }
   }
 
+  function getPrintPayload() {
+    var el = document.getElementById('print-payload');
+    if (!el) return [];
+    try {
+      return JSON.parse(el.textContent) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function csrfToken() {
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function logPrintEvent(status, errorMessage) {
+    var urlEl = document.getElementById('printLogUrl');
+    var items = getPrintPayload();
+    if (!urlEl || !items.length) return;
+    var body = {
+      items: items,
+      printer_name: selected_device ? (selected_device.name || '') : '',
+      status: status || 'success',
+      error_message: errorMessage || ''
+    };
+    fetch(urlEl.value, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken()
+      },
+      body: JSON.stringify(body)
+    }).catch(function () { /* history is best-effort */ });
+  }
+
   function setup() {
     if (typeof BrowserPrint === 'undefined') {
       console.warn('BrowserPrint SDK not available — is Zebra Browser Print running on this machine?');
@@ -491,8 +539,14 @@
     if (!confirm("Print " + count + " label(s) to " + selected_device.name + "?")) return;
 
     selected_device.send(zpl,
-      function () { alert("Successfully printed " + count + " label(s)."); },
-      errorCallback
+      function () {
+        logPrintEvent('success');
+        alert("Successfully printed " + count + " label(s).");
+      },
+      function (err) {
+        logPrintEvent('error', String(err || 'printer error'));
+        errorCallback(err);
+      }
     );
   }
 

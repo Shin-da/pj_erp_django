@@ -12,4 +12,6 @@ urlpatterns = [
     path("templates/<int:pk>/duplicate/", views.template_duplicate, name="template_duplicate"),
     path("templates/<int:pk>/delete/", views.template_delete, name="template_delete"),
     path("print/", views.print_labels, name="print_labels"),
+    path("print/log/", views.print_log, name="print_log"),
+    path("print/history/", views.print_history, name="print_history"),
 ]

@@ -74,11 +74,11 @@ class LabelTemplate(TimeStampedModel):
     )
     offset_x = models.IntegerField(
         default=0,
-        help_text="Print X nudge in dots (negative shifts left). Irys RFID stock usually needs ~−18 at 300 DPI.",
+        help_text="Print X nudge in dots (positive shifts right). Use to align with the physical die-cut.",
     )
     offset_y = models.IntegerField(
         default=0,
-        help_text="Print Y nudge in dots (positive shifts down). Irys RFID stock usually needs ~55 at 300 DPI so content lands on the die-cut.",
+        help_text="Print Y nudge in dots (positive shifts down). Use to align with the physical die-cut.",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="label_templates"
@@ -225,3 +225,55 @@ class LabelField(TimeStampedModel):
 
     def __str__(self):
         return f"{self.get_field_key_display()} @ ({self.x},{self.y}) on {self.template}"
+
+
+class LabelPrintLog(TimeStampedModel):
+    """One row per barcode sent to a Zebra in a print action.
+
+    BrowserPrint runs in the browser — we record a log when the client
+    reports send success (or failure). `batch_id` groups labels from the
+    same Print click. `times printed` for a barcode is COUNT of success rows.
+    """
+
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Sent to printer"
+        ERROR = "error", "Send failed"
+
+    batch_id = models.UUIDField(db_index=True)
+    barcode = models.CharField(max_length=100, db_index=True)
+    item = models.ForeignKey(
+        "inventory.ProductItem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="label_print_logs",
+    )
+    template = models.ForeignKey(
+        LabelTemplate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="print_logs",
+    )
+    template_name = models.CharField(max_length=100, blank=True)
+    printed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="label_print_logs",
+    )
+    printer_name = models.CharField(max_length=200, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCESS)
+    error_message = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["barcode", "-created_at"], name="hardware_la_barcode_fd15e7_idx"),
+            models.Index(fields=["status", "-created_at"], name="hardware_la_status_b1ce89_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.barcode} ×{self.quantity} @ {self.created_at:%Y-%m-%d %H:%M}"

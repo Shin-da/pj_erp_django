@@ -1,9 +1,12 @@
 import json
 import re
+import uuid
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models import Count, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -11,7 +14,7 @@ from django.views.decorators.http import require_POST
 from apps.inventory.models import ProductItem
 
 from .media import DEFAULT_PRINTER_DPI, MEDIA_PROFILES, get_media_profile, irys_jewellery_sample_layout
-from .models import LabelField, LabelTemplate
+from .models import LabelField, LabelPrintLog, LabelTemplate
 from .zpl import SAMPLE_FIELD_VALUES, build_zpl, render_field_text, resolve_field_values
 
 FIELD_LIST_VALUES = (
@@ -292,6 +295,7 @@ def print_labels(request):
         "product_count": 0,
         "not_found": [],
         "selected_template_id": selected_template_id,
+        "print_payload": [],
     }
 
     if request.method == "POST":
@@ -406,6 +410,7 @@ def print_labels(request):
             preview_items.append({
                 "barcode": item.barcode,
                 "template_name": tpl.name,
+                "template_id": tpl.pk,
                 "width_dots": tpl.width_dots,
                 "height_dots": tpl.height_dots,
                 "dpi": tpl.dpi,
@@ -417,6 +422,8 @@ def print_labels(request):
                 "geometry": geometry,
                 "fields": preview_fields,
                 "blank_fields": blank_keys,
+                "print_count": 0,
+                "last_printed_at": None,
             })
 
         if skipped_no_template:
@@ -426,9 +433,145 @@ def print_labels(request):
                 "(pick a template explicitly, or set a default for that category).",
             )
 
+        barcodes = [p["barcode"] for p in preview_items]
+        if barcodes:
+            counts = {
+                row["barcode"]: row
+                for row in (
+                    LabelPrintLog.objects.filter(
+                        barcode__in=barcodes,
+                        status=LabelPrintLog.Status.SUCCESS,
+                    )
+                    .values("barcode")
+                    .annotate(times=Count("id"), qty=Sum("quantity"))
+                )
+            }
+            last_by = {}
+            for log in LabelPrintLog.objects.filter(
+                barcode__in=barcodes,
+                status=LabelPrintLog.Status.SUCCESS,
+            ).order_by("-created_at"):
+                if log.barcode not in last_by:
+                    last_by[log.barcode] = log.created_at
+            for p in preview_items:
+                info = counts.get(p["barcode"])
+                if info:
+                    p["print_count"] = int(info["qty"] or info["times"] or 0)
+                p["last_printed_at"] = last_by.get(p["barcode"])
+
         context["preview_items"] = preview_items
         context["not_found"] = not_found
         context["zpl_data"] = "\n".join(zpl_chunks)
         context["product_count"] = len(preview_items)
+        context["print_payload"] = [
+            {"barcode": p["barcode"], "template_id": p["template_id"]}
+            for p in preview_items
+        ]
 
     return render(request, "hardware/print.html", context)
+
+
+@login_required
+@require_POST
+def print_log(request):
+    """Record labels after BrowserPrint reports send success or failure."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "bad request"}, status=400)
+
+    raw_items = payload.get("items") or []
+    if not raw_items and payload.get("barcodes"):
+        raw_items = [{"barcode": b} for b in payload.get("barcodes") or []]
+    if not isinstance(raw_items, list) or not raw_items:
+        return JsonResponse({"ok": False, "error": "no items"}, status=400)
+
+    status = payload.get("status") or LabelPrintLog.Status.SUCCESS
+    if status not in {LabelPrintLog.Status.SUCCESS, LabelPrintLog.Status.ERROR}:
+        status = LabelPrintLog.Status.SUCCESS
+    printer_name = (payload.get("printer_name") or "")[:200]
+    error_message = (payload.get("error_message") or "")[:300]
+    default_template_id = payload.get("template_id") or None
+
+    barcodes = []
+    for row in raw_items[:500]:
+        if isinstance(row, str):
+            bc = row.strip()
+            tid = default_template_id
+        else:
+            bc = (row.get("barcode") or "").strip()
+            tid = row.get("template_id") or default_template_id
+        if bc:
+            barcodes.append((bc, tid))
+
+    if not barcodes:
+        return JsonResponse({"ok": False, "error": "no barcodes"}, status=400)
+
+    items_by_bc = {
+        i.barcode.lower(): i
+        for i in ProductItem.objects.filter(barcode__in=[b for b, _ in barcodes])
+    }
+    template_ids = {tid for _, tid in barcodes if tid}
+    if default_template_id:
+        template_ids.add(default_template_id)
+    templates = {
+        t.pk: t
+        for t in LabelTemplate.objects.filter(pk__in=[int(x) for x in template_ids if str(x).isdigit()])
+    }
+
+    batch_id = uuid.uuid4()
+    rows = []
+    for barcode, tid in barcodes:
+        item = items_by_bc.get(barcode.lower())
+        tpl = None
+        if tid is not None:
+            try:
+                tpl = templates.get(int(tid))
+            except (TypeError, ValueError):
+                tpl = None
+        rows.append(
+            LabelPrintLog(
+                batch_id=batch_id,
+                barcode=item.barcode if item else barcode[:100],
+                item=item,
+                template=tpl,
+                template_name=(tpl.name if tpl else "")[:100],
+                printed_by=request.user if request.user.is_authenticated else None,
+                printer_name=printer_name,
+                quantity=1,
+                status=status,
+                error_message=error_message if status == LabelPrintLog.Status.ERROR else "",
+            )
+        )
+
+    LabelPrintLog.objects.bulk_create(rows)
+    return JsonResponse({"ok": True, "batch_id": str(batch_id), "logged": len(rows)})
+
+
+@login_required
+def print_history(request):
+    q = (request.GET.get("q") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    logs = LabelPrintLog.objects.select_related("printed_by", "template", "item").all()
+    if q:
+        logs = logs.filter(barcode__icontains=q)
+    if status in {LabelPrintLog.Status.SUCCESS, LabelPrintLog.Status.ERROR}:
+        logs = logs.filter(status=status)
+
+    summary = None
+    if q:
+        success = LabelPrintLog.objects.filter(
+            barcode__icontains=q,
+            status=LabelPrintLog.Status.SUCCESS,
+        )
+        summary = success.aggregate(times=Count("id"), qty=Sum("quantity"))
+
+    paginator = Paginator(logs, 50)
+    page = paginator.get_page(request.GET.get("page") or 1)
+
+    return render(request, "hardware/print_history.html", {
+        "page": page,
+        "q": q,
+        "status": status,
+        "summary": summary,
+    })
