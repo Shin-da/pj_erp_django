@@ -6,6 +6,10 @@ infrastructure Perfect Jewel doesn't own). Architecture and rationale in
 findings this scaffold is built against are in the `perfect-jewel-system-
 landscape.md` project doc.
 
+**Work log:** [`PROJECT_WORKLOG.md`](PROJECT_WORKLOG.md) — chronological log of what was
+built (from git + Cursor sessions). Append new session entries at the top of
+that file; do not rewrite older ones.
+
 **Decision (19 Aug 2026): full rewrite in Django + PostgreSQL, mimicking
 `ftp_perfect-jewel-active-sync` (Sonal's iadmin) as the spec, full
 parity.** This is a faithful rebuild of what iadmin actually does — same
@@ -127,6 +131,23 @@ python manage.py runserver
 ```
 
 Two local catalogs (`pj_erp_dev` / `pj_erp_prod`) and how to switch: [`DATABASE.md`](DATABASE.md).
+
+## Media files (product photos) on Render
+
+WhiteNoise only serves collected static assets. Uploads live in object storage:
+
+1. Create a **Cloudflare R2** (or S3) bucket with public read (or a custom domain).
+2. Set the `AWS_*` vars from `.env.example` on the Render service.
+3. Deploy, then from a machine that has the local `media/` tree and the same env:
+
+   ```bash
+   python manage.py upload_local_media
+   ```
+
+   That copies existing keys (`product_images/…`, etc.) so DB rows keep working.
+   New admin uploads go straight to the bucket.
+
+Brand logos under `static/core/img/brand/` are static files (git + `collectstatic`), not media.
 
 ## Next steps
 
