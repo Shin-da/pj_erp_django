@@ -37,7 +37,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-Irys Standard RFID jewellery tag printing: die-cut accuracy @ 300 DPI, real G-/D- weights from legacy sync, print history. Broader ERP parity (catalogue → inventory → tracker → assignment/invoices → payments/returns) is largely in place; hardware/Tiara sync, HR, reporting still lighter or pending per `README.md`.
+**Uncommitted catalogue + dashboard UX:** reference-first products list, PJ/PJGOLD tag-sequence panel on home — commit + push with the R2 media stack when ready. Local catalogs refreshed from live `stock_rfid`; **DB Sync** page at `/dev/db-sync/` is local/uncommitted (no sidebar link yet — ship urls/views/template together). **Production media on Cloudflare R2** still local (settings/`upload_local_media`/deps); confirm Render `AWS_*` vars, then redeploy. Brand assets under `static/core/img/brand/` still untracked. Irys RFID + expanded search + work log are on `main` (`a151c45`). Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
 
 ---
 
@@ -50,6 +50,90 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-03 → 2026-09-07 — Live MSSQL sync + DB Sync status page
+
+- **Source:** Cursor chat [Live MSSQL sync and DB status](97ec69f1-b5f2-430a-83f9-f70dc9f8b38f) (started 2026-09-03; wrap-up logged 2026-09-07)
+- **Goal:** Put live iadmin `stock_rfid` data into the Django Postgres catalogs; add a simple dev page showing whether MSSQL vs `pj_erp_prod` / `pj_erp_dev` are in sync; clarify whether the Django schema is clearer to navigate than legacy.
+- **Done:**
+  - Ran `sync_legacy_mssql` into active profile **prod** (`pj_erp_prod`), then `clone_prod_to_dev --yes` so both catalogs match. Credentials were already in gitignored `.env` (`LEGACY_MSSQL_*`).
+  - First sync (2026-09-03): ~7,428 products/items, 111 resellers, 219 invoices, 149 reseller payments (deltas vs prior dump: +40 products/items, +2 resellers, +21 invoices, +19 payments).
+  - Second sync (same chat, later): ~7,429 products, 7,429 items (1 MSSQL row skipped), 220 invoices, 1,353 lines, 149 payments; then re-cloned to `pj_erp_dev`.
+  - **DB Sync status page (local / uncommitted):** `/dev/db-sync/` — COUNT(*) compare of live MSSQL vs both Postgres catalogs; overall synced with soft rules (items may be −1; locations/categories may be ahead locally); connection panels; last sync log from cache; **Sync now** POST (background thread, same lock as webhook). Helpers: `apps/core/sync_status.py`, `count_live_tables` / `ping_live` in `legacy_mssql.py`, views `db_sync_status` / `db_sync_run`, template `templates/core/db_sync_status.html`.
+  - Sidebar **DB Sync** nav was added in-session but is **not** on current `templates/base.html` (matches `main` after the Sep 4 accidental-nav 500 fix). Route still works if you hit the URL while local code is loaded.
+  - Schema Q&A (no code): Django is the clearer map for “where data lives” (real FKs/indexes, typed fields, location on `ProductItem`, `StockStatus` choices, audit timestamps); legacy remains the live ops source during transition, with placeholders/SPs/no FKs making navigation hard.
+- **Follow-ups / open:**
+  - Commit + deploy DB Sync page **with** urls/views/template together; only re-add the sidebar link when brand static + this route ship in the same deploy (see `0112cfb`).
+  - After future prod syncs, run `clone_prod_to_dev --yes` if the working copy should match.
+  - Re-sync still useful so Irys gold/diamond weights from legacy metal/stone detail tables fill after `cdafad0`.
+- **Commits (if any):** none yet — sync was operational (data only); DB Sync UI remains working-tree / untracked (`sync_status.py`, `db_sync_status.html`; modified `views.py` / `urls.py` / `legacy_mssql.py`).
+
+### 2026-09-07 — Products identity UX + dashboard tag sequences
+
+- **Source:** Cursor chat [View by PJ codes](1865161a-2a3c-41d7-999a-0f23f2c04dc8)
+- **Goal:** Decide whether `/products/` should “view by PJ code / barcode”; fix the wall of repeated style names (e.g. ANICH1); surface latest PJ / PJGOLD so new tags don’t collide.
+- **Done (local / uncommitted):**
+  - Confirmed piece view already exists at `/products/item/<barcode>/`; nav search exact-match already redirects there. No separate “by PJ” filter chip needed.
+  - **Products list identity:** lead with **Reference** (unique), demote shared **Style** name; add **PJ / barcode** column (link to piece when `item_count == 1`); grid cards use `pl-card-ref` + sample barcode annotation; default sort **Reference A–Z**; exact PJ/barcode/EPC on list `q` redirects via `_exact_item`.
+  - Product detail title and global search product results/suggest also lead with `reference_id`.
+  - **Dashboard Tag sequences:** highest numeric `PJ#####` and `PJGOLD####` (not lex sort), suggested next codes, plus piece details (reference, style, status, location, category/supplier, recorded). Display-only — no DB reservation. `_latest_barcode_series` in `apps/core/views.py`; UI in `templates/core/home.html` + `.dash-seq-*` CSS.
+- **Follow-ups / open:**
+  - Commit + deploy with other local catalogue/media work; hard-refresh / collectstatic so CSS lands on Render.
+  - Optional later: copy-to-clipboard on suggested next; same hint in admin item create; exact `reference_id` redirect; group-by-style toggle.
+- **Commits (if any):** none yet for this slice (working tree). Related prior list rewrite: see entry below from [UI and UX enhancement](0482c868-02fa-40dd-98b5-add162273e99).
+
+### 2026-09-04 → 2026-09-07 — Production media via Cloudflare R2
+
+- **Source:** Cursor chat [Production image display issue](90742bd3-47e2-44c2-8878-d84a7f0b37d5) (started 2026-09-04; wrap-up logged 2026-09-07)
+- **Goal:** Fix product / upload pictures missing on Render production.
+- **Done (local / uncommitted code + ops):**
+  - Root cause: `media/` is gitignored + ephemeral on Render; Django only served media when `DEBUG=True`; WhiteNoise does not serve uploads; brand files under `static/core/img/brand/` were never committed.
+  - Added S3-compatible default storage (`django-storages` + `boto3`) when `AWS_STORAGE_BUCKET_NAME` is set; local `FileSystemStorage` otherwise. Absolute `/static/` and `/media/` URLs.
+  - Production media serve via `django.views.static.serve` when not on S3 (`SERVE_MEDIA`; `static()` is a no-op with `DEBUG=False`).
+  - `upload_local_media` management command (exact-key PutObject — avoids django-storages rename suffixes that would break DB paths).
+  - Invoice PDF logo uses WeasyPrint-safe URI (`file://` locally / HTTPS on R2) instead of `.path`.
+  - Documented R2 env vars in `.env.example` + README media section.
+  - Ops: created public R2 bucket `pj-erp-media` (`pub-….r2.dev`); uploaded **833** local media keys with `--force`. Guided Render env (endpoint needs `https://`; custom domain is host-only, no dashboard URL).
+- **Follow-ups / open:**
+  - **Commit + push** this media stack (and ideally `static/core/img/brand/`) — not on `main` yet; Render will not pick it up until then.
+  - Confirm all seven `AWS_*` vars are present on Render (`BUCKET`, keys, `ENDPOINT_URL` with `https://`, `REGION=auto`, `CUSTOM_DOMAIN=pub-….r2.dev`, `QUERYSTRING_AUTH=False`), then rebuild/deploy.
+  - Rotate R2 API token if secrets were exposed in screenshots/chat.
+  - After deploy, verify a product thumb hits `https://pub-….r2.dev/product_images/…`.
+- **Commits (if any):** none yet for this slice (working tree + untracked `upload_local_media.py`).
+
+### 2026-08-26 → 2026-09-07 — Dashboard vs snapshot, search overlay, status audit
+
+- **Source:** Cursor chat [Dashboard and status audit](fbf2fc72-ab0b-4c40-aad1-c3681d595354) (started 2026-08-26; wrap-up logged 2026-09-07). Git not readable in this workspace this turn (no `.git`); related dashboard/search work on `main` is already in the Aug 27 / Sep 4 appendix rows.
+- **Goal:** After the FTP MSSQL snapshot was in Postgres, tailor the home dashboard to real counts; fix the broken search dropdown; answer how to switch catalogs and whether prod has the dump; then a no-code project-status audit before the next build phase.
+- **Done:**
+  - Dashboard shaped around this catalog (company stock + invoice history, not empty “holding now”): sales band (invoiced / collected / collected this month / unpaid outstanding), sold KPI link, subcategory labels (ER → Earrings, …), empty locations hidden until toggled, top resellers by invoiced value, recent invoices with peso amounts. Assigned = 0 is real for this dump.
+  - Search suggestions dropdown was transparent (`background: var(--panel)` with `--panel` undefined). Defined `--panel` as the opaque surface color; moved `.search-dd` into `base.css`.
+  - Switch catalogs in gitignored `.env` (`DJANGO_DB_PROFILE=dev|prod`), then restart `runserver` — not `.gitignore`. Removed a stray `DJANGO_DB_PROFILE=dev` line that had been pasted into `.gitignore`.
+  - Dump vs `pj_erp_prod`: all chosen operational tables matched (6,656 items, 60 resellers, 135 invoices, 81 reseller payments). Not a live `tag11.in` pull; employees/tracker/transfers left out on purpose.
+  - 2026-09-02 **audit only** (no code changes): operator payments UI, transfers UI, view-level authz, tests, and deploy hygiene are the main remaining gaps. Invoice PDF on this Windows box needs GTK/Pango for WeasyPrint. Estimate ~38% overall / ~8% production-ready.
+- **Follow-ups / open:**
+  - Next build priorities from the audit: payments on the invoice screen, transfers staff UI, real authorization, rotate `1001`/`changeme123`, tests on assign/return/status.
+  - Do not start reporting UI or Tiara push until those backends exist; don’t run `sync_legacy_mssql` against the frozen `prod` profile if that catalog must stay a dump snapshot.
+- **Commits (if any):** none from this wrap-up. Early-thread UI likely already on `main` (see Aug 27 dashboard/search commits and Sep 4 search UX). Appendix not refreshed (git unavailable here).
+- **Note (2026-09-07):** Local `pj_erp_prod` was later **intentionally** refreshed from live `stock_rfid` via `sync_legacy_mssql` + `clone_prod_to_dev` (see entry *Live MSSQL sync + DB Sync status page*). Treat “frozen dump” as policy only when you need a stable snapshot again — not current local state.
+
+### 2026-09-07 — Products catalogue list UI/UX
+
+- **Source:** Cursor chat [UI and UX enhancement](0482c868-02fa-40dd-98b5-add162273e99) (started 2026-09-03; wrap-up logged 2026-09-07)
+- **Goal:** Enhance `/products/` UI/UX so the jewellery catalogue is browsable visually and filters stay usable at ~7k designs.
+- **Done (local / uncommitted):**
+  - Default **grid** of product cards (image, stock pill, reference, category, metal, price) plus **list** table toggle; 24/page grid, 50/page list.
+  - Summary strip: designs / with available / none available / no pieces / free-piece rollup; stock chips preserve other filters.
+  - Filter bar with icon search, selects auto-submit on change, removable filter chips, clearer empty state.
+  - Pagination preserves all query params (incl. subcategory + view); page-number window with ellipsis.
+  - Exact PJ/barcode (or RFID EPC via `_exact_item`) on list search redirects to the piece page; default sort is **reference_id** (style names often repeat, e.g. ANICH1).
+  - `OUT` stock filter = pieces exist but none available (no longer lumps in zero-piece designs).
+  - Styles: `.pl-*` block in `static/core/css/base.css`; template `templates/catalogue/product_list.html`; logic `apps/catalogue/views.py`.
+- **Note (2026-09-07):** Reference-first columns, sample barcode on cards/list, and search suggest leading with `reference_id` were finished / tightened in [View by PJ codes](1865161a-2a3c-41d7-999a-0f23f2c04dc8) (entry above) on the same uncommitted tree.
+- **Follow-ups / open:**
+  - Commit + deploy this products list work (still local alongside other unpublished changes — brand assets, DB Sync page, etc.).
+  - Hard-refresh / collectstatic on Render after ship so `.pl-*` CSS is live.
+- **Commits:** none yet for this slice.
 
 ### 2026-09-07 — Irys stone weights + print history
 
@@ -68,6 +152,23 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - `cdafad0` — Import real gold/diamond tag weights and print D-/G- on Irys labels.
   - `ded183e` — Add label print history for Zebra BrowserPrint jobs.
 
+### 2026-09-04 — Global search coverage & UX
+
+- **Source:** Cursor chat [Search coverage and UX](bc78b905-8f7b-4539-b0e6-4334f0af278e); git `73d0240`, `0112cfb`
+- **Goal:** Confirm whether nav/`/search/` covered “everything,” expand the high-value gaps, and polish dropdown + results + mobile UX (scope **1A + 2C**).
+- **Done:**
+  - Coverage: invoices (`RE…`/`RN…` + reseller name), RFID EPC (partial + exact→item), products also match via piece barcode (aligned with product list).
+  - Still out of global search (little/no detail UI): payments, transfers, returns, hardware templates.
+  - UX: mobile search overlay (was `display:none` under 900px); dropdown loading / match highlight / group counts / kbd hints; results page jump chips, hint cards, clearer empty state.
+  - Files: `apps/core/search.py`, `templates/core/search.html`, `static/core/js/search.js`, `templates/base.html`, search styles in `static/core/css/base.css`.
+  - Prod incident: deploy of `73d0240` 500’d every authenticated page — `base.html` had accidentally shipped local-only **DB Sync** `{% url %}` (route not on `main`) + missing brand static; login + `/search/suggest/` still worked (no shell template). Fixed in `0112cfb`.
+- **Follow-ups / open:**
+  - Brand images + DB Sync page remain local/untracked — don’t link them from templates until committed with assets + urls/views.
+  - Optional later: Postgres FTS/trigram when item table grows (noted in `search.py`).
+- **Commits:**
+  - `73d0240` — Expand global search coverage and polish search UX.
+  - `0112cfb` — Fix production 500 from accidental base.html nav changes.
+
 ### 2026-09-03 → 2026-09-04 — Irys RFID designer & print accuracy
 
 - **Source:** git `5ed692d` … `a2aa023` (and related); Cursor RFID sessions
@@ -79,8 +180,8 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - Die-cut registration: Offset Y ~55; Offset X nudged left (−18 then later −35).
   - Preview = design coords on-tag; offsets only in ZPL for printer registration.
   - Tag prices as whole numbers; stone formatting helpers G-/D- (real weights wired 2026-09-07).
-  - Search UX polish; production 500 from accidental `base.html` nav fix (`0112cfb`).
-- **Commits (selected):** `5ed692d`, `f242bbd`, `b1d7618`, `7a730ec`, `e544898`, `cc71518`, `f8756e3`, `cd26da8`, `3b63707`, `73d0240`, `0112cfb`, `a2aa023`.
+  - *(Search coverage/UX + prod 500 fix from the same calendar day are detailed in the **2026-09-04 — Global search** entry above, not re-listed here.)*
+- **Commits (selected):** `5ed692d`, `f242bbd`, `b1d7618`, `7a730ec`, `e544898`, `cc71518`, `f8756e3`, `cd26da8`, `3b63707`, `a2aa023`.
 
 ### 2026-08-28 — Deploy, legacy sync, product images, login
 
@@ -153,6 +254,7 @@ Generated from `main` as of **2026-09-07**. Newest work is also summarized above
 | 2026-09-04 | `a2aa023` | Format tag prices as whole numbers and stone weights as G-/D-. |
 | 2026-09-07 | `cdafad0` | Import real gold/diamond tag weights and print D-/G- on Irys labels. |
 | 2026-09-07 | `ded183e` | Add label print history for Zebra BrowserPrint jobs. |
+| 2026-09-07 | `a151c45` | Add PROJECT_WORKLOG.md as the living project work log. |
 
 ---
 
@@ -162,4 +264,4 @@ Generated from `main` as of **2026-09-07**. Newest work is also summarized above
 - Verbal / offline decisions not in git or Cursor transcripts.
 - Detailed day-by-day notes before 2026-09-07 sessions (reconstructed from commit messages only).
 
-Other Cursor chats that may hold extra context to merge later: “Postgres database setup”, “Dual repository audit overview”, “Repo updates and documentation”, “Specific SN search for PJ codes”.
+Other Cursor chats that may hold extra context to merge later: “Postgres database setup”, “Dual repository audit overview”, “Repo updates and documentation”, “Specific SN search for PJ codes”, [Search coverage and UX](bc78b905-8f7b-4539-b0e6-4334f0af278e), [UI and UX enhancement](0482c868-02fa-40dd-98b5-add162273e99) (products list), [View by PJ codes](1865161a-2a3c-41d7-999a-0f23f2c04dc8) (reference-first list + tag sequences).
