@@ -51,6 +51,16 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 
 ## Session / phase entries
 
+### 2026-09-08 — Create the developer login when the web app boots
+
+- **Source:** this chat; production sign-in still rejected `dev` after deploy `758bbf6`
+- **Goal:** Sign in on the live site as `dev` even if Render starts gunicorn without `scripts/start.sh`.
+- **Done:**
+  - `config/wsgi.py` creates or updates the developer login from `DEV_ACCOUNT_PASSWORD` after Django starts. The password is not passed on the shell and is not written to the log.
+- **Follow-ups / open:**
+  - Sign in on `pjsystems.itsshin.dev` with employee code `dev` only after this commit is Live. Password is the value already set on the Render service.
+- **Commits (if any):** this commit — create the developer login when the web app boots.
+
 ### 2026-09-08 — Persist jefffffff label layout on live
 
 - **Source:** this chat; local designer `/hardware/templates/1/`

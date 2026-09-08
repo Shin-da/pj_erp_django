@@ -1,14 +1,8 @@
 """Create the single developer login. Does not touch other employees."""
 
-import os
-import secrets
-
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from apps.accounts.models import Employee
-
-DEFAULT_CODE = "dev"
+from apps.accounts.developer import DEFAULT_CODE, ensure_developer_account
 
 
 class Command(BaseCommand):
@@ -26,39 +20,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        code = (opts["code"] or DEFAULT_CODE).strip()
-        password = (opts["password"] or os.environ.get("DEV_ACCOUNT_PASSWORD") or "").strip()
-        first_name = (opts["first_name"] or "Jeffmathew").strip()
-        last_name = (opts["last_name"] or "Garcia").strip()
-        user, created = Employee.objects.get_or_create(
-            employee_code=code,
-            defaults={
-                "first_name": first_name,
-                "last_name": last_name,
-                "is_staff": True,
-                "is_superuser": True,
-                "is_active": True,
-                "is_developer": True,
-            },
+        user, created, password_set = ensure_developer_account(
+            password=opts["password"],
+            code=opts["code"],
+            first_name=opts["first_name"],
+            last_name=opts["last_name"],
+            reset_password=opts["reset_password"],
+            generate_if_missing=True,
         )
-        user.first_name = first_name
-        user.last_name = last_name
-        user.is_staff = True
-        user.is_superuser = True
-        user.is_active = True
-        user.is_developer = True
-        changed_password = created or opts["reset_password"] or bool(password)
-        if changed_password:
-            if not password:
-                password = secrets.token_urlsafe(12)
-            user.set_password(password)
-        user.save()
+        if user is None:
+            self.stdout.write(self.style.WARNING("No password supplied. Developer login was not created."))
+            return
         verb = "Created" if created else "Updated"
-        self.stdout.write(self.style.SUCCESS(
-            f"{verb} {code} on {settings.DB_PROFILE} / {settings.DATABASES['default']['NAME']}."
-        ))
-        if changed_password:
-            self.stdout.write(f"Login: {code}")
-            self.stdout.write(f"Password: {password}")
+        self.stdout.write(self.style.SUCCESS(f"{verb} {user.employee_code}."))
+        if password_set:
+            self.stdout.write("Password saved. It is not printed.")
         else:
             self.stdout.write("Password left unchanged. Pass --reset-password to issue a new one.")
