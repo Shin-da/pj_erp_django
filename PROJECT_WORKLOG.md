@@ -37,7 +37,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-Label designer and print preview default to 1× zoom. Catalogue UX, dashboard tag sequences, R2 media stack, DB Sync page, and brand icons are on `main`. Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
+Persist the `jefffffff` Irys label layout on live Postgres so deploys stop wiping it. Catalogue UX, dashboard tag sequences, R2 media stack, DB Sync page, and brand icons are on `main`. Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
 
 ---
 
@@ -50,6 +50,18 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-08 — Persist jefffffff label layout on live
+
+- **Source:** this chat; local designer `/hardware/templates/1/`
+- **Goal:** Keep the `jefffffff` Irys layout after deploy, on live Postgres as well as this machine.
+- **Done:**
+  - Layout is in `apps/hardware/saved_layouts.py` (colour at 783,47; offsets −35 / 55; ANY default).
+  - `ensure_label_templates` restores that named row only. It does not wipe other templates.
+  - Render `start.sh` runs that command after migrate. Migration `0011` upserts the same spec once.
+- **Follow-ups / open:**
+  - Designer edits to `jefffffff` need a dump back into `saved_layouts.py` or the next boot restores this snapshot.
+- **Commits (if any):** none yet.
 
 ### 2026-09-08 — Developer login for /dev/ pages
 
