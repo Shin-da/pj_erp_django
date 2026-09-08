@@ -37,6 +37,11 @@ from apps.payments.models import ResellerPayment
 from apps.returns.models import ReserveAlert
 from apps.tracker.models import TrackerSession
 from apps.transfers.models import Transfer, TransferStatus
+from apps.accounts.access import developer_required
+from apps.core.data_map import (
+    DJANGO_TABLES, FLOW, ID_TRAP, LEGACY_TABLES, NOT_COPIED, REL_CHAINS, STORES, SYNCED,
+)
+from apps.core.schema_browser import load_store, pick_table
 from apps.core.sync_status import build_sync_report
 
 
@@ -356,7 +361,42 @@ def _run_sync_in_background():
         cache.delete(_SYNC_LOCK_KEY)
 
 
-@login_required
+@developer_required
+def data_map(request):
+    """How the legacy DB, this app, Render, and the Tiara sheet fit together."""
+    return render(request, "core/data_map.html", {
+        "stores": STORES,
+        "flow": FLOW,
+        "synced": SYNCED,
+        "not_copied": NOT_COPIED,
+        "legacy_tables": LEGACY_TABLES,
+        "django_tables": DJANGO_TABLES,
+        "rel_chains": REL_CHAINS,
+        "id_trap": ID_TRAP,
+        "active_profile": settings.DB_PROFILE,
+        "active_name": settings.DATABASES["default"]["NAME"],
+    })
+
+
+@developer_required
+def db_workbench(request):
+    """Read-only table browser for live iadmin and the Django catalog."""
+    store_id = request.GET.get("store") or "mssql"
+    if store_id not in ("mssql", "django"):
+        store_id = "mssql"
+    refresh = request.GET.get("refresh") == "1"
+    catalog = load_store(store_id, refresh=refresh)
+    table = pick_table(catalog, request.GET.get("table") or "")
+    return render(request, "core/db_workbench.html", {
+        "store_id": store_id,
+        "catalog": catalog,
+        "table": table,
+        "active_profile": settings.DB_PROFILE,
+        "active_name": settings.DATABASES["default"]["NAME"],
+    })
+
+
+@developer_required
 def db_sync_status(request):
     """Dev page: live MSSQL vs local pj_erp_prod / pj_erp_dev row counts."""
     report = build_sync_report()
@@ -373,7 +413,7 @@ def db_sync_status(request):
     )
 
 
-@login_required
+@developer_required
 @require_POST
 def db_sync_run(request):
     """Kick off sync_legacy_mssql in a background thread (same as the webhook)."""

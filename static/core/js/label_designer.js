@@ -13,7 +13,7 @@
   var zoomLabel = document.getElementById('zoomLabel');
   var selectedId = null;
   var nextTempId = -1;
-  var zoom = cfg.zoom || 2; // CSS px per printer dot — Irys tags are tiny
+  var zoom = cfg.zoom || 1; // CSS px per printer dot (1× = 1 CSS px per printer dot)
 
   function getCookie(name) {
     var match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');

@@ -21,12 +21,21 @@ Counts are annotated in one query per page rather than looped, so a
 product with 400 pieces costs the same as one with 4.
 """
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, OuterRef, Q, Subquery, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
+from apps.accounts.access import is_developer
+from apps.catalogue.datafile import sync_datafile
+from apps.catalogue.intake import (
+    IntakeRow,
+    apply_rows,
+    default_location,
+    parse_jewellery_workbook,
+)
 from apps.catalogue.labels import subcategory_label
 from apps.catalogue.models import Category, ProductMaster, Supplier
 from apps.core.models import AuditLogEntry
@@ -303,3 +312,82 @@ def item_detail(request, barcode):
         "siblings": siblings,
         "sibling_total": sibling_total,
     })
+
+
+def _intake_context(result=None, report=None, datafile_report=None, datafile_error=""):
+    locations = Location.objects.filter(is_active=True).order_by("name")
+    return {
+        "locations": locations,
+        "default_location": default_location(),
+        "result": result,
+        "report": report,
+        "datafile_report": datafile_report,
+        "datafile_error": datafile_error,
+    }
+
+
+@login_required
+def product_intake(request):
+    """Default: jewellery Excel upload. One-piece form is the other way in."""
+    if request.method == "POST" and request.POST.get("mode") == "datafile":
+        if not is_developer(request.user):
+            messages.error(request, "Print-sheet sync is only for the developer account.")
+            return redirect("catalogue:product_list")
+        try:
+            datafile_report = sync_datafile()
+        except RuntimeError as exc:
+            return render(request, "catalogue/intake.html", _intake_context(datafile_error=str(exc)))
+        return render(request, "catalogue/intake.html", _intake_context(datafile_report=datafile_report))
+
+    if request.method == "POST":
+        location = Location.objects.filter(
+            pk=request.POST.get("location") or "", is_active=True,
+        ).first() or default_location()
+        if location is None:
+            messages.error(request, "Add a location first. A new piece has to sit somewhere.")
+            return render(request, "catalogue/intake.html", _intake_context())
+
+        if request.POST.get("mode") == "one":
+            row = IntakeRow(
+                row_number=1,
+                pj=(request.POST.get("pj") or "").strip().upper(),
+                reference=(request.POST.get("reference") or "").strip(),
+                owner=(request.POST.get("owner") or "").strip(),
+                supplier=(request.POST.get("supplier") or "").strip(),
+                subcategory=(request.POST.get("subcategory") or "").strip().upper(),
+                metal_name=(request.POST.get("metal_name") or "").strip(),
+                purity=(request.POST.get("purity") or "").strip(),
+                weight=(request.POST.get("weight") or "").strip(),
+                actual_price=None,
+                currency=(request.POST.get("currency") or "USD").strip().upper(),
+                rate=None,
+                payment_type="",
+                markup=None,
+                markup_amount=None,
+                size=(request.POST.get("size") or "").strip(),
+                diamond_weight="",
+            )
+            from apps.catalogue.intake import _decimal
+            row.actual_price = _decimal(request.POST.get("actual_price"))
+            row.rate = _decimal(request.POST.get("rate"))
+            if not row.pj or not row.reference or not row.owner:
+                messages.error(request, "PJ code, supplier product code, and owner are required.")
+                return render(request, "catalogue/intake.html", _intake_context())
+            report = apply_rows([row], location)
+            messages.success(
+                request,
+                f"Saved {row.pj}. {report['created']} new, {report['updated']} updated.",
+            )
+            return redirect("catalogue:item_detail", barcode=row.pj)
+
+        upload = request.FILES.get("workbook")
+        if not upload:
+            messages.error(request, "Choose the jewellery Excel file first.")
+            return render(request, "catalogue/intake.html", _intake_context())
+        parsed = parse_jewellery_workbook(upload)
+        if parsed.errors and not parsed.rows:
+            return render(request, "catalogue/intake.html", _intake_context(result=parsed))
+        report = apply_rows(parsed.rows, location)
+        return render(request, "catalogue/intake.html", _intake_context(result=parsed, report=report))
+
+    return render(request, "catalogue/intake.html", _intake_context())

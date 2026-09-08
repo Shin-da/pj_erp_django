@@ -77,6 +77,10 @@ class Employee(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     email = models.EmailField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_developer = models.BooleanField(
+        default=False,
+        help_text="Sees every staff page plus the /dev/ database tools. Not granted to ordinary logins.",
+    )
 
     default_location = models.ForeignKey(
         "locations.Location",

@@ -37,7 +37,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-Catalogue UX, dashboard tag sequences, R2 media stack, DB Sync page, and brand icons are on `main` (see latest commit). Confirm Render `AWS_*` vars, then redeploy so product photos hit R2. DB Sync is at `/dev/db-sync/` — sidebar link still withheld so a missing route cannot 500 the shell (`0112cfb`). Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
+Label designer and print preview default to 1× zoom. Catalogue UX, dashboard tag sequences, R2 media stack, DB Sync page, and brand icons are on `main`. Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
 
 ---
 
@@ -50,6 +50,72 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-08 — Developer login for /dev/ pages
+
+- **Source:** this chat
+- **Goal:** One developer account that can see every page plus the database tools, on the deployed site as well as locally.
+- **Done:**
+  - `Employee.is_developer`. `/dev/` pages and print-sheet sync return 403 for anyone else. Sidebar links appear only for that login.
+  - `manage.py ensure_developer` creates employee_code `dev`. Created on this machine’s `pj_erp_prod` only.
+- **Follow-ups / open:**
+  - After this code is on Render, run `ensure_developer` once against the live database. The local password does not exist there yet.
+- **Commits (if any):** none yet.
+
+### 2026-09-08 — DATAFILE print sheet sync
+
+- **Source:** this chat; public copy of the Tiara sheet
+- **Goal:** Fill karat and net weight from DATAFILE, matched on RFID Tag, without treating a blank metal type as Silver.
+- **Done:**
+  - Sync print sheet on `/products/add/` updates existing pieces only. PJ25073 is now Gold / `18K+3G` / 9.05 g.
+  - Local run: 7874 matched, 7470 updated, 1367 sheet rows not in this catalog.
+- **Follow-ups / open:**
+  - This wrote the local catalog only. Production still needs this after they ask to push.
+- **Commits (if any):** none yet.
+
+### 2026-09-08 — Default label preview zoom 1×
+
+- **Source:** this chat
+- **Goal:** Open `/hardware/templates/1/` at 1× preview zoom, matching print.
+- **Done:**
+  - Designer config and fallback zoom start at 1× (`1.0×` label).
+  - Print preview cards also open at 1×; Fit still scales to width.
+- **Follow-ups / open:**
+  - Staff can still zoom in with + / Fit.
+- **Commits (if any):** none yet.
+
+### 2026-09-08 — Add stock by jewellery Excel
+
+- **Source:** this chat; `YZC 9-8-26.xlsx` is the Product Master upload
+- **Goal:** Add pieces in Django the same way staff add them on iadmin — Excel first, one-piece form second.
+- **Done:**
+  - `/catalogue/add/` reads the Jewellery Excel sheet (header on row 2). Match is the PJ code: new row creates a design plus a piece; a known PJ is updated.
+  - `DFLT - 18K` is stored as purity `18K` and metal Gold. A blank metal name is not saved as Silver.
+- **Follow-ups / open:**
+  - This writes the Django catalog only. It does not push back to live iadmin.
+- **Commits (if any):** none yet.
+
+### 2026-09-08 — YZC intake sheet vs what the upload stored
+
+- **Source:** `Downloads\YZC 9-8-26.xlsx`; Product Master “Upload Excel” opens `website_product_reference.aspx`
+- **Goal:** See what Cylver’s jewellery upload actually wrote on live iadmin.
+- **Done:**
+  - Sheet is 226 consignment pieces, owner YZC1, PJ24881–PJ25106. Metal name blank. Purity text is `DFLT - 18K` (203), plus PT900 / PT850 / PT950. Markup 10.
+  - All 226 barcodes are on live `stock_rfid`. Weights match. `metal_id` is 1 (Silver) and `metal_purity_id` is empty on every row — the `DFLT - 18K` text did not land as a purity id.
+- **Follow-ups / open:**
+  - Do not treat stock-report karat or `metal_id` 1 as the label. Print source is still DATAFILE. This sheet is the intake file.
+- **Commits (if any):** none.
+
+### 2026-09-08 — Read-only DB workbench for live schema
+
+- **Source:** this chat; user asked for the iadmin workbench layout, for every database, with clearer relationships
+- **Goal:** Show the actual tables, columns, and joins for live iadmin and the Django catalog — read only, no sidebar link.
+- **Done:**
+  - `/dev/db-workbench/` lists live `stock_rfid` (79 tables, 0 foreign keys, 17 known joins) and the active Postgres catalog (real foreign keys).
+  - Click a table for columns, key, and what it points at / what points at it. Overlapping metal ids are marked, not treated as names.
+- **Follow-ups / open:**
+  - Still local-only until they ask to push. DATAFILE purity is still not imported.
+- **Commits (if any):** none yet.
 
 ### 2026-09-08 — Stock-report karat is purity + country suffix
 

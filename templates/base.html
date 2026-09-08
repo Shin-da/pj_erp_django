@@ -48,6 +48,20 @@
           class="nav-item top-level{% if request.resolver_match.app_name == 'hardware' %} active{% endif %}">
           <i class="fa-solid fa-tag"></i> <span class="nav-label">Tag Printing</span>
         </a>
+        {% if show_dev_nav %}
+        <a href="{% url 'core:data_map' %}" title="Data map"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'data_map' %} active{% endif %}">
+          <i class="fa-solid fa-diagram-project"></i> <span class="nav-label">Data map</span>
+        </a>
+        <a href="{% url 'core:db_workbench' %}" title="DB workbench"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'db_workbench' %} active{% endif %}">
+          <i class="fa-solid fa-table-list"></i> <span class="nav-label">DB workbench</span>
+        </a>
+        <a href="{% url 'core:db_sync_status' %}" title="DB sync"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'db_sync_status' %} active{% endif %}">
+          <i class="fa-solid fa-arrows-rotate"></i> <span class="nav-label">DB sync</span>
+        </a>
+        {% endif %}
       </div>
     </div>
 
@@ -157,7 +171,7 @@
             <div class="avatar">{{ user.employee_code|slice:":1"|upper }}</div>
             <div class="u-meta">
               <div class="n">{{ user.get_full_name|default:user.employee_code }}</div>
-              <div class="r">{{ user.employee_code }}</div>
+              <div class="r">{% if user.is_developer %}Developer{% else %}{{ user.employee_code }}{% endif %}</div>
             </div>
             <i class="fa-solid fa-chevron-down"></i>
           </button>

@@ -100,7 +100,7 @@
       </div>
       <div class="zoom-controls">
         <button type="button" id="zoomOut" class="btn btn-ghost btn-sm" title="Zoom out">−</button>
-        <span id="zoomLabel" class="mono" style="font-size:11px; min-width:36px; text-align:center;">2×</span>
+        <span id="zoomLabel" class="mono" style="font-size:11px; min-width:36px; text-align:center;">1.0×</span>
         <button type="button" id="zoomIn" class="btn btn-ghost btn-sm" title="Zoom in">+</button>
       </div>
     </div>
@@ -373,9 +373,9 @@
     offsetX: {{ template_obj.offset_x }},
     offsetY: {{ template_obj.offset_y }},
     dpi: {{ template_obj.dpi }},
-    zoom: 2.2,
+    zoom: 1,
   };
 </script>
-<script src="{% static 'core/js/label_designer.js' %}?v=12"></script>
+<script src="{% static 'core/js/label_designer.js' %}?v=13"></script>
 
 {% endblock %}

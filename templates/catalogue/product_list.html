@@ -8,6 +8,7 @@
     <p>One row per design. Reference ID is the unique catalogue code; style names often repeat across designs. Paste a PJ / barcode to open that piece directly.</p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'catalogue:product_intake' %}" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Add stock</a>
     <a href="{% url 'inventory:location_list' %}" class="btn btn-ghost"><i class="fa-solid fa-boxes-stacked"></i> By location</a>
   </div>
 </div>

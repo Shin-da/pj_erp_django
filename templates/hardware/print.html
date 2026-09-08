@@ -570,14 +570,13 @@
     if (!stage) return;
     var w = parseInt(stage.dataset.w, 10) || 600;
     var available = Math.max(200, stage.clientWidth - 16);
-    // Prefer a readable size — Irys tags are tiny in dots.
-    var scale = Math.max(2.2, Math.min(4.5, available / w));
+    var scale = Math.max(1, Math.min(4.5, available / w));
     applyCardZoom(card, scale);
   }
 
   function initPreviewCards() {
     document.querySelectorAll('[data-preview-card]').forEach(function (card) {
-      fitCard(card);
+      applyCardZoom(card, 1);
 
       var zoomIn = card.querySelector('[data-zoom-in]');
       var zoomOut = card.querySelector('[data-zoom-out]');
@@ -586,10 +585,10 @@
       var canvas = card.querySelector('.tag-preview-canvas');
 
       if (zoomIn) zoomIn.addEventListener('click', function () {
-        applyCardZoom(card, (parseFloat(card.dataset.zoom) || 2.5) + 0.25);
+        applyCardZoom(card, (parseFloat(card.dataset.zoom) || 1) + 0.25);
       });
       if (zoomOut) zoomOut.addEventListener('click', function () {
-        applyCardZoom(card, (parseFloat(card.dataset.zoom) || 2.5) - 0.25);
+        applyCardZoom(card, (parseFloat(card.dataset.zoom) || 1) - 0.25);
       });
       if (zoomFit) zoomFit.addEventListener('click', function () { fitCard(card); });
       if (zones && canvas) {
@@ -603,9 +602,6 @@
   document.addEventListener('DOMContentLoaded', function () {
     setup();
     initPreviewCards();
-    window.addEventListener('resize', function () {
-      document.querySelectorAll('[data-preview-card]').forEach(fitCard);
-    });
   });
 </script>
 

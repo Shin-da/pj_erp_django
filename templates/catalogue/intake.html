@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Add stock — Perfect Jewel ERP{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Add stock</h1>
+    <p>The usual way is the jewellery Excel from Product Master — the file with a <span class="mono">Jewellery Excel</span> sheet, <span class="mono">PJNUMBER</span>, and <span class="mono">DFLT - 18K</span>. A blank metal name is not saved as Silver.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Products</a>
+  </div>
+</div>
+
+{% if report %}
+<div class="panel in-result">
+  <div class="kpi-label">Upload caught</div>
+  <h2>{{ result.sheet }} · {{ result.rows|length }} rows</h2>
+  <p>{{ report.created }} new pieces, {{ report.updated }} already here and updated. They sit at <strong>{{ default_location }}</strong> unless that barcode was already placed.</p>
+  {% if result.errors %}
+  <ul>
+    {% for err in result.errors|slice:":8" %}
+    <li>{{ err }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if report.notes %}
+  <ul>
+    {% for note in report.notes %}
+    <li>{{ note }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% elif result and result.errors %}
+<div class="panel in-result">
+  <div class="kpi-label">Not this file</div>
+  <ul>
+    {% for err in result.errors %}
+    <li>{{ err }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if show_dev_nav %}
+<form method="post" class="panel in-upload">
+  {% csrf_token %}
+  <input type="hidden" name="mode" value="datafile">
+  <div class="kpi-label">Print sheet</div>
+  <p>DATAFILE is what they print. This fills metal purity and net weight on pieces already here. It does not move stock or change price. A blank metal type is not saved as Silver.</p>
+  {% if datafile_error %}
+  <p>{{ datafile_error }}</p>
+  {% endif %}
+  {% if datafile_report %}
+  <p>{{ datafile_report.matched }} pieces matched, {{ datafile_report.updated }} updated. {{ datafile_report.missing }} sheet rows are not in this catalog yet.</p>
+  {% endif %}
+  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-table"></i> Sync print sheet</button>
+</form>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="panel in-upload">
+  {% csrf_token %}
+  <div class="kpi-label">Upload Excel</div>
+  <p>Same workbook Cylver drops on iadmin. Header is row 2. Each row is one PJ code.</p>
+  <label class="in-file">
+    <span>Jewellery Excel file</span>
+    <input type="file" name="workbook" accept=".xlsx,.xlsm" required>
+  </label>
+  <label>
+    <span>Put new pieces at</span>
+    <select name="location" class="field">
+      {% for loc in locations %}
+      <option value="{{ loc.pk }}" {% if default_location and loc.pk == default_location.pk %}selected{% endif %}>{{ loc }}</option>
+      {% empty %}
+      <option value="">No location yet</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload</button>
+</form>
+
+<details class="panel in-one">
+  <summary>Add one piece instead</summary>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="mode" value="one">
+    <div class="in-grid">
+      <label><span>PJ code</span><input class="field" name="pj" placeholder="PJ25107" required></label>
+      <label><span>Supplier product code</span><input class="field" name="reference" placeholder="Z-R4442" required></label>
+      <label><span>Owner</span><input class="field" name="owner" placeholder="YZC1" required></label>
+      <label><span>Supplier</span><input class="field" name="supplier" placeholder="YZC"></label>
+      <label><span>Type</span><input class="field" name="subcategory" placeholder="RN"></label>
+      <label><span>Metal purity</span><input class="field" name="purity" placeholder="DFLT - 18K"></label>
+      <label><span>Metal name</span><input class="field" name="metal_name" placeholder="Leave blank if the sheet does"></label>
+      <label><span>Metal weight</span><input class="field" name="weight" placeholder="1.58"></label>
+      <label><span>Actual price</span><input class="field" name="actual_price" placeholder="239.40"></label>
+      <label><span>Currency</span><input class="field" name="currency" value="USD"></label>
+      <label><span>Rate</span><input class="field" name="rate" placeholder="63"></label>
+      <label><span>Size</span><input class="field" name="size"></label>
+      <label>
+        <span>Location</span>
+        <select name="location" class="field">
+          {% for loc in locations %}
+          <option value="{{ loc.pk }}" {% if default_location and loc.pk == default_location.pk %}selected{% endif %}>{{ loc }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <button type="submit" class="btn btn-ghost">Save this piece</button>
+  </form>
+</details>
+
+<style>
+  .in-upload, .in-one, .in-result { margin-bottom: 12px; }
+  .in-upload p, .in-result p { margin: 6px 0 12px; font-size: 13px; color: var(--text-muted); }
+  .in-result h2 { margin: 4px 0 8px; font-size: 18px; }
+  .in-result ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .in-file, .in-upload label, .in-one label { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
+  .in-upload { display: grid; gap: 10px; max-width: 520px; }
+  .in-one summary { cursor: pointer; font-weight: 650; }
+  .in-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+  }
+  @media (max-width: 800px) {
+    .in-grid { grid-template-columns: 1fr; }
+  }
+  .in-one .btn { margin-top: 4px; }
+</style>
+
+{% endblock %}

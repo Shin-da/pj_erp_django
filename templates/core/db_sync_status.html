@@ -10,6 +10,8 @@
       <strong>{{ report.active_profile }}</strong> → {{ report.active_name }}.</p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'core:db_workbench' %}" class="btn btn-ghost"><i class="fa-solid fa-table-list"></i> Workbench</a>
+    <a href="{% url 'core:data_map' %}" class="btn btn-ghost"><i class="fa-solid fa-diagram-project"></i> Data map</a>
     <a href="{% url 'core:db_sync_status' %}" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i> Refresh</a>
     <form method="post" action="{% url 'core:db_sync_run' %}" style="margin:0;display:inline;">
       {% csrf_token %}

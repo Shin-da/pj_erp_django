@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}DB workbench — Perfect Jewel ERP{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>DB workbench</h1>
+    <p>Same idea as iadmin’s local table list, for every store we can read. Columns and joins only — nothing here is edited.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'core:data_map' %}" class="btn btn-ghost"><i class="fa-solid fa-diagram-project"></i> Data map</a>
+    <a href="?store={{ store_id }}&amp;table={{ table.name|default:'' }}&amp;refresh=1" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i> Refresh</a>
+  </div>
+</div>
+
+<div class="wb-stores">
+  <a class="wb-store {% if store_id == 'mssql' %}is-on{% endif %}" href="{% url 'core:db_workbench' %}?store=mssql">
+    <span>SQL Server</span>
+    <strong>Live iadmin</strong>
+    <em>Almost no foreign keys. Joins are column names.</em>
+  </a>
+  <a class="wb-store {% if store_id == 'django' %}is-on{% endif %}" href="{% url 'core:db_workbench' %}?store=django">
+    <span>Postgres · {{ active_profile }}</span>
+    <strong>Django catalog</strong>
+    <em>{{ active_name }}. The live website uses this same shape.</em>
+  </a>
+</div>
+
+{% if not catalog.ok %}
+<div class="wb-error">Could not read this database. {{ catalog.error }}</div>
+{% else %}
+
+<div class="wb-layout">
+  <aside class="wb-side">
+    <div class="wb-side-head">
+      <span>{{ catalog.table_count }} tables</span>
+      {% if store_id == 'mssql' %}
+      <span>{{ catalog.fk_count }} real keys · {{ catalog.loose_count }} known joins</span>
+      {% else %}
+      <span>{{ catalog.fk_count }} foreign keys</span>
+      {% endif %}
+    </div>
+    <input type="search" id="wbFilter" class="wb-filter" placeholder="Filter tables…" autocomplete="off">
+    {% for group in catalog.groups %}
+    <div class="wb-group" data-group>
+      <div class="wb-group-label">{{ group.label }}</div>
+      {% for t in group.tables %}
+      <a class="wb-table {% if table and t.name == table.name %}is-on{% endif %} {% if t.known %}is-known{% endif %}"
+         data-name="{{ t.name|lower }}"
+         href="{% url 'core:db_workbench' %}?store={{ store_id }}&amp;table={{ t.name }}">
+        <span class="wb-tname">{{ t.name }}</span>
+        <span class="wb-tmeta">
+          {% if t.rows is not None %}{{ t.rows }}{% endif %}
+          {% if t.outgoing or t.incoming %}<i class="fa-solid fa-link"></i>{% endif %}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </aside>
+
+  <section class="wb-main">
+    {% if not table %}
+    <div class="wb-empty">No tables came back.</div>
+    {% else %}
+    <header class="wb-title">
+      <div>
+        <h2 class="mono">{{ table.name }}</h2>
+        <p>
+          {% if table.holds %}{{ table.holds }}{% else %}No note yet — this is the live column list.{% endif %}
+        </p>
+      </div>
+      <div class="wb-chips">
+        <span class="pill">key {{ table.pk|join:", "|default:"none" }}</span>
+        {% if table.rows is not None %}<span class="pill">{{ table.rows }} rows</span>{% endif %}
+        {% if table.synced %}<span class="pill">synced</span>{% endif %}
+        {% if store_id == 'mssql' %}<span class="pill">not enforced</span>{% else %}<span class="pill">enforced keys</span>{% endif %}
+      </div>
+    </header>
+
+    <div class="wb-hood">
+      <div>
+        <div class="wb-kicker">Points at</div>
+        {% if table.outgoing %}
+        <div class="wb-links">
+          {% for edge in table.outgoing %}
+          <a class="wb-edge wb-edge-{{ edge.kind }}" href="{% url 'core:db_workbench' %}?store={{ store_id }}&amp;table={{ edge.to_table }}">
+            <b class="mono">{{ edge.from_col }}</b>
+            <span>→ {{ edge.to_table }}.{{ edge.to_col }}</span>
+            <em>{% if edge.kind == 'fk' %}foreign key{% elif edge.kind == 'trap' %}same number, different name{% else %}used by reports / sync{% endif %}</em>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="wb-quiet">This table does not point at another table we know about.</p>
+        {% endif %}
+      </div>
+      <div>
+        <div class="wb-kicker">Pointed at by</div>
+        {% if table.incoming %}
+        <div class="wb-links">
+          {% for edge in table.incoming %}
+          <a class="wb-edge wb-edge-{{ edge.kind }}" href="{% url 'core:db_workbench' %}?store={{ store_id }}&amp;table={{ edge.from_table }}">
+            <b class="mono">{{ edge.from_table }}</b>
+            <span>.{{ edge.from_col }} → {{ edge.to_col }}</span>
+            <em>{% if edge.kind == 'fk' %}foreign key{% elif edge.kind == 'trap' %}do not treat as a name{% else %}used by reports / sync{% endif %}</em>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="wb-quiet">Nothing we track points back at this table.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="wb-kicker">Columns</div>
+    <div class="wb-gridwrap">
+      <table class="wb-cols">
+        <thead>
+          <tr>
+            <th>Column</th>
+            <th>Type</th>
+            <th>Empty ok</th>
+            <th>How it relates</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for col in table.columns %}
+          <tr class="{% if 'trap' in col.flags %}is-trap{% elif 'key' in col.flags %}is-key{% elif 'join' in col.flags %}is-join{% endif %}">
+            <td class="mono">
+              {{ col.name }}
+              {% if 'key' in col.flags %}<span class="wb-flag">key</span>{% endif %}
+              {% if 'trap' in col.flags %}<span class="wb-flag is-warn">overlap</span>{% endif %}
+              {% if 'join' in col.flags %}<span class="wb-flag">join</span>{% endif %}
+              {% if 'maybe' in col.flags %}<span class="wb-flag">id?</span>{% endif %}
+            </td>
+            <td class="mono">{{ col.type }}</td>
+            <td>{% if col.nullable %}yes{% else %}no{% endif %}</td>
+            <td>
+              {% for join in col.joins %}
+              <a href="{% url 'core:db_workbench' %}?store={{ store_id }}&amp;table={{ join.to_table }}">{{ join.to_table }}.{{ join.to_col }}</a>
+              {% if join.note %} — {{ join.note }}{% endif %}{% if not forloop.last %}<br>{% endif %}
+              {% empty %}
+              {% if 'maybe' in col.flags %}Looks like an id. Not a confirmed join.{% else %}—{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+
+<style>
+  .wb-stores {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .wb-store {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--surface);
+    text-decoration: none;
+    color: inherit;
+  }
+  .wb-store span, .wb-kicker {
+    display: block;
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .wb-store strong { display: block; font-size: 15px; }
+  .wb-store em { display: block; margin-top: 4px; font-style: normal; font-size: 12px; color: var(--text-muted); }
+  .wb-store.is-on { border-color: var(--border-strong); box-shadow: inset 3px 0 0 #8a6a32; }
+  .wb-error {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--surface);
+  }
+  .wb-layout {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .wb-stores, .wb-layout { grid-template-columns: 1fr; }
+  }
+  .wb-side {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    max-height: calc(100vh - 220px);
+    overflow: auto;
+    position: sticky;
+    top: 8px;
+  }
+  .wb-side-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .wb-filter {
+    width: calc(100% - 16px);
+    margin: 8px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg, transparent);
+    color: inherit;
+  }
+  .wb-group-label {
+    padding: 8px 12px 4px;
+    font-size: 10px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .wb-table {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    text-decoration: none;
+    color: inherit;
+    font-size: 12px;
+  }
+  .wb-table:hover, .wb-table.is-on { background: var(--surface-2); }
+  .wb-table.is-known .wb-tname { font-weight: 650; }
+  .wb-tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wb-tmeta { flex: none; color: var(--text-muted); font-size: 11px; }
+  .wb-main {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 14px;
+    min-width: 0;
+  }
+  .wb-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+  .wb-title h2 { margin: 0 0 6px; font-size: 18px; }
+  .wb-title p { margin: 0; font-size: 13px; color: var(--text-muted); }
+  .wb-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .wb-hood {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 720px) {
+    .wb-hood, .wb-title { display: block; }
+    .wb-chips { justify-content: flex-start; margin-top: 8px; }
+  }
+  .wb-links { display: grid; gap: 6px; }
+  .wb-edge {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-decoration: none;
+    color: inherit;
+    background: var(--bg, transparent);
+  }
+  .wb-edge b { display: block; font-size: 12px; }
+  .wb-edge span, .wb-edge em { display: block; font-size: 12px; color: var(--text-muted); font-style: normal; }
+  .wb-edge-fk { border-left: 3px solid #2f6b4f; }
+  .wb-edge-used { border-left: 3px solid #3d6b8a; }
+  .wb-edge-trap { border-left: 3px solid #8a4a32; }
+  .wb-quiet { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+  .wb-gridwrap { overflow: auto; }
+  .wb-cols { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .wb-cols th, .wb-cols td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .wb-cols th { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+  .wb-cols a { color: inherit; }
+  .wb-flag {
+    display: inline-block;
+    margin-left: 6px;
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .wb-flag.is-warn { color: #8a4a32; }
+  .wb-cols tr.is-key td:first-child { font-weight: 650; }
+  .wb-cols tr.is-trap { background: color-mix(in srgb, #8a4a32 8%, transparent); }
+  .wb-empty { padding: 12px; color: var(--text-muted); }
+</style>
+
+<script>
+  (function () {
+    var box = document.getElementById("wbFilter");
+    if (!box) return;
+    box.addEventListener("input", function () {
+      var q = (box.value || "").toLowerCase();
+      document.querySelectorAll(".wb-table").forEach(function (el) {
+        var name = el.getAttribute("data-name") || "";
+        el.style.display = !q || name.indexOf(q) >= 0 ? "" : "none";
+      });
+      document.querySelectorAll("[data-group]").forEach(function (group) {
+        var any = false;
+        group.querySelectorAll(".wb-table").forEach(function (el) {
+          if (el.style.display !== "none") any = true;
+        });
+        group.style.display = any ? "" : "none";
+      });
+    });
+  })();
+</script>
+
+{% endblock %}

@@ -61,6 +61,7 @@
       <tr><th>Reference ID</th><td class="mono">{{ item.product.reference_id|default:"—" }}</td></tr>
       <tr><th>Category</th><td>{{ item.product.category.name }}</td></tr>
       <tr><th>Metal</th><td>{{ item.product.display_metal|default:"—" }}</td></tr>
+      <tr><th>Purity</th><td>{{ item.product.display_purity|default:"—" }}</td></tr>
       <tr><th>Supplier</th><td>{{ item.product.supplier.name|default:"—" }}</td></tr>
       <tr><th>Net weight</th><td class="mono">{% if item.product.display_net_weight %}{{ item.product.display_net_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
       <tr><th>Gross weight</th><td class="mono">{% if item.product.gross_weight %}{{ item.product.gross_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>

@@ -129,6 +129,11 @@ LEGACY_MSSQL_PASSWORD = config("LEGACY_MSSQL_PASSWORD", default="")
 # pinged by an external scheduler (cron-job.org) instead of a paid Render Cron Job.
 SYNC_TRIGGER_TOKEN = config("SYNC_TRIGGER_TOKEN", default="")
 
+# Tiara print sheet. Link must be "anyone with the link can view".
+# Sync matches RFID Tag to an existing PJ code and writes purity / weight only.
+DATAFILE_SHEET_ID = config("DATAFILE_SHEET_ID", default="1Nme3M7J5mW_cp21uA_nIhDF66xqKMkn9")
+DATAFILE_SHEET_GID = config("DATAFILE_SHEET_GID", default="1206911768")
+
 # --- Auth --------------------------------------------------------------------
 # Custom user model from day one — never swap this in later, Django makes it
 # very painful to change after the first migration. Replaces tblemployee's

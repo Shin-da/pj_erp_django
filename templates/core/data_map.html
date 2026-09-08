@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}Data map — Perfect Jewel ERP{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Data map</h1>
+    <p>Where a piece actually lives. Sync counts stay on the other page. This machine is talking to
+      <strong>{{ active_profile }}</strong> / {{ active_name }}.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'core:db_workbench' %}" class="btn btn-ghost"><i class="fa-solid fa-table-list"></i> Workbench</a>
+    <a href="{% url 'core:db_sync_status' %}" class="btn btn-ghost"><i class="fa-solid fa-arrows-rotate"></i> DB sync</a>
+  </div>
+</div>
+
+<div class="dm-stores">
+  {% for s in stores %}
+  <article class="dm-store dm-store-{{ s.id }}">
+    <div class="dm-kicker">{{ s.kind }}</div>
+    <h2>{{ s.title }}</h2>
+    <div class="mono dm-where">{{ s.where }}</div>
+    <p>{{ s.role }}</p>
+  </article>
+  {% endfor %}
+</div>
+
+<div class="section-heading"><span class="tag">Relationships</span></div>
+<div class="dm-rel">
+  {% for chain in rel_chains %}
+  <section class="panel dm-chain dm-chain-{{ chain.kind }}">
+    <div class="kpi-label" style="margin-bottom:10px;">{{ chain.title }}</div>
+    <div class="dm-nodes">
+      {% for node in chain.nodes %}
+      <div class="dm-node mono">{{ node }}</div>
+      {% if not forloop.last %}<span class="dm-arrow">→</span>{% endif %}
+      {% endfor %}
+    </div>
+    <ul class="dm-joins">
+      {% for join in chain.joins %}
+      <li class="mono">{{ join }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+</div>
+
+<div class="dm-split">
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:10px;">Legacy tables — join columns, not enforced keys</div>
+    {% for t in legacy_tables %}
+    <article class="dm-ent">
+      <h3 class="mono">{{ t.name }}</h3>
+      <div class="dm-pk">pk {{ t.pk }}</div>
+      <p>{{ t.holds }}</p>
+      <ul>
+        {% for link in t.links %}
+        <li class="mono">{{ link }}</li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:10px;">Django tables — real foreign keys</div>
+    {% for t in django_tables %}
+    <article class="dm-ent">
+      <h3 class="mono">{{ t.name }}</h3>
+      <div class="dm-pk">pk {{ t.pk }}</div>
+      <p>{{ t.holds }}</p>
+      <ul>
+        {% for link in t.links %}
+        <li class="mono">{{ link }}</li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="section-heading"><span class="tag">One piece, four stops</span></div>
+<ol class="dm-flow">
+  {% for step in flow %}
+  <li>
+    <div class="dm-step">{{ step.step }}</div>
+    <div>
+      <h3>{{ step.title }}</h3>
+      <div class="dm-pair">
+        <span>Legacy <b class="mono">{{ step.legacy }}</b></span>
+        <span>Here <b class="mono">{{ step.django }}</b></span>
+      </div>
+      <p>{{ step.note }}</p>
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+
+<div class="dm-warn">
+  <h3>Same number, three names</h3>
+  <p>On a metal-detail row, <span class="mono">metal_id = 1</span> and <span class="mono">metal_purity_id = 1</span> are not labels. Each lookup table reads <b>1</b> differently. That is why stock reports and this app can disagree. For PJ23380 the print sheet says metal type <b>SL</b>, purity blank, net weight <b>3.75</b>.</p>
+  <div class="dm-trap">
+    {% for row in id_trap %}
+    <div><span>Country table</span><strong>{{ row.as_country }}</strong></div>
+    <div><span>Purity master</span><strong>{{ row.as_purity }}</strong></div>
+    <div><span>Purity + country combo</span><strong>{{ row.as_combo }}</strong></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="dm-split">
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:10px;">Sync copies these</div>
+    <table class="dm-table">
+      <thead>
+        <tr><th>What</th><th>Legacy</th><th>Here</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for label, legacy, django, how in synced %}
+        <tr>
+          <td>{{ label }}</td>
+          <td class="mono">{{ legacy }}</td>
+          <td class="mono">{{ django }}</td>
+          <td><span class="pill">{{ how }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="kpi-label" style="margin-bottom:10px;">Not copied by sync</div>
+    <ul class="dm-miss">
+      {% for title, source, note in not_copied %}
+      <li>
+        <strong>{{ title }}</strong>
+        <div class="mono">{{ source }}</div>
+        <p>{{ note }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<style>
+  .dm-rel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 960px) {
+    .dm-rel { grid-template-columns: 1fr; }
+  }
+  .dm-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .dm-node {
+    font-size: 11px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-soft, rgba(0,0,0,.03));
+  }
+  .dm-arrow { color: var(--text-muted); font-size: 12px; }
+  .dm-joins { margin: 0; padding-left: 16px; }
+  .dm-joins li { font-size: 12px; margin: 3px 0; }
+  .dm-ent { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .dm-ent:last-child { border-bottom: 0; }
+  .dm-ent h3 { margin: 0; font-size: 13px; }
+  .dm-pk { font-size: 11px; color: var(--text-muted); margin: 2px 0 4px; }
+  .dm-ent p { margin: 0 0 6px; font-size: 12.5px; }
+  .dm-ent ul { margin: 0; padding-left: 16px; }
+  .dm-ent li { font-size: 11.5px; margin: 2px 0; }
+  .dm-stores {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  @media (max-width: 1000px) {
+    .dm-stores { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .dm-stores { grid-template-columns: 1fr; }
+  }
+  .dm-store {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    background: var(--surface);
+    border-top: 3px solid var(--border);
+  }
+  .dm-store-mssql { border-top-color: #8a6a32; }
+  .dm-store-local { border-top-color: #3d6b8a; }
+  .dm-store-render { border-top-color: #2f6b4f; }
+  .dm-store-sheet { border-top-color: #7a4e6a; }
+  .dm-kicker {
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .dm-store h2 { margin: 0 0 6px; font-size: 16px; }
+  .dm-where { font-size: 11px; margin-bottom: 8px; }
+  .dm-store p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-muted); }
+  .dm-flow {
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+  .dm-flow li {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 12px;
+    align-items: start;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--surface);
+  }
+  .dm-step {
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    background: var(--bg-soft, rgba(0,0,0,.04));
+  }
+  .dm-flow h3 { margin: 0 0 6px; font-size: 15px; }
+  .dm-pair {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .dm-flow p, .dm-miss p { margin: 4px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+  .dm-warn {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    background: var(--surface);
+  }
+  .dm-warn h3 { margin: 0 0 8px; font-size: 15px; }
+  .dm-warn > p { margin: 0 0 12px; font-size: 13px; line-height: 1.5; }
+  .dm-trap {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 720px) {
+    .dm-trap { grid-template-columns: 1fr; }
+  }
+  .dm-trap div {
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--bg-soft, rgba(0,0,0,.03));
+  }
+  .dm-trap span { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .dm-split {
+    display: grid;
+    grid-template-columns: 1.4fr 0.8fr;
+    gap: 12px;
+  }
+  @media (max-width: 960px) {
+    .dm-split { grid-template-columns: 1fr; }
+  }
+  .dm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .dm-table th, .dm-table td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .dm-table th { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+  .dm-miss { list-style: none; margin: 0; padding: 0; }
+  .dm-miss li { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .dm-miss li:last-child { border-bottom: 0; }
+  .dm-miss .mono { font-size: 11px; margin-top: 2px; }
+</style>
+
+{% endblock %}
