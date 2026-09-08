@@ -51,6 +51,17 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 
 ## Session / phase entries
 
+### 2026-09-08 — Stock-report karat is purity + country suffix
+
+- **Source:** this chat; stock new report for `PJ23380` shows `18K-Japan Gold`
+- **Goal:** Match the stock-report purity label, keep the origin suffix, and clarify sync vs the other legacy reports.
+- **Done:**
+  - `metal_purity_id` on metal details is `tblpurity_country_mgmt` (18K + Japan Gold), not `tblMetalpurity_master` (which made the same id look like 24K / Silver).
+  - Label is `18K-Japan Gold`. A DEFAULT/DFLT country drops the suffix so it stays `18K`, not `DFLT - 18K`.
+- **Follow-ups / open:**
+  - Live weight numbers were written on the earlier MSSQL sync; the piece page shows them after the display deploy. Corrected karat needs this commit on Render, then another live sync. Do not sync before that deploy or the old mapping can write the wrong karat.
+- **Commits (if any):** this change.
+
 ### 2026-09-08 — Piece weight and karat from jewellery metal details
 
 - **Source:** this chat; live piece page for `PJ23380`

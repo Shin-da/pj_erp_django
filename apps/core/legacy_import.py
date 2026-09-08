@@ -42,7 +42,8 @@ from django.utils import timezone
 from apps.core.models import AuditLogEntry
 from apps.locations.models import Location, LocationType
 from apps.catalogue.models import (
-    Category, Currency, Metal, Purity, Supplier, ProductMaster, strip_dflt_prefix,
+    Category, Currency, Metal, Purity, Supplier, ProductMaster,
+    format_metal_purity_label, strip_dflt_prefix,
 )
 from apps.inventory.models import ProductItem, StockStatus
 from apps.assignment.models import (
@@ -69,6 +70,7 @@ WANTED = {
     "tblproduct_detail_master",
     "tbljewellery_metal_details",
     "tblmetalcountry_master",
+    "tblpurity_country_mgmt",
     "tbljewellery_stone_details",
     "tblstone_sub_category",
     "tblResellerMaster",
@@ -261,6 +263,7 @@ class LegacyImporter:
                 rows("tblstone_sub_category"),
                 rows("tblmetalcountry_master"),
                 purity_by_nid,
+                rows("tblpurity_country_mgmt"),
             )
             item_by_detail_nid, item_by_barcode = self._import_items(
                 rows("tblproduct_detail_master"),
@@ -468,25 +471,46 @@ class LegacyImporter:
 
     def _import_tag_weights(
         self, product_by_nid, metal_details, stone_details, stone_subcats,
-        metal_countries=None, purity_by_nid=None,
+        metal_countries=None, purity_by_nid=None, purity_countries=None,
     ):
         """Fill tag weights plus metal/purity/net from jewellery detail tables.
 
-        iadmin stock reports read weight and karat from
-        tbljewellery_metal_details, not tblproduct_master.net_wt / metal,
-        which are usually empty. metal_id there is tblmetalcountry_master.nid.
+        Stock new report treats metal_purity_id as tblpurity_country_mgmt.nid
+        (18K + Japan Gold → 18K-Japan Gold), not tblMetalpurity_master.nid.
+        A DEFAULT/DFLT country is omitted so the label stays 18K, not DFLT - 18K.
         """
         if not product_by_nid:
             return
 
         purity_by_nid = purity_by_nid or {}
         country_by_nid = {}
+        country_code_by_nid = {}
         for row in metal_countries or []:
             nid = as_int(row.get("nid"))
             name = as_str(row.get("countryname") or row.get("country_name"))
             if nid is None or not name:
                 continue
             country_by_nid[nid] = name[:100]
+            country_code_by_nid[nid] = as_str(row.get("code")).upper()
+
+        # metal_purity_id on detail rows → purity+country combo used by stocknewreport.
+        combo_by_nid = {}
+        for row in purity_countries or []:
+            nid = as_int(row.get("nid"))
+            if nid is None:
+                continue
+            purity = purity_by_nid.get(as_int(row.get("purity_id")))
+            country_id = as_int(row.get("country_id"))
+            purity_name = purity.name if purity is not None else ""
+            combo_by_nid[nid] = {
+                "label": format_metal_purity_label(
+                    purity_name,
+                    country_by_nid.get(country_id, ""),
+                    country_code_by_nid.get(country_id, ""),
+                ),
+                "country": country_by_nid.get(country_id, ""),
+                "country_code": country_code_by_nid.get(country_id, ""),
+            }
 
         diamond_subcat_ids = set()
         for row in stone_subcats or []:
@@ -548,22 +572,29 @@ class LegacyImporter:
                 product.net_weight = net
                 fields.append("net_weight")
 
-            country = country_by_nid.get(meta.get("metal_id"))
-            if country and not product.metal_id:
-                metal, _ = Metal.objects.get_or_create(name=country)
-                product.metal = metal
-                fields.append("metal")
+            combo = combo_by_nid.get(meta.get("purity_id")) or {}
+            country = combo.get("country") or ""
+            country_code = combo.get("country_code") or ""
+            if not country:
+                country = country_by_nid.get(meta.get("metal_id"), "")
+                country_code = country_code_by_nid.get(meta.get("metal_id"), "")
+            if country and country_code not in {"DFLT", "DEFAULT"} and country.upper() not in {"DEFAULT", "DFLT"}:
+                metal, _ = Metal.objects.get_or_create(name=country[:100])
+                if product.metal_id != metal.pk:
+                    product.metal = metal
+                    fields.append("metal")
 
-            purity_nid = meta.get("purity_id")
-            purity = purity_by_nid.get(purity_nid) if purity_nid else None
-            if purity and not product.purity_id:
-                if product.metal_id and purity.metal_id != product.metal_id:
-                    purity, _ = Purity.objects.get_or_create(
-                        metal=product.metal,
-                        name=strip_dflt_prefix(purity.name)[:50],
-                    )
-                product.purity = purity
-                fields.append("purity")
+            label = combo.get("label") or ""
+            if not label and purity_by_nid.get(meta.get("purity_id")):
+                label = format_metal_purity_label(purity_by_nid[meta.get("purity_id")].name)
+            if label:
+                host = product.metal
+                if host is None:
+                    host, _ = Metal.objects.get_or_create(name="Unspecified")
+                purity, _ = Purity.objects.get_or_create(metal=host, name=label[:50])
+                if product.purity_id != purity.pk:
+                    product.purity = purity
+                    fields.append("purity")
 
             if not fields:
                 continue

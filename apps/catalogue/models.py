@@ -68,6 +68,21 @@ def strip_dflt_prefix(value):
     return cleaned or text
 
 
+def format_metal_purity_label(purity_name, country_name="", country_code=""):
+    """Stock-report karat line: 18K-Japan Gold. Drop a DEFAULT/DFLT suffix."""
+    purity = strip_dflt_prefix(purity_name)
+    if not purity or purity == "-":
+        return ""
+    code = (country_code or "").strip().upper()
+    country = (country_name or "").strip()
+    if not country or code in {"DFLT", "DEFAULT"} or country.upper() in {"DEFAULT", "DFLT"}:
+        return purity
+    suffix = f"-{country}"
+    if purity.endswith(suffix):
+        return purity
+    return f"{purity}-{country}"
+
+
 class Metal(TimeStampedModel):
     name = models.CharField(max_length=100, unique=True)
 
@@ -199,10 +214,13 @@ class ProductMaster(TimeStampedModel):
 
     @property
     def display_metal(self):
+        purity = self.display_purity
+        # Stock report already stores the origin suffix on the purity label.
+        if purity and "-" in purity:
+            return purity
         parts = []
         if self.metal_id and (self.metal.name or "").strip() not in {"", "Unspecified"}:
             parts.append(self.metal.name.strip())
-        purity = self.display_purity
         if purity:
             parts.append(purity)
         return " ".join(parts)
