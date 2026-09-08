@@ -64,8 +64,16 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - **Dashboard wording follows the data:** peso figures beside stock counts labelled *at list price* (they are sums of catalogue `selling_price`); the Assigned tile no longer claims "None currently out" at zero and points at By location; new `core.SyncRun` row per run puts "as of when" on the page, replacing a cache key that did not survive a Render restart.
   - `apps/core/tests.py` now covers the drift itself (15 tests); `config/settings_sqlite.py` runs the suite without a local Postgres. Full suite 22 passing.
   - `OWNER-ONE-PAGER.md` — plain-language status of both systems for Perfect Jewel.
+- **Sync run 2026-09-09 03:25 (Render, `prod` / `pj_erp_db`), results:**
+  - Sold **337 → 577** (exact match with iadmin). Company stock **7,626 → 7,386** vs iadmin 7,387.
+  - Locations now real: HO 6,646 → **Main Vault 5,625, Pullout 1,166, Admin Room 406, Show Room 201, Amara Shia 160, Hanz 99, Dani 67**, 49 stocked in total.
+  - Invoice status refresh moved 4 masters that had been frozen since first import: complete **189 → 186**, cancelled **43 → 47**, unpaid **78 → 75**, invoiced **₱25,583,563 → ₱25,543,452**.
+  - Tracker history imported (SN533–SN538 visible, incl. the 2,600-piece Show Room closing scans). Transfers pending **0** — the `return_status='pending'` mapping held.
 - **Follow-ups / open:**
-  - **Run a sync so the fix takes effect.** Employee `1001` is not a developer, so `/dev/db-sync/` returns 403 — needs the `dev` login or `SYNC_TRIGGER_TOKEN`. Numbers will not move until then.
+  - Off by one against iadmin (company 7,386 vs 7,387, Main Vault 5,625 vs 5,624). MSSQL has 7,965 detail rows to our 7,964 — one is unimportable — but the Main Vault delta points the other way, so ~2 pieces are placed differently. Not chased.
+  - **iadmin's "today" is the SQL server's day, not Manila's.** `adminhome.aspx.cs:98` uses `CAST(GETDATE() AS DATE)`; at 02:28 PHT on 9 Sep it still counted 8 Sep scans as "today". Django (`Asia/Manila`) correctly said no scans yet. Real defect on the legacy side.
+  - Django lists each reseller location code separately (Donnalyn Bartolome appears as 46 + 25 + 16 + …); iadmin groups her 6 codes into one bar of 99. Presentational difference, no grouping model here.
+  - `/dev/db-sync/`'s "Last sync log" reads an in-memory cache, which is per gunicorn worker and empty after a restart — it showed "Sync running…" and "no run recorded" while the run had in fact finished. Should read `core.SyncRun` instead.
   - Direct MSSQL from the laptop still fails (DNS); live checking was done by logged-in HTML scrape. Local Postgres service reports Running but listens on nothing.
   - iadmin's own dashboard still shows the "Assigned 0" and "291 active transfers" traps to the owner. Same wording fix would apply there.
   - Retire the `1001` / `changeme123` login before showing the site around.
