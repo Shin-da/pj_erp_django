@@ -51,6 +51,17 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 
 ## Session / phase entries
 
+### 2026-09-08 — Piece weight and karat from jewellery metal details
+
+- **Source:** this chat; live piece page for `PJ23380`
+- **Goal:** Show weight and 18K/purity that iadmin reports read from metal-detail rows, and strip a leading `DFLT -` purity prefix.
+- **Done:**
+  - Confirmed `tblproduct_master.net_wt` / `metal` are usually empty; stock reports use `tbljewellery_metal_details.weight` plus `metal_id` (`tblmetalcountry_master`) and `metal_purity_id`.
+  - Piece/design pages fall back to that weight. Import now fills net weight, metal, and purity from those rows. `DFLT - ` is stripped on import and display; the rest of the label is kept (no extra toggle).
+- **Follow-ups / open:**
+  - After this lands on Render, re-run the live MSSQL sync so metal/karat columns fill on `pjsystems.itsshin.dev`. Weight can show from existing `gold_weight` as soon as the template deploys.
+- **Commits (if any):** this change.
+
 ### 2026-09-08 — Ship local catalogue, media, and DB Sync
 
 - **Source:** this chat; git after `6332eeb`

@@ -41,7 +41,9 @@ from django.utils import timezone
 
 from apps.core.models import AuditLogEntry
 from apps.locations.models import Location, LocationType
-from apps.catalogue.models import Category, Currency, Metal, Purity, Supplier, ProductMaster
+from apps.catalogue.models import (
+    Category, Currency, Metal, Purity, Supplier, ProductMaster, strip_dflt_prefix,
+)
 from apps.inventory.models import ProductItem, StockStatus
 from apps.assignment.models import (
     AssignmentMaster,
@@ -66,6 +68,7 @@ WANTED = {
     "tblproduct_master",
     "tblproduct_detail_master",
     "tbljewellery_metal_details",
+    "tblmetalcountry_master",
     "tbljewellery_stone_details",
     "tblstone_sub_category",
     "tblResellerMaster",
@@ -256,6 +259,8 @@ class LegacyImporter:
                 rows("tbljewellery_metal_details"),
                 rows("tbljewellery_stone_details"),
                 rows("tblstone_sub_category"),
+                rows("tblmetalcountry_master"),
+                purity_by_nid,
             )
             item_by_detail_nid, item_by_barcode = self._import_items(
                 rows("tblproduct_detail_master"),
@@ -382,7 +387,9 @@ class LegacyImporter:
         by_nid = {}
         for row in purity_rows:
             nid = row["nid"]
-            name = as_str(row.get("Metalpurity") or row.get("metalpurity")) or f"Purity {nid}"
+            name = strip_dflt_prefix(
+                as_str(row.get("Metalpurity") or row.get("metalpurity")) or f"Purity {nid}"
+            )
             purity, _ = Purity.objects.update_or_create(
                 metal=fallback_metal,
                 name=name[:50],
@@ -459,10 +466,27 @@ class LegacyImporter:
             self.stdout.write(self.style.SUCCESS(f"  ProductMaster: {created_count} created, {updated_count} updated"))
         return product_by_nid, product_location
 
-    def _import_tag_weights(self, product_by_nid, metal_details, stone_details, stone_subcats):
-        """Fill gold_weight (G-) and diamond_weight (D-) from jewellery detail tables."""
+    def _import_tag_weights(
+        self, product_by_nid, metal_details, stone_details, stone_subcats,
+        metal_countries=None, purity_by_nid=None,
+    ):
+        """Fill tag weights plus metal/purity/net from jewellery detail tables.
+
+        iadmin stock reports read weight and karat from
+        tbljewellery_metal_details, not tblproduct_master.net_wt / metal,
+        which are usually empty. metal_id there is tblmetalcountry_master.nid.
+        """
         if not product_by_nid:
             return
+
+        purity_by_nid = purity_by_nid or {}
+        country_by_nid = {}
+        for row in metal_countries or []:
+            nid = as_int(row.get("nid"))
+            name = as_str(row.get("countryname") or row.get("country_name"))
+            if nid is None or not name:
+                continue
+            country_by_nid[nid] = name[:100]
 
         diamond_subcat_ids = set()
         for row in stone_subcats or []:
@@ -476,12 +500,21 @@ class LegacyImporter:
                         diamond_subcat_ids.add(val)
 
         gold_by_pid = {}
+        metal_meta_by_pid = {}
         for row in metal_details or []:
             pid = as_int(row.get("product_id"))
-            wt = as_str(row.get("weight"))
-            if pid is None or not wt:
+            if pid is None:
                 continue
-            gold_by_pid.setdefault(pid, wt[:40])
+            wt = as_str(row.get("weight"))
+            if wt and pid not in gold_by_pid:
+                gold_by_pid[pid] = wt[:40]
+            meta = metal_meta_by_pid.setdefault(pid, {"metal_id": None, "purity_id": None, "weight": None})
+            if not meta.get("metal_id"):
+                meta["metal_id"] = as_int(row.get("metal_id"))
+            if not meta.get("purity_id"):
+                meta["purity_id"] = as_int(row.get("metal_purity_id"))
+            if meta.get("weight") is None and wt:
+                meta["weight"] = as_dec(wt)
 
         diamond_by_pid = {}
         for row in stone_details or []:
@@ -498,17 +531,44 @@ class LegacyImporter:
 
         updated = 0
         for pid, product in product_by_nid.items():
-            # Only touch products that have at least one detail weight —
-            # never blank out existing values when a product has no rows.
-            if pid not in gold_by_pid and pid not in diamond_by_pid:
+            if pid not in gold_by_pid and pid not in diamond_by_pid and pid not in metal_meta_by_pid:
                 continue
             gold = gold_by_pid.get(pid, product.gold_weight)
             diamond = diamond_by_pid.get(pid, product.diamond_weight)
-            if product.gold_weight == gold and product.diamond_weight == diamond:
+            meta = metal_meta_by_pid.get(pid) or {}
+            fields = []
+
+            if product.gold_weight != gold or product.diamond_weight != diamond:
+                product.gold_weight = gold
+                product.diamond_weight = diamond
+                fields.extend(["gold_weight", "diamond_weight"])
+
+            net = meta.get("weight")
+            if product.net_weight is None and net is not None:
+                product.net_weight = net
+                fields.append("net_weight")
+
+            country = country_by_nid.get(meta.get("metal_id"))
+            if country and not product.metal_id:
+                metal, _ = Metal.objects.get_or_create(name=country)
+                product.metal = metal
+                fields.append("metal")
+
+            purity_nid = meta.get("purity_id")
+            purity = purity_by_nid.get(purity_nid) if purity_nid else None
+            if purity and not product.purity_id:
+                if product.metal_id and purity.metal_id != product.metal_id:
+                    purity, _ = Purity.objects.get_or_create(
+                        metal=product.metal,
+                        name=strip_dflt_prefix(purity.name)[:50],
+                    )
+                product.purity = purity
+                fields.append("purity")
+
+            if not fields:
                 continue
-            product.gold_weight = gold
-            product.diamond_weight = diamond
-            product.save(update_fields=["gold_weight", "diamond_weight", "updated_at"])
+            fields.append("updated_at")
+            product.save(update_fields=fields)
             updated += 1
         if metal_details or stone_details:
             self.stdout.write(

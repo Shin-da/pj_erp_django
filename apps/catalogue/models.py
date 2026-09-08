@@ -21,7 +21,8 @@ Legacy findings this fixes:
     `transfer_id`) but no procedure ever wrote them.
 """
 
-from decimal import Decimal
+import re
+from decimal import Decimal, InvalidOperation
 
 from django.db import models
 
@@ -53,6 +54,18 @@ class Currency(TimeStampedModel):
 
     def __str__(self):
         return self.code
+
+
+_DFLT_PREFIX_RE = re.compile(r"^\s*DFLT\s*[-–—:|/]\s*", re.IGNORECASE)
+
+
+def strip_dflt_prefix(value):
+    """Drop a legacy 'DFLT - ' purity prefix. Keep the rest (18K, PT900, …)."""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    cleaned = _DFLT_PREFIX_RE.sub("", text).strip()
+    return cleaned or text
 
 
 class Metal(TimeStampedModel):
@@ -176,6 +189,36 @@ class ProductMaster(TimeStampedModel):
         if self.rate_change_status == "apply" and self.update_convert_rate is not None:
             return self.update_convert_rate
         return self.convert_rate if self.convert_rate is not None else Decimal("1")
+
+    @property
+    def display_purity(self):
+        if not self.purity_id:
+            return ""
+        label = strip_dflt_prefix(self.purity.name)
+        return "" if label in {"", "-"} else label
+
+    @property
+    def display_metal(self):
+        parts = []
+        if self.metal_id and (self.metal.name or "").strip() not in {"", "Unspecified"}:
+            parts.append(self.metal.name.strip())
+        purity = self.display_purity
+        if purity:
+            parts.append(purity)
+        return " ".join(parts)
+
+    @property
+    def display_net_weight(self):
+        """Master net_wt, else the jewellery metal-detail weight stored as gold_weight."""
+        if self.net_weight is not None:
+            return self.net_weight
+        raw = (self.gold_weight or "").strip().replace(",", "")
+        if not raw:
+            return None
+        try:
+            return Decimal(raw)
+        except (InvalidOperation, ValueError):
+            return None
 
 
 class ProductImage(TimeStampedModel):

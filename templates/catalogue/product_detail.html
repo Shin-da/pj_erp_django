@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>{% if product.reference_id %}<span class="mono">{{ product.reference_id }}</span>{% if product.name %} <span class="cell-muted" style="font-size:14px; font-weight:400;">{{ product.name }}</span>{% endif %}{% else %}{{ product.name }}{% endif %}</h1>
-    <p>{{ product.category.name }}{% if product.metal %} · {{ product.metal.name }}{% if product.purity %} {{ product.purity.name }}{% endif %}{% endif %} · {{ product.item_count }} physical piece{{ product.item_count|pluralize }} in the system.</p>
+    <p>{{ product.category.name }}{% if product.display_metal %} · {{ product.display_metal }}{% endif %} · {{ product.item_count }} physical piece{{ product.item_count|pluralize }} in the system.</p>
   </div>
   <div class="page-head-actions">
     <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> All products</a>
@@ -43,9 +43,9 @@
       <tr><th>Category</th><td>{{ product.category.name }} <span class="cell-muted mono">({{ product.category.code }})</span></td></tr>
       <tr><th>Sub-category</th><td>{{ product.subcategory|default:"—" }}</td></tr>
       <tr><th>Metal</th><td>{{ product.metal.name|default:"—" }}</td></tr>
-      <tr><th>Purity</th><td>{{ product.purity.name|default:"—" }}</td></tr>
+      <tr><th>Purity</th><td>{{ product.display_purity|default:"—" }}</td></tr>
       <tr><th>Supplier</th><td>{{ product.supplier.name|default:"—" }}</td></tr>
-      <tr><th>Net weight</th><td class="mono">{% if product.net_weight %}{{ product.net_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
+      <tr><th>Net weight</th><td class="mono">{% if product.display_net_weight %}{{ product.display_net_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
       <tr><th>Gross weight</th><td class="mono">{% if product.gross_weight %}{{ product.gross_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
       <tr><th>Purchase price</th><td class="mono">{% if product.purchase_price %}{{ product.currency.symbol|default:product.currency.code }}{{ product.purchase_price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
       <tr><th>Selling price</th><td class="mono cell-strong">{% if product.selling_price %}{{ product.currency.symbol|default:product.currency.code }}{{ product.selling_price|floatformat:2 }}{% else %}—{% endif %}</td></tr>

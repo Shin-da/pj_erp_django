@@ -139,7 +139,7 @@
           <span>{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</span>
         </div>
         <div class="pl-card-foot">
-          <span class="pl-card-metal">{% if p.metal %}{{ p.metal.name }}{% if p.purity %} {{ p.purity.name }}{% endif %}{% else %}—{% endif %}</span>
+          <span class="pl-card-metal">{{ p.display_metal|default:"—" }}</span>
           <span class="pl-card-price mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</span>
         </div>
       </div>
@@ -187,7 +187,7 @@
               {% endif %}
             </td>
             <td class="cell-muted">{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</td>
-            <td class="cell-muted">{% if p.metal %}{{ p.metal.name }}{% if p.purity %} {{ p.purity.name }}{% endif %}{% else %}—{% endif %}</td>
+            <td class="cell-muted">{{ p.display_metal|default:"—" }}</td>
             <td class="mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
             <td class="mono">{{ p.item_count }}</td>
             <td>
