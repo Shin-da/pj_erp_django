@@ -8,7 +8,8 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 | Repo | https://github.com/Shin-da/pj_erp_django |
 | Branch | `main` |
 | Deploy | Render (migrate + collectstatic on build; gunicorn) |
-| Related docs | `README.md` (what’s built), `DATABASE.md` (DB notes) |
+| Related docs | `OWNER-ONE-PAGER.md` (plain-language status, both systems), `README.md` (what’s built), `DATABASE.md` (DB notes) |
+| Sibling spec | https://github.com/Shin-da/ftp_perfect-jewel-active-sync (`PROJECT_WORKLOG.md` there) |
 
 ---
 
@@ -37,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-Persist the `jefffffff` Irys label layout on live Postgres so deploys stop wiping it. Catalogue UX, dashboard tag sequences, R2 media stack, DB Sync page, and brand icons are on `main`. Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
+Run a sync on Render so the 2026-09-09 mirror fix actually lands — until it does, the live dashboard still shows the stale sold/location figures. After that: payments UI, transfers UI, authz, and the remaining ops gaps from the 2026-09-02 audit. `README.md` still describes hardware/UI as unbuilt — trust this work log over the README until that file is refreshed.
 
 ---
 
@@ -50,6 +51,38 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-09 — Stop the mirror drifting; honest dashboard wording; owner one-pager
+
+- **Source:** this chat — live tile-by-tile comparison of `perfect-jewel.svojas.co/iadmin/` against `pjsystems.itsshin.dev`
+- **Goal:** Find out why the two dashboards disagree, fix the cause rather than the display, and leave the owner something readable.
+- **Done:**
+  - **Found the drift.** iadmin: 577 sold / 7,387 company stock. Here: 337 / 7,626. `_import_items` skipped `status` and `location` on update by design, so a piece imported as company stock stayed company stock forever. New pieces arrived (both systems agree on 7,964 total); nothing that *changed* about an existing piece did.
+  - **Found a second location bug.** Item location was read from `tblproduct_master.company_locationid` — the shared *design* row — so 6,646 pieces sat at HO here while iadmin had Main Vault 5,624 / Pullout 1,166 / Show Room 201. Now follows `InventoryLocationHelper` precedence: per-barcode `tblproduct_detail_master.company_locationid`, then master, then HO.
+  - Re-sync now refreshes `ProductItem.status`/`location`/`reprint_status` and `AssignmentMaster.invoice_status`. `--preserve-local-state` restores the old behaviour for the day Perfect Jewel actually works in this system.
+  - **Imported two tables that were being skipped entirely.** `tblproduct_transfer` (as history — mapped to `COMPLETE`, because `return_status` defaults to `'pending'` and iadmin never moves it, which is why the legacy dashboard advertises 291 active transfers with nothing in transit) and `tblproduct_tracker` (dated by `scan_date`, so "scans today" means today). Added `legacy_id` to `Transfer` and `TrackerSession`, plus `ScanMode.TRANSFER` for legacy `workflow_mode='transfer_only'` sessions.
+  - **Dashboard wording follows the data:** peso figures beside stock counts labelled *at list price* (they are sums of catalogue `selling_price`); the Assigned tile no longer claims "None currently out" at zero and points at By location; new `core.SyncRun` row per run puts "as of when" on the page, replacing a cache key that did not survive a Render restart.
+  - `apps/core/tests.py` now covers the drift itself (15 tests); `config/settings_sqlite.py` runs the suite without a local Postgres. Full suite 22 passing.
+  - `OWNER-ONE-PAGER.md` — plain-language status of both systems for Perfect Jewel.
+- **Follow-ups / open:**
+  - **Run a sync so the fix takes effect.** Employee `1001` is not a developer, so `/dev/db-sync/` returns 403 — needs the `dev` login or `SYNC_TRIGGER_TOKEN`. Numbers will not move until then.
+  - Direct MSSQL from the laptop still fails (DNS); live checking was done by logged-in HTML scrape. Local Postgres service reports Running but listens on nothing.
+  - iadmin's own dashboard still shows the "Assigned 0" and "291 active transfers" traps to the owner. Same wording fix would apply there.
+  - Retire the `1001` / `changeme123` login before showing the site around.
+- **Commits (if any):** `31f2fb9` — Let a re-sync from iadmin correct stock state, not just add new pieces
+
+### 2026-09-09 — Docs review vs iadmin sibling; work-log convention in both repos
+
+- **Source:** Cursor chat “check the docs” on `ftp_perfect-jewel-active-sync` and this repo
+- **Goal:** Read both documentation trees; give the FTP repo the same living `PROJECT_WORKLOG.md` this file already is.
+- **Done:**
+  - Confirmed this file is the current Django picture; `README.md` lags (hardware + staff UI exist; sync/hr/reporting still stubs).
+  - FTP sibling now has `PROJECT_WORKLOG.md` (created from its git history). Spec docs there remain `CLAUDE.md` / `SYSTEM-AUDIT.md` / scan + inventory + hardware.
+  - Broken in-repo pointers here: `IADMIN-SYSTEM-REFERENCE.md`, `django-rebuild-plan.md`, `REBUILD-ARCHITECTURE-AND-BUDGET.md` (ShinTools) are cited but not in this repo.
+- **Follow-ups / open:**
+  - Refresh `README.md` to match this work log (hardware/Irys/UI built; remaining gaps listed honestly).
+  - Optional: vendor or link the missing architecture/reference markdown so model docstrings stop pointing at ghosts.
+- **Commits (if any):** none yet for this slice.
 
 ### 2026-09-08 — Create the developer login when the web app boots
 
