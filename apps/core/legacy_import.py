@@ -42,8 +42,7 @@ from django.utils import timezone
 from apps.core.models import AuditLogEntry
 from apps.locations.models import Location, LocationType
 from apps.catalogue.models import (
-    Category, Currency, Metal, Purity, Supplier, ProductMaster,
-    format_metal_purity_label, strip_dflt_prefix,
+    Category, Currency, Metal, Purity, Supplier, ProductMaster, strip_dflt_prefix,
 )
 from apps.inventory.models import ProductItem, StockStatus
 from apps.assignment.models import (
@@ -473,44 +472,15 @@ class LegacyImporter:
         self, product_by_nid, metal_details, stone_details, stone_subcats,
         metal_countries=None, purity_by_nid=None, purity_countries=None,
     ):
-        """Fill tag weights plus metal/purity/net from jewellery detail tables.
+        """Fill tag weight numbers from jewellery metal/stone detail rows.
 
-        Stock new report treats metal_purity_id as tblpurity_country_mgmt.nid
-        (18K + Japan Gold → 18K-Japan Gold), not tblMetalpurity_master.nid.
-        A DEFAULT/DFLT country is omitted so the label stays 18K, not DFLT - 18K.
+        Do not copy metal/karat labels from these ids. The same integer is used
+        by more than one lookup (country, purity master, purity-country combo),
+        and the legacy report pages do not agree. Weight is the raw text on the
+        detail row, not a joined name.
         """
         if not product_by_nid:
             return
-
-        purity_by_nid = purity_by_nid or {}
-        country_by_nid = {}
-        country_code_by_nid = {}
-        for row in metal_countries or []:
-            nid = as_int(row.get("nid"))
-            name = as_str(row.get("countryname") or row.get("country_name"))
-            if nid is None or not name:
-                continue
-            country_by_nid[nid] = name[:100]
-            country_code_by_nid[nid] = as_str(row.get("code")).upper()
-
-        # metal_purity_id on detail rows → purity+country combo used by stocknewreport.
-        combo_by_nid = {}
-        for row in purity_countries or []:
-            nid = as_int(row.get("nid"))
-            if nid is None:
-                continue
-            purity = purity_by_nid.get(as_int(row.get("purity_id")))
-            country_id = as_int(row.get("country_id"))
-            purity_name = purity.name if purity is not None else ""
-            combo_by_nid[nid] = {
-                "label": format_metal_purity_label(
-                    purity_name,
-                    country_by_nid.get(country_id, ""),
-                    country_code_by_nid.get(country_id, ""),
-                ),
-                "country": country_by_nid.get(country_id, ""),
-                "country_code": country_code_by_nid.get(country_id, ""),
-            }
 
         diamond_subcat_ids = set()
         for row in stone_subcats or []:
@@ -571,30 +541,6 @@ class LegacyImporter:
             if product.net_weight is None and net is not None:
                 product.net_weight = net
                 fields.append("net_weight")
-
-            combo = combo_by_nid.get(meta.get("purity_id")) or {}
-            country = combo.get("country") or ""
-            country_code = combo.get("country_code") or ""
-            if not country:
-                country = country_by_nid.get(meta.get("metal_id"), "")
-                country_code = country_code_by_nid.get(meta.get("metal_id"), "")
-            if country and country_code not in {"DFLT", "DEFAULT"} and country.upper() not in {"DEFAULT", "DFLT"}:
-                metal, _ = Metal.objects.get_or_create(name=country[:100])
-                if product.metal_id != metal.pk:
-                    product.metal = metal
-                    fields.append("metal")
-
-            label = combo.get("label") or ""
-            if not label and purity_by_nid.get(meta.get("purity_id")):
-                label = format_metal_purity_label(purity_by_nid[meta.get("purity_id")].name)
-            if label:
-                host = product.metal
-                if host is None:
-                    host, _ = Metal.objects.get_or_create(name="Unspecified")
-                purity, _ = Purity.objects.get_or_create(metal=host, name=label[:50])
-                if product.purity_id != purity.pk:
-                    product.purity = purity
-                    fields.append("purity")
 
             if not fields:
                 continue
