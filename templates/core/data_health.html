@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Data health — Perfect Jewel ERP{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Data health</h1>
+    <p>Read-only checks against live iadmin, run when this page loads. Not the frozen August printout.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'core:owner_brief' %}" class="btn btn-ghost"><i class="fa-solid fa-file-lines"></i> Owner brief</a>
+    <a href="{% url 'core:data_health' %}" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i> Check again</a>
+  </div>
+</div>
+
+{% if not health.ok %}
+<div class="panel" style="border-color:var(--danger);">
+  <div class="kpi-label">Live iadmin is not readable from here</div>
+  <p style="margin:8px 0 0;">{{ health.error }}</p>
+</div>
+{% else %}
+<div class="ob-note" style="border-left:2px solid var(--gold, #b08d3f); padding:12px 14px; margin:0 0 18px;">
+  Checked {{ health.checked_at }}. Source {{ health.where }}.
+  {{ health.fail_count }} failing, {{ health.warn_count }} warnings.
+  Refresh the page to re-query.
+</div>
+
+{% for check in health.checks %}
+<article class="panel" style="margin-bottom:12px; --kpi-accent:{% if check.status == 'fail' %}var(--danger){% elif check.status == 'warn' or check.status == 'error' %}var(--warn){% else %}var(--ok){% endif %}; border-left:3px solid var(--kpi-accent);">
+  <div class="kpi-label">{{ check.title }}</div>
+  <div style="font-weight:600; margin-top:4px;">{{ check.figure }}</div>
+  <p style="margin:6px 0 0;">{{ check.detail }}</p>
+  {% if check.rows %}
+  <div class="table-wrap" style="margin-top:10px;">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Who</th><th>When</th><th style="text-align:right;">Amount</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+        {% for row in check.rows %}
+        <tr>
+          <td>{{ row.nid }}</td>
+          <td>{{ row.reseller }}</td>
+          <td>{{ row.when }}</td>
+          <td style="text-align:right;">{{ row.amount }}</td>
+          <td>{{ row.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</article>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

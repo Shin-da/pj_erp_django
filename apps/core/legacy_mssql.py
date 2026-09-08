@@ -108,6 +108,29 @@ def count_live_tables(wanted: set[str]) -> tuple[dict[str, int | None], str | No
     return counts, None
 
 
+def select_rows(sql: str) -> list[dict]:
+    """
+    Read-only SELECT. Returns rows as dicts with lowercased column names.
+
+    Used by the developer data-health page. Anything that is not a single
+    SELECT is refused before it reaches the server.
+    """
+    stripped = sql.strip().lstrip("(")
+    if not stripped.lower().startswith("select"):
+        raise CommandError("Data health only runs SELECT statements.")
+    if ";" in stripped.rstrip(";"):
+        raise CommandError("Data health refuses multi-statement SQL.")
+
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        columns = [d[0].lower() for d in cur.description]
+        return [dict(zip(columns, row)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 def ping_live() -> tuple[bool, str]:
     """Quick connectivity check. Returns (ok, detail)."""
     try:

@@ -8,6 +8,7 @@
     <p>Same idea as iadmin’s local table list, for every store we can read. Columns and joins only — nothing here is edited.</p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'core:owner_brief' %}" class="btn btn-ghost"><i class="fa-solid fa-file-lines"></i> Owner brief</a>
     <a href="{% url 'core:data_map' %}" class="btn btn-ghost"><i class="fa-solid fa-diagram-project"></i> Data map</a>
     <a href="?store={{ store_id }}&amp;table={{ table.name|default:'' }}&amp;refresh=1" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i> Refresh</a>
   </div>

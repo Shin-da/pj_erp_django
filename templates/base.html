@@ -49,6 +49,14 @@
           <i class="fa-solid fa-tag"></i> <span class="nav-label">Tag Printing</span>
         </a>
         {% if show_dev_nav %}
+        <a href="{% url 'core:data_health' %}" title="Data health"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'data_health' %} active{% endif %}">
+          <i class="fa-solid fa-heart-pulse"></i> <span class="nav-label">Data health</span>
+        </a>
+        <a href="{% url 'core:owner_brief' %}" title="Owner brief"
+          class="nav-item top-level{% if request.resolver_match.url_name == 'owner_brief' %} active{% endif %}">
+          <i class="fa-solid fa-file-lines"></i> <span class="nav-label">Owner brief</span>
+        </a>
         <a href="{% url 'core:data_map' %}" title="Data map"
           class="nav-item top-level{% if request.resolver_match.url_name == 'data_map' %} active{% endif %}">
           <i class="fa-solid fa-diagram-project"></i> <span class="nav-label">Data map</span>

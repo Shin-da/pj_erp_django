@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Owner brief — Perfect Jewel ERP{% endblock %}
+{% block content %}
+
+<style>
+  .ob-note {
+    border-left: 2px solid var(--gold, #b08d3f);
+    background: var(--surface-2, rgba(0,0,0,.03));
+    padding: 12px 14px;
+    margin: 0 0 18px;
+  }
+  .ob-note strong { display: block; margin-bottom: 4px; }
+  .ob-bug {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line, rgba(0,0,0,.08));
+  }
+  .ob-bug:last-child { border-bottom: 0; }
+  .ob-fig {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  @media print {
+    .sb, .page-head-actions, .no-print { display: none !important; }
+    .main { margin: 0 !important; }
+  }
+</style>
+
+<div class="page-head">
+  <div>
+    <h1>Owner brief</h1>
+    <p>What the iadmin books actually say, and which dashboard figures were wrong.
+      Developer login only — this is the page to open when presenting.</p>
+  </div>
+  <div class="page-head-actions no-print">
+    <a href="{% url 'core:data_health' %}" class="btn btn-ghost"><i class="fa-solid fa-heart-pulse"></i> Live health</a>
+    <a href="{% url 'core:data_map' %}" class="btn btn-ghost"><i class="fa-solid fa-diagram-project"></i> Data map</a>
+    <a href="{% url 'core:db_sync_status' %}" class="btn btn-ghost"><i class="fa-solid fa-arrows-rotate"></i> DB sync</a>
+    <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button>
+  </div>
+</div>
+
+<div class="ob-note">
+  <strong>Read this first, then the numbers.</strong>
+  These figures are a frozen printout. For a check against the live books, open Data health.
+  Source is a restore of production iadmin taken {{ as_of }}. Window: {{ window }}.
+  There is no earlier history — the system went live 10 July 2026. Four more weeks
+  of live trading exist on the server and are not in these figures. Read-only. Nothing here was written back.
+</div>
+
+<div class="kpi-grid">
+  {% for card in headline %}
+  <div class="kpi-card">
+    <div class="kpi-top">
+      <span class="kpi-label">{{ card.label }}</span>
+    </div>
+    <div class="kpi-num" style="font-size:22px;">{{ card.value }}</div>
+    <div class="kpi-sub">{{ card.sub }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="section-heading"><span class="tag">The books</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Line</th><th>Count</th><th style="text-align:right;">Amount</th></tr>
+      </thead>
+      <tbody>
+        {% for row in books %}
+        <tr>
+          <td>{{ row.0 }}</td>
+          <td>{{ row.1 }}</td>
+          <td style="text-align:right;">{{ row.2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="kpi-sub" style="margin:8px 0 0;">August is not a trend. Two invoices that week are ₱1,747,598 and ₱1,197,306. July, the slower month, is the figure to use if someone asks what a normal month looks like.</p>
+
+<div class="section-heading"><span class="tag">The vault</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Ownership</th><th>Pieces</th><th style="text-align:right;">Value at base price</th><th style="text-align:right;">Share</th></tr>
+      </thead>
+      <tbody>
+        {% for row in vault %}
+        <tr>
+          <td>{{ row.0 }}</td>
+          <td>{{ row.1 }}</td>
+          <td style="text-align:right;">{{ row.2 }}</td>
+          <td style="text-align:right;">{{ row.3 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="kpi-sub" style="margin:8px 0 0;">₱212.7 million in the vault is not ₱212.7 million of company capital. 87% is consignment stock owned by suppliers.</p>
+
+<div class="section-heading"><span class="tag">Bugs confirmed in the data</span></div>
+<div class="panel">
+  {% for bug in bugs %}
+  <article class="ob-bug">
+    <div class="kpi-label">{{ bug.title }}</div>
+    <div class="ob-fig">{{ bug.figure }}</div>
+    <p style="margin:6px 0 0;">{{ bug.body }}</p>
+  </article>
+  {% endfor %}
+</div>
+
+<div class="section-heading"><span class="tag">What the system cannot answer</span></div>
+<div class="panel">
+  {% for item in cannot %}
+  <article class="ob-bug">
+    <div class="kpi-label">{{ item.title }}</div>
+    <p style="margin:6px 0 0;">{{ item.body }}</p>
+  </article>
+  {% endfor %}
+</div>
+
+<div class="section-heading"><span class="tag">Already corrected — say this carefully</span></div>
+<div class="panel">
+  {% for item in fixed %}
+  <article class="ob-bug">
+    <div class="kpi-label">{{ item.where }} · {{ item.state }}</div>
+    <p style="margin:6px 0 0;">{{ item.body }}</p>
+  </article>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -380,6 +380,40 @@ def _run_sync_in_background(trigger="webhook"):
 
 
 @developer_required
+def owner_brief(request):
+    """Health numbers and confirmed bugs, for presenting to the owner."""
+    from apps.core.owner_brief import (
+        AS_OF,
+        BOOKS,
+        BUGS,
+        CANNOT,
+        FIXED,
+        HEADLINE,
+        VAULT,
+        WINDOW,
+    )
+
+    return render(request, "core/owner_brief.html", {
+        "as_of": AS_OF,
+        "window": WINDOW,
+        "headline": HEADLINE,
+        "books": BOOKS,
+        "vault": VAULT,
+        "bugs": BUGS,
+        "cannot": CANNOT,
+        "fixed": FIXED,
+    })
+
+
+@developer_required
+def data_health(request):
+    """Read the live iadmin books and report what is wrong right now."""
+    from apps.core.data_health import build_data_health
+
+    return render(request, "core/data_health.html", {"health": build_data_health()})
+
+
+@developer_required
 def data_map(request):
     """How the legacy DB, this app, Render, and the Tiara sheet fit together."""
     return render(request, "core/data_map.html", {

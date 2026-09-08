@@ -214,6 +214,82 @@ class TrackerImportTests(TestCase):
         self.assertEqual(TrackerSession.objects.get(legacy_id=7).scan_items.count(), 1)
 
 
+class DataHealthTests(TestCase):
+    def test_phantom_complete_and_unpaid_gap_come_from_the_query(self):
+        from apps.core.data_health import build_data_health
+
+        def query(sql):
+            text = " ".join(sql.split()).lower()
+            if "getdate()" in text:
+                return [{"server_now": datetime(2026, 9, 9, 3, 0)}]
+            if "live_n" in text:
+                return [{
+                    "live_n": 2, "live_amt": 1000, "cancel_n": 1, "cancel_amt": 100,
+                    "first_on": "2026-07-10", "last_on": "2026-09-08",
+                }]
+            if "from tblassignpayment_transaction" in text and "paid" in text and "rem_amount" not in text and "assign_masterid" not in text:
+                return [{"n": 1, "paid": 400}]
+            if "soldqty" in text:
+                return [{
+                    "nid": 97, "reseller": "JUNNEL", "assign_date": "2026-08-05",
+                    "invoice_status": "complete", "return_status": "complete",
+                    "total_price": 7547626, "soldqty": 0,
+                }]
+            if "rem_amount" in text:
+                return [{"n": 1}]
+            if "billed less" in text or "f.paid" in text:
+                return [{"n": 3, "balance": 600}]
+            if "sold_status" in text and "item_current_status" in text:
+                return [{"by_sold_status": 10, "by_current_status": 4}]
+            if "purchase_price" in text:
+                return [{"designs": 5, "no_cost": 5}]
+            if "product_type" in text:
+                return [{"kind": "consignment", "pieces": 8}, {"kind": "purchased", "pieces": 2}]
+            if "tblproduct_transfer" in text:
+                return [{"all_n": 4, "pending_n": 4}]
+            raise AssertionError(sql)
+
+        report = build_data_health(query=query)
+        self.assertTrue(report["ok"])
+        by_id = {c["id"]: c for c in report["checks"]}
+        self.assertEqual(by_id["phantom"]["status"], "fail")
+        self.assertEqual(by_id["phantom"]["rows"][0]["nid"], 97)
+        self.assertEqual(by_id["unpaid"]["status"], "fail")
+        self.assertEqual(by_id["sold"]["status"], "fail")
+        self.assertEqual(by_id["cost"]["status"], "fail")
+        self.assertEqual(by_id["transfers"]["status"], "fail")
+
+    def test_ordinary_staff_are_refused_health(self):
+        user = get_user_model().objects.create_user(
+            employee_code="staffhealth", password="x", is_developer=False,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse("core:data_health"))
+        self.assertEqual(response.status_code, 403)
+
+
+class OwnerBriefTests(TestCase):
+    def test_developer_sees_the_confirmed_figures(self):
+        user = get_user_model().objects.create_user(
+            employee_code="devbrief", password="x", is_developer=True,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse("core:owner_brief"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "₱9,090,832")
+        self.assertContains(response, "₱7,547,626")
+        self.assertContains(response, "Assignment 97")
+        self.assertNotContains(response, "₱2,000/day")
+
+    def test_ordinary_staff_are_refused(self):
+        user = get_user_model().objects.create_user(
+            employee_code="staffbrief", password="x", is_developer=False,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse("core:owner_brief"))
+        self.assertEqual(response.status_code, 403)
+
+
 class DashboardTests(TestCase):
     def _login(self):
         run_import(legacy_tables(detail_location=2))

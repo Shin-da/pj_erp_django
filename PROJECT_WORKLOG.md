@@ -52,6 +52,31 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 
 ## Session / phase entries
 
+### 2026-09-09 — Live data health on the developer pages
+
+- **Source:** this chat — owner brief was a frozen printout; asked for actual health that checks the data
+- **Goal:** A developer-only page that queries live iadmin read-only and reports what is wrong now.
+- **Done:**
+  - `/dev/health/` behind `developer_required`. SELECT only. Re-runs on refresh.
+  - Checks: server clock vs Manila, live/cancelled invoice totals and date window, complete uninvoiced assignments with soldqty 0, unpaid last-balance vs billed-less-payments, sold_status vs item_current_status, empty purchase_price, consignment share of unsold pieces, transfers still pending.
+  - Owner brief stays the frozen August printout and links here.
+- **Follow-ups / open:**
+  - Page only shows live numbers when this Django process can reach mssql.tag11.in. A failed connection is shown, not guessed.
+
+### 2026-09-09 — Owner brief on the developer pages
+
+- **Source:** this chat — financial-health read of the iadmin restore, then “add this to the dev view”
+- **Goal:** A developer-only page Jeff can open and present: health numbers and confirmed bugs, not the rate-ask.
+- **Done:**
+  - New `/dev/owner-brief/` behind `developer_required`. Nav item **Owner brief**, linked from Data map, DB workbench, and DB sync. Print button.
+  - Figures are the 13 Aug restore queried 9 Sep: net invoiced ₱9,090,832, 87% of vault consignment, ₱3.0M outstanding, assignment 97 at ₱7,547,626, unpaid 35 vs 54, wrong clock, Indian peso grouping, 291 “active” transfers.
+  - Says what the system cannot answer (no 12-month history, no cost/margin) and what is already fixed in code versus not yet FTP’d.
+  - Compensation / day-rate material is deliberately not on the page.
+  - `OwnerBriefTests`: developer sees the figures; ordinary staff get 403.
+- **Follow-ups / open:**
+  - Re-pull production and refresh the brief once mid-Aug through September is in the restore. These numbers stop at 12 Aug.
+  - iadmin dashboard fixes still need a human FTP upload before they are live.
+
 ### 2026-09-09 — Stop the mirror drifting; honest dashboard wording; owner one-pager
 
 - **Source:** this chat — live tile-by-tile comparison of `perfect-jewel.svojas.co/iadmin/` against `pjsystems.itsshin.dev`

@@ -9,6 +9,7 @@
       <strong>{{ active_profile }}</strong> / {{ active_name }}.</p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'core:owner_brief' %}" class="btn btn-ghost"><i class="fa-solid fa-file-lines"></i> Owner brief</a>
     <a href="{% url 'core:db_workbench' %}" class="btn btn-ghost"><i class="fa-solid fa-table-list"></i> Workbench</a>
     <a href="{% url 'core:db_sync_status' %}" class="btn btn-ghost"><i class="fa-solid fa-arrows-rotate"></i> DB sync</a>
   </div>
