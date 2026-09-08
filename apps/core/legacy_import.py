@@ -16,15 +16,26 @@ source system) is upserted by a `legacy_id` field on the Django side
 SupplierPayment; Reseller/ResellerLocation already had this). Re-running
 an import never creates duplicates.
 
-Ownership boundary on re-sync: once a row already exists here (matched by
-legacy_id), fields that the live Django ERP itself can change after the
-fact — ProductItem.status/location, AssignmentMaster.invoice_status — are
-deliberately left untouched on update. iadmin is treated as the source of
-new master data (new products, new items, new invoices, new payments)
-during the transition, not as the ongoing source of truth for state a
-Perfect Jewel staffer may have since changed in the new system. Everything
-else (names, prices, weights, reseller info, invoice numbers) is
-refreshed from iadmin on every run.
+Ownership boundary on re-sync: iadmin is the book of record. Every field,
+including state the Django app can also change (ProductItem.status and
+location, AssignmentMaster.invoice_status), is refreshed from iadmin on
+every run.
+
+This used to be the other way round — those three fields were skipped on
+update, on the theory that a staffer might have changed them here. In
+practice nobody works in this system yet, so the effect was a dashboard
+that silently drifted: on 9 Sep 2026 iadmin showed 577 pieces sold and
+7,387 in company stock while this system, syncing daily from the same
+server, still showed 337 and 7,626. New pieces arrived; the status of
+existing pieces never moved again after first import. Same story for
+location, which additionally read the *master* row's `company_locationid`
+(the shared design record) instead of the per-barcode one, so 6,646
+pieces sat at Head Office here while iadmin had them spread across Main
+Vault, Pullout and the showroom.
+
+Pass `preserve_local_state=True` to get the old behaviour back. That is
+the correct setting on the day Perfect Jewel starts entering work here
+instead of in iadmin, and the wrong one until then.
 """
 
 from __future__ import annotations
@@ -37,6 +48,7 @@ from dateutil import parser as date_parser
 from django.core.management.base import CommandError
 from django.core.management.color import color_style
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.models import AuditLogEntry
@@ -54,8 +66,8 @@ from apps.assignment.models import (
 )
 from apps.payments.models import ResellerPayment, SupplierPayment, InvoiceCancellation
 from apps.returns.models import ReturnRecord, ReserveAlert
-from apps.transfers.models import TransferLine, Transfer
-from apps.tracker.models import TrackerScanItem, TrackerSession
+from apps.transfers.models import TransferLine, Transfer, TransferStatus
+from apps.tracker.models import ScanMode, ScanResult, TrackerScanItem, TrackerSession
 
 
 WANTED = {
@@ -79,6 +91,10 @@ WANTED = {
     "tblAssignPayment_transaction",
     "tblproduct_barcode_logs",
     "tblpayment_transaction",
+    "tblproduct_transfer",
+    "tblproduct_transfer_details",
+    "tblproduct_tracker",
+    "tblproduct_tracker_itemsdeatils",
 }
 
 LOCATION_TYPE_BY_NID = {
@@ -205,6 +221,69 @@ def map_invoice_status(row):
     return InvoiceStatus.DRAFT
 
 
+def as_aware(val):
+    """Legacy datetimes are naive local time; `created_at` columns are not."""
+    if isinstance(val, date) and not isinstance(val, datetime):
+        val = datetime.combine(val, datetime.min.time())
+    if not isinstance(val, datetime):
+        return None
+    if timezone.is_naive(val):
+        return timezone.make_aware(val, timezone.get_default_timezone())
+    return val
+
+
+def is_visible_row(row):
+    """`bstatus` 0 means the legacy row was soft-deleted / hidden."""
+    val = as_int(row.get("bstatus"))
+    return val != 0
+
+
+def map_transfer_status(row):
+    """
+    A legacy transfer row is history, not a to-do.
+
+    `tblproduct_transfer.return_status` defaults to `'pending'` and no
+    stored procedure ever moves it off that value — the return-transfer
+    button in `ProductTransferList.aspx.cs` was commented out and never
+    finished (INVENTORY-AND-INVOICING.md §4.5). The stock itself was
+    already moved at transfer time. Importing those rows as PENDING is
+    what makes the legacy dashboard advertise "291 active transfers" when
+    nothing is in transit, so they land here as COMPLETE unless the row
+    actually says it came back.
+    """
+    raw = as_str(row.get("return_status")).lower()
+    if raw.startswith("return") or raw in ("complete", "completed", "done"):
+        return TransferStatus.RETURNED
+    return TransferStatus.COMPLETE
+
+
+def map_scan_mode(row):
+    raw = as_str(row.get("scan_mode")).lower()
+    if raw.startswith("open"):
+        return ScanMode.OPENING
+    if raw.startswith("clos"):
+        return ScanMode.CLOSING
+    if raw.startswith("find"):
+        return ScanMode.FIND
+    if raw.startswith("check"):
+        return ScanMode.CHECK
+    if "transfer" in as_str(row.get("workflow_mode")).lower():
+        return ScanMode.TRANSFER
+    return ScanMode.CHECK
+
+
+SCAN_RESULT_BY_LEGACY_LOCATION = {
+    "company": ScanResult.COMPANY_STOCK,
+    "assign": ScanResult.ASSIGNED,
+    "assigned": ScanResult.ASSIGNED,
+    "sold": ScanResult.SOLD,
+    "reserve": ScanResult.RESERVED,
+    "reserved": ScanResult.RESERVED,
+    "loss": ScanResult.LOSS,
+    "elsewhere": ScanResult.ELSEWHERE,
+}
+
+
 class LegacyImporter:
     """Maps parsed/fetched legacy rows onto the Django schema."""
 
@@ -212,7 +291,10 @@ class LegacyImporter:
         self.stdout = stdout
         self.style = color_style()
 
-    def run(self, tables, *, flush=False, dry_run=False, skip_payments=False, skip_assignments=False):
+    def run(
+        self, tables, *, flush=False, dry_run=False, skip_payments=False,
+        skip_assignments=False, preserve_local_state=False,
+    ):
         def rows(name):
             return tables.get(name.lower(), [])
 
@@ -269,6 +351,7 @@ class LegacyImporter:
                 product_by_nid,
                 product_location,
                 location_by_nid,
+                preserve_local_state=preserve_local_state,
             )
             reseller_by_nid = self._import_resellers(rows("tblResellerMaster"))
             reseller_location_by_nid = self._import_reseller_locations(rows("tblresellerlocationMaster"))
@@ -282,12 +365,26 @@ class LegacyImporter:
                     item_by_detail_nid,
                     item_by_barcode,
                     reseller_location_by_nid,
+                    preserve_local_state=preserve_local_state,
                 )
             else:
                 master_by_nid = {}
             if not skip_payments:
                 self._import_reseller_payments(rows("tblAssignPayment_transaction"), master_by_nid)
                 self._import_supplier_payments(rows("tblpayment_transaction"), supplier_by_nid, product_by_nid)
+            transfer_by_nid = self._import_transfers(
+                rows("tblproduct_transfer"),
+                rows("tblproduct_transfer_details"),
+                location_by_nid,
+                item_by_barcode,
+            )
+            self._import_tracker(
+                rows("tblproduct_tracker"),
+                rows("tblproduct_tracker_itemsdeatils"),
+                location_by_nid,
+                item_by_barcode,
+                transfer_by_nid,
+            )
             self._ensure_login()
 
     def _flush(self):
@@ -555,7 +652,7 @@ class LegacyImporter:
                 )
             )
 
-    def _import_items(self, details, product_by_nid, product_location, location_by_nid):
+    def _import_items(self, details, product_by_nid, product_location, location_by_nid, *, preserve_local_state=False):
         default_loc = location_by_nid.get(1) or next(iter(location_by_nid.values()), None)
         item_by_detail_nid = {}
         item_by_barcode = {}
@@ -563,6 +660,8 @@ class LegacyImporter:
         skipped = 0
         created_count = 0
         updated_count = 0
+        restated = 0
+        moved = 0
         for row in details:
             pmid = as_int(row.get("product_masterid"))
             product = product_by_nid.get(pmid)
@@ -573,8 +672,17 @@ class LegacyImporter:
             if default_loc is None:
                 raise CommandError("No locations available — cannot attach items.")
             seen_barcodes.add(barcode)
-            loc_id = product_location.get(pmid)
-            loc = location_by_nid.get(loc_id, default_loc)
+            # Same precedence as InventoryLocationHelper.EffectiveLocationSql:
+            # per-barcode location first, then the shared product master, then
+            # Head Office. Reading only the master (as this did until Sep 2026)
+            # collapses every piece of a design onto one location and loses
+            # every transfer iadmin has ever recorded.
+            loc = (
+                location_by_nid.get(as_int(row.get("company_locationid")))
+                or location_by_nid.get(product_location.get(pmid))
+                or default_loc
+            )
+            status = map_item_status(row)
             reprint = "PRINTED" if as_str(row.get("barcode_reprint_status")).lower() == "complete" else "NONE"
             nid = row["nid"]
             existing = ProductItem.objects.filter(legacy_id=nid).first()
@@ -584,18 +692,25 @@ class LegacyImporter:
                     barcode=barcode[:100],
                     product=product,
                     location=loc,
-                    status=map_item_status(row),
+                    status=status,
                     reprint_status=reprint,
                 )
                 created_count += 1
             else:
                 obj = existing
-                # Deliberately NOT touching status/location on update: once
-                # this item exists, the live ERP (transfers, assignment,
-                # sales) owns those, not iadmin.
+                fields = ["barcode", "product", "updated_at"]
                 obj.barcode = barcode[:100]
                 obj.product = product
-                obj.save(update_fields=["barcode", "product", "updated_at"])
+                if not preserve_local_state:
+                    if obj.status != status:
+                        restated += 1
+                    if obj.location_id != loc.pk:
+                        moved += 1
+                    obj.status = status
+                    obj.location = loc
+                    obj.reprint_status = reprint
+                    fields += ["status", "location", "reprint_status"]
+                obj.save(update_fields=fields)
                 updated_count += 1
             item_by_detail_nid[nid] = obj
             item_by_barcode[obj.barcode] = obj
@@ -603,6 +718,10 @@ class LegacyImporter:
             self.stdout.write(self.style.SUCCESS(
                 f"  ProductItem: {created_count} created, {updated_count} updated, {skipped} skipped (missing product/barcode/duplicate)"
             ))
+            if preserve_local_state:
+                self.stdout.write("    status/location left as-is (--preserve-local-state)")
+            else:
+                self.stdout.write(f"    refreshed from iadmin: {restated} status change(s), {moved} location change(s)")
         return item_by_detail_nid, item_by_barcode
 
     def _import_reseller_locations(self, locations):
@@ -644,7 +763,7 @@ class LegacyImporter:
     def _import_assignments(
         self, masters, lines, barcode_logs, details,
         reseller_by_nid, item_by_detail_nid, item_by_barcode,
-        reseller_location_by_nid=None,
+        reseller_location_by_nid=None, preserve_local_state=False,
     ):
         reseller_location_by_nid = reseller_location_by_nid or {}
         logs_by_assign = {}
@@ -688,14 +807,18 @@ class LegacyImporter:
                 created_masters += 1
             else:
                 am = existing
+                fields = ["reseller", "reseller_location", "is_reserve", "invoice_number", "updated_at"]
                 am.reseller = reseller
                 am.reseller_location = reseller_location
                 am.is_reserve = is_reserve
                 if inv:
                     am.invoice_number = inv[:32]
-                # invoice_status intentionally left untouched on update —
-                # the live ERP may have stamped or cancelled it since import.
-                am.save(update_fields=["reseller", "reseller_location", "is_reserve", "invoice_number", "updated_at"])
+                if not preserve_local_state:
+                    # An invoice cancelled in iadmin after first import stayed
+                    # COMPLETE here forever without this.
+                    am.invoice_status = map_invoice_status(row)
+                    fields.append("invoice_status")
+                am.save(update_fields=fields)
                 updated_masters += 1
             master_by_nid[nid] = am
             master_by_nid[str(nid)] = am
@@ -810,6 +933,191 @@ class LegacyImporter:
                 updated_count += 1
         if payments:
             self.stdout.write(self.style.SUCCESS(f"  SupplierPayment: {created_count} created, {updated_count} updated ({skipped} skipped)"))
+
+    @staticmethod
+    def _flush_lines(model, pending, *, force=False, chunk=2000):
+        """bulk_create `pending` once it's worth a round trip, then clear it."""
+        if not pending or (not force and len(pending) < chunk):
+            return 0
+        written = len(pending)
+        model.objects.bulk_create(pending, batch_size=500, ignore_conflicts=True)
+        pending.clear()
+        return written
+
+    def _import_transfers(self, transfers, transfer_details, location_by_nid, item_by_barcode):
+        """
+        Location-to-location moves already carried out in iadmin.
+
+        Imported as history only — the items were placed at their current
+        location by `_import_items` reading the same source, so nothing
+        here calls `Transfer.execute()`. Running the moves again would
+        fail the from-location check anyway, since the stock has already
+        arrived.
+        """
+        if not transfers:
+            return {}
+
+        lines_by_transfer = {}
+        for row in transfer_details:
+            tid = as_int(row.get("tranfer_id"))
+            if tid is not None and is_visible_row(row):
+                lines_by_transfer.setdefault(tid, []).append(row)
+
+        transfer_by_nid = {}
+        created_count = 0
+        updated_count = 0
+        skipped = 0
+        line_count = 0
+        line_objs = []
+        for row in transfers:
+            nid = row.get("nid")
+            from_loc = location_by_nid.get(as_int(row.get("transferid_from")))
+            to_loc = location_by_nid.get(as_int(row.get("transferid_to")))
+            if nid is None or from_loc is None or to_loc is None or from_loc.pk == to_loc.pk:
+                skipped += 1
+                continue
+            if not is_visible_row(row) or as_str(row.get("active_status"), "active").lower() == "inactive":
+                skipped += 1
+                continue
+            status = map_transfer_status(row)
+            obj, created = Transfer.objects.update_or_create(
+                legacy_id=nid,
+                defaults=dict(from_location=from_loc, to_location=to_loc, status=status),
+            )
+            moved_on = as_aware(as_date(row.get("transfer_date") or row.get("createiondate")))
+            if moved_on:
+                Transfer.objects.filter(pk=obj.pk).update(created_at=moved_on)
+            transfer_by_nid[nid] = obj
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+            for line in lines_by_transfer.get(nid, []):
+                item = item_by_barcode.get(as_str(line.get("pjnumber")))
+                if item is not None:
+                    line_objs.append(TransferLine(transfer=obj, item=item))
+            # A single legacy transfer can carry thousands of barcodes (the
+            # 8 Sep 2026 vault-to-showroom move was 2,597 pieces), so don't
+            # hold every line of every transfer in memory at once.
+            line_count += self._flush_lines(TransferLine, line_objs)
+
+        line_count += self._flush_lines(TransferLine, line_objs, force=True)
+        self.stdout.write(self.style.SUCCESS(
+            f"  Transfer: {created_count} created, {updated_count} updated ({skipped} skipped), "
+            f"{line_count} candidate line(s)"
+        ))
+        return transfer_by_nid
+
+    def _import_tracker(self, sessions, session_items, location_by_nid, item_by_barcode, transfer_by_nid):
+        """
+        Stocktake / scan history from `tblproduct_tracker`.
+
+        Without this the dashboard's floor-activity panel reads "no scan
+        sessions" on a shop that scans daily, which is a worse lie than
+        showing nothing at all — an empty table looks like a quiet day,
+        not an unimplemented import.
+
+        Legacy `scan_date` is copied onto `created_at` (which is
+        `auto_now_add`, hence the follow-up `.update()`), so "scans today"
+        counts the day the scan happened rather than the day it was
+        imported.
+        """
+        if not sessions:
+            return
+
+        default_loc = location_by_nid.get(1) or next(iter(location_by_nid.values()), None)
+        if default_loc is None:
+            return
+
+        items_by_session = {}
+        for row in session_items:
+            tid = as_int(row.get("trackerid"))
+            if tid is not None and is_visible_row(row):
+                items_by_session.setdefault(tid, []).append(row)
+
+        incoming_nids = {r["nid"] for r in sessions if r.get("nid") is not None}
+        taken_indexes = set(
+            TrackerSession.objects.filter(
+                Q(legacy_id__isnull=True) | ~Q(legacy_id__in=incoming_nids)
+            ).values_list("scan_index", flat=True)
+        )
+        next_free = max(taken_indexes, default=0)
+
+        session_by_nid = {}
+        created_count = 0
+        updated_count = 0
+        skipped = 0
+        scan_line_count = 0
+        scan_line_objs = []
+        for row in sessions:
+            nid = row.get("nid")
+            if nid is None or not is_visible_row(row):
+                skipped += 1
+                continue
+            loc = (
+                location_by_nid.get(as_int(row.get("from_location_id")))
+                or location_by_nid.get(as_int(row.get("to_location_id")))
+                or default_loc
+            )
+            index = as_int(row.get("scan_index")) or nid
+            if index in taken_indexes:
+                next_free += 1
+                index = next_free
+            taken_indexes.add(index)
+            workflow = as_str(row.get("workflow_mode")).lower()
+            transfer = transfer_by_nid.get(as_int(row.get("transfer_id")))
+            defaults = dict(
+                scan_index=index,
+                location=loc,
+                mode=map_scan_mode(row),
+                item_count=as_int(row.get("items_qty")) or 0,
+                is_transfer="transfer" in workflow or transfer is not None,
+                transfer=transfer,
+            )
+            obj, created = TrackerSession.objects.update_or_create(legacy_id=nid, defaults=defaults)
+            scanned_at = as_aware(row.get("operated_at") or row.get("scan_date") or row.get("creationdate"))
+            if scanned_at:
+                TrackerSession.objects.filter(pk=obj.pk).update(created_at=scanned_at)
+            session_by_nid[nid] = obj
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+            for line in items_by_session.get(nid, []):
+                item = item_by_barcode.get(as_str(line.get("pjnumber")))
+                if item is None:
+                    continue
+                scan_line_objs.append(TrackerScanItem(
+                    session=obj,
+                    item=item,
+                    result=SCAN_RESULT_BY_LEGACY_LOCATION.get(
+                        as_str(line.get("pjnumber_location")).lower(), ""
+                    ),
+                    location_at_scan=loc,
+                    is_extra=as_str(line.get("item_action")).lower() == "extra",
+                ))
+            scan_line_count += self._flush_lines(TrackerScanItem, scan_line_objs)
+
+        scan_line_count += self._flush_lines(TrackerScanItem, scan_line_objs, force=True)
+
+        # Second pass: a closing scan's parent may appear later in the file.
+        linked = 0
+        for row in sessions:
+            child = session_by_nid.get(row.get("nid"))
+            parent_ids = split_id_list(row.get("parent_tracker_ids"))
+            if child is None or not parent_ids:
+                continue
+            parent = session_by_nid.get(parent_ids[0])
+            if parent is not None and child.parent_session_id != parent.pk:
+                child.parent_session = parent
+                child.save(update_fields=["parent_session", "updated_at"])
+                linked += 1
+
+        self.stdout.write(self.style.SUCCESS(
+            f"  TrackerSession: {created_count} created, {updated_count} updated ({skipped} skipped), "
+            f"{scan_line_count} candidate scan line(s), {linked} closing scan(s) linked"
+        ))
 
     def _ensure_login(self):
         from django.core.management import call_command

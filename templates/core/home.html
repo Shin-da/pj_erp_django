@@ -6,7 +6,15 @@
 <div class="page-head">
   <div>
     <h1>{{ greeting }}, {{ user.get_short_name }}</h1>
-    <p>{{ today_label }} · {{ total_items|intcomma }} tagged pieces in this catalog.</p>
+    <p>
+      {{ today_label }} · {{ total_items|intcomma }} tagged pieces in this catalog.
+      {% if last_sync %}
+        {% if last_sync.ok %}<span class="cell-muted">Mirrored from iadmin {{ last_sync.finished_at|date:"j M Y, H:i" }}.</span>
+        {% else %}<span class="pill pill-danger">Last sync failed {{ last_sync.finished_at|date:"j M Y, H:i" }}</span>{% endif %}
+      {% else %}
+        <span class="cell-muted">No sync recorded yet — figures are as of the last import.</span>
+      {% endif %}
+    </p>
   </div>
   <div class="page-head-actions">
     <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-gem"></i> Products</a>
@@ -31,7 +39,7 @@
       <span class="kpi-icon"><i class="fa-solid fa-warehouse"></i></span>
     </div>
     <div class="kpi-num">{{ pending|intcomma }}</div>
-    <div class="kpi-sub">{{ pending_pct }}% · &#8369;{{ available_value|floatformat:0|intcomma }}</div>
+    <div class="kpi-sub">{{ pending_pct }}% of pieces · &#8369;{{ available_value|floatformat:0|intcomma }} at list price</div>
   </a>
 
   <a href="{% url 'assignment:group_list' %}" class="kpi-card kpi-link" style="--kpi-accent:var(--info); --kpi-bg:var(--info-bg);">
@@ -40,7 +48,7 @@
       <span class="kpi-icon"><i class="fa-solid fa-handshake"></i></span>
     </div>
     <div class="kpi-num">{{ assigned|intcomma }}</div>
-    <div class="kpi-sub">{% if assigned %}With resellers · &#8369;{{ assigned_value|floatformat:0|intcomma }}{% else %}None currently out{% endif %}</div>
+    <div class="kpi-sub">{% if assigned %}On an open assignment · &#8369;{{ assigned_value|floatformat:0|intcomma }} at list price{% else %}No open assignments — see By location{% endif %}</div>
   </a>
 
   <a href="{% url 'catalogue:product_list' %}?stock=SOLD" class="kpi-card kpi-link" style="--kpi-accent:var(--violet); --kpi-bg:var(--violet-bg);">
@@ -49,7 +57,7 @@
       <span class="kpi-icon"><i class="fa-solid fa-circle-check"></i></span>
     </div>
     <div class="kpi-num">{{ sold|intcomma }}</div>
-    <div class="kpi-sub">&#8369;{{ sold_value|floatformat:0|intcomma }}{% if reserved %} · {{ reserved }} reserved{% endif %}{% if in_transit %} · {{ in_transit }} in transit{% endif %}</div>
+    <div class="kpi-sub">&#8369;{{ sold_value|floatformat:0|intcomma }} at list price{% if reserved %} · {{ reserved }} reserved{% endif %}{% if in_transit %} · {{ in_transit }} in transit{% endif %}</div>
   </a>
 </div>
 
@@ -67,6 +75,7 @@
     <span><i class="mix-dot mix-sold"></i> Sold {{ sold_pct }}%</span>
     {% if reserved %}<span><i class="mix-dot mix-reserved"></i> Reserved {{ reserved_pct }}%</span>{% endif %}
   </div>
+  <p class="cell-muted" style="font-size:11px; margin:6px 0 0;">Assigned counts pieces on an open reseller assignment. Stock moved to a reseller's room by transfer stays company stock here and shows under <a href="#dashLocations">By location</a>.</p>
 </div>
 {% endif %}
 
@@ -191,7 +200,7 @@
         <span class="kpi-icon"><i class="fa-solid fa-file-invoice"></i></span>
       </div>
       <div class="kpi-num">&#8369;{{ invoiced_value|floatformat:0|intcomma }}</div>
-      <div class="kpi-sub">{{ invoice_complete|intcomma }} complete{% if invoice_draft %} · {{ invoice_draft }} draft{% endif %}{% if invoice_cancelled %} · {{ invoice_cancelled }} cancelled{% endif %}</div>
+      <div class="kpi-sub">After discounts · {{ invoice_complete|intcomma }} complete{% if invoice_draft %} · {{ invoice_draft }} draft{% endif %}{% if invoice_cancelled %} · {{ invoice_cancelled }} cancelled{% endif %}</div>
     </a>
     <div class="kpi-card" style="--kpi-accent:var(--ok); --kpi-bg:var(--ok-bg);">
       <div class="kpi-top">
@@ -215,12 +224,13 @@
         <span class="kpi-icon"><i class="fa-solid fa-file-circle-exclamation"></i></span>
       </div>
       <div class="kpi-num">{{ unpaid_count|intcomma }}</div>
-      <div class="kpi-sub">&#8369;{{ unpaid_balance|floatformat:0|intcomma }} still outstanding</div>
+      <div class="kpi-sub">&#8369;{{ unpaid_balance|floatformat:0|intcomma }} outstanding · billed less all payments</div>
     </a>
   </div>
 </div>
 
 <div class="section-heading"><span class="tag">By location</span></div>
+<p class="cell-muted" style="font-size:11px; margin:-4px 0 8px;">Where each individual barcode sits, mirrored per piece from iadmin. This is the answer to "what is still in the vault" — not the Assigned tile.</p>
 <div class="table-wrap">
   <div class="table-scroll">
     <table class="loc-bars" id="dashLocations">
@@ -392,14 +402,14 @@
         {% for s in recent_scans %}
         <tr>
           <td class="mono cell-strong">SN{{ s.scan_index|stringformat:"03d" }}</td>
-          <td>{{ s.get_mode_display }}{% if s.is_transfer %} <span class="pill pill-info">Transfer</span>{% endif %}</td>
+          <td>{% if s.is_transfer %}<span class="pill pill-info">Transfer</span>{% if s.mode != "TRANSFER" %} {{ s.get_mode_display }}{% endif %}{% else %}{{ s.get_mode_display }}{% endif %}</td>
           <td><a href="{% url 'inventory:location_detail' s.location.code %}">{{ s.location.name }}</a></td>
           <td class="mono">{{ s.item_count|intcomma }}</td>
           <td class="cell-muted">{% if s.created_by %}{{ s.created_by.get_short_name|default:s.created_by.employee_code }}{% else %}—{% endif %}</td>
           <td class="cell-muted">{{ s.created_at|date:"M j, H:i" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="cell-muted">No scan sessions recorded yet. Every tracker submit writes one.</td></tr>
+        <tr><td colspan="6" class="cell-muted">No scan sessions in this catalog. Scans made in iadmin arrive on the next sync; scans made here are written immediately.</td></tr>
         {% endfor %}
       </tbody>
     </table>

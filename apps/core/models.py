@@ -122,6 +122,37 @@ class AuditLogEntry(models.Model):
         )
 
 
+class SyncRun(models.Model):
+    """
+    One row per `sync_legacy_mssql` run.
+
+    Every stock number in this system is a mirror of the live iadmin SQL
+    Server, so "as of when" is part of the number. Without it the
+    dashboard reads like a live shop floor when it is really a snapshot,
+    and a sync that has been quietly failing for a week looks identical to
+    one that ran a minute ago. The previous marker for this was a cache
+    key, which does not survive a Render restart and is not shared between
+    web workers.
+    """
+
+    started_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    ok = models.BooleanField(default=False)
+    trigger = models.CharField(max_length=30, default="manual")
+    summary = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        state = "ok" if self.ok else "failed"
+        return f"Sync {self.started_at:%Y-%m-%d %H:%M} ({state})"
+
+    @classmethod
+    def last_success(cls):
+        return cls.objects.filter(ok=True).order_by("-finished_at").first()
+
+
 class LegacyDocumentKind(models.TextChoices):
     INVOICE_PDF = "INVOICE_PDF", "Generated invoice PDF"
     PAYMENT_PROOF = "PAYMENT_PROOF", "Proof of payment"

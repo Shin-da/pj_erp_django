@@ -33,6 +33,10 @@ class ScanMode(models.TextChoices):
     CLOSING = "CLOSING", "Closing count"
     CHECK = "CHECK", "Check item"
     FIND = "FIND", "Find item"
+    # Legacy `workflow_mode='transfer_only'` sessions: barcodes were scanned
+    # purely to move them between locations, with no opening/closing count
+    # attached. Imported, not offered as a mode in this app's own scan page.
+    TRANSFER = "TRANSFER", "Transfer scan"
 
 
 class ScanResult(models.TextChoices):
@@ -48,6 +52,10 @@ class ScanResult(models.TextChoices):
 
 
 class TrackerSession(TimeStampedModel):
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblproduct_tracker.nid — lets a re-sync from iadmin update this exact session instead of duplicating it.",
+    )
     scan_index = models.PositiveIntegerField(unique=True, editable=False)
     location = models.ForeignKey(
         "locations.Location", on_delete=models.PROTECT, related_name="tracker_sessions"

@@ -55,6 +55,10 @@ class TransferLocationMismatch(Exception):
 
 
 class Transfer(TimeStampedModel):
+    legacy_id = models.IntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="tblproduct_transfer.nid — lets a re-sync from iadmin update this exact transfer instead of duplicating it.",
+    )
     from_location = models.ForeignKey(
         "locations.Location", on_delete=models.PROTECT, related_name="transfers_out"
     )

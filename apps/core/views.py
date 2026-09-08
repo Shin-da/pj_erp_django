@@ -29,6 +29,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.assignment.models import AssignmentLine, AssignmentMaster, InvoiceStatus, Reseller
+from apps.core.models import SyncRun
 from apps.catalogue.labels import subcategory_label
 from apps.catalogue.models import Category, ProductMaster
 from apps.inventory.models import ProductItem, StockStatus
@@ -117,11 +118,21 @@ def _net_line(prefix=""):
 def home(request):
     """
     Operational home — stock mix, collections, who has been invoiced.
-    Numbers come from whichever local catalog DJANGO_DB_PROFILE points at.
+    Numbers come from whichever local catalog DJANGO_DB_PROFILE points at,
+    which is a mirror of iadmin, so every tile is "as of the last sync"
+    (surfaced on the page via `last_sync`, not left to be assumed).
 
-    This FTP snapshot has almost no pieces currently ASSIGNED (they are
-    company stock or already sold). The sales band and reseller ranking
-    use invoice/payment history rather than live holdings.
+    Two figures on this page are routinely misread and are labelled in the
+    template accordingly:
+
+      * "Assigned" counts pieces flagged against an open reseller
+        assignment. It is near zero on this data because Perfect Jewel
+        moves stock to reseller-named *locations* by transfer instead of
+        assigning it, so the honest answer to "what is out of the vault"
+        is the By location table, not this tile.
+      * The peso figures beside stock counts are sums of the catalogue's
+        `selling_price` — list value of the tags, not revenue and not
+        cost. Money that actually changed hands is the Sales band.
     """
     now = timezone.localtime()
     hour = now.hour
@@ -338,6 +349,7 @@ def home(request):
         "reserve_overdue": reserve_overdue,
         "latest_pj": latest_pj,
         "latest_pjgold": latest_pjgold,
+        "last_sync": SyncRun.objects.filter(finished_at__isnull=False).first(),
     }
     return render(request, "core/home.html", context)
 
@@ -347,16 +359,22 @@ _SYNC_LAST_RESULT_KEY = "sync_legacy_webhook_last_result"
 logger = logging.getLogger(__name__)
 
 
-def _run_sync_in_background():
+def _run_sync_in_background(trigger="webhook"):
     out = io.StringIO()
+    run = SyncRun.objects.create(trigger=trigger)
+    ok = False
     try:
         call_command("sync_legacy_mssql", stdout=out, stderr=out)
+        ok = True
         result = f"OK {timezone.now().isoformat()}\n{out.getvalue()}"
         logger.info("sync_legacy_mssql (webhook) completed:\n%s", out.getvalue())
     except Exception:
         result = f"ERROR {timezone.now().isoformat()}\n{out.getvalue()}\n{traceback.format_exc()}"
         logger.exception("sync_legacy_mssql (webhook) failed")
     finally:
+        SyncRun.objects.filter(pk=run.pk).update(
+            finished_at=timezone.now(), ok=ok, summary=result[:20000]
+        )
         cache.set(_SYNC_LAST_RESULT_KEY, result, timeout=60 * 60 * 48)
         cache.delete(_SYNC_LOCK_KEY)
 
@@ -421,7 +439,7 @@ def db_sync_run(request):
         messages.warning(request, "A sync is already running.")
         return redirect("core:db_sync_status")
 
-    thread = threading.Thread(target=_run_sync_in_background, daemon=True)
+    thread = threading.Thread(target=_run_sync_in_background, args=("dev page",), daemon=True)
     thread.start()
     messages.info(
         request,

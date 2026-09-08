@@ -4,16 +4,15 @@ and upsert it into this system.
 
 Safe to run repeatedly and on a schedule (Render Cron Job, Task
 Scheduler, whatever) — it never flushes or deletes, and it never writes
-back to MSSQL. New rows on the legacy side (new products, items,
-resellers, invoices, payments) are created here; rows already imported
-are matched by legacy_id and refreshed, except live-system-owned state
-(ProductItem.status/location, AssignmentMaster.invoice_status), which is
-left alone once set.
+back to MSSQL. New rows on the legacy side are created here; rows already
+imported are matched by legacy_id and fully refreshed, including stock
+status, per-barcode location and invoice status.
 
 Usage:
 
     python manage.py sync_legacy_mssql
     python manage.py sync_legacy_mssql --dry-run
+    python manage.py sync_legacy_mssql --preserve-local-state
 """
 
 from __future__ import annotations
@@ -32,6 +31,15 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true", help="Fetch and report only, no DB writes")
         parser.add_argument("--skip-payments", action="store_true")
         parser.add_argument("--skip-assignments", action="store_true")
+        parser.add_argument(
+            "--preserve-local-state",
+            action="store_true",
+            help=(
+                "Keep stock status, location and invoice status as they are here instead of "
+                "refreshing them from iadmin. Correct once Perfect Jewel works in this system; "
+                "until then it makes the dashboard drift out of date."
+            ),
+        )
 
     def handle(self, *args, **opts):
         self.stdout.write(
@@ -47,6 +55,7 @@ class Command(BaseCommand):
             dry_run=opts["dry_run"],
             skip_payments=opts["skip_payments"],
             skip_assignments=opts["skip_assignments"],
+            preserve_local_state=opts["preserve_local_state"],
         )
 
         if not opts["dry_run"]:
