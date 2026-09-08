@@ -21,8 +21,8 @@
   </div>
   <div class="auth-aside-veil"></div>
   <div class="auth-aside-copy">
-    <div class="auth-aside-mark">PJ</div>
-    <div class="auth-aside-name">Perfect Jewelry</div>
+    <img class="auth-aside-logo" src="{% static 'core/img/brand/pj-logo-light.png' %}"
+         alt="Perfect Jewelry Inc." width="640" height="615">
     <div class="auth-aside-tag">Enterprise Inventory &amp; RFID Management</div>
   </div>
 </aside>
@@ -30,13 +30,13 @@
 <main class="auth-main">
 <div class="auth-card">
 
-  <div class="auth-brand">
-    <div class="auth-mark">PJ</div>
+  <!-- <div class="auth-brand">
+    <div class="auth-mark"><img src="{% static 'core/img/brand/pj-mark.png' %}" alt=""></div>
     <div>
       <div class="auth-name">Perfect Jewelry</div>
       <div class="auth-sub">Enterprise System</div>
     </div>
-  </div>
+  </div> -->
 
   <h1 class="auth-title">Sign in</h1>
 
@@ -61,7 +61,7 @@
       <input type="text" name="{{ form.username.html_name }}" id="{{ form.username.id_for_label }}"
              class="field" value="{{ form.username.value|default:'' }}"
              inputmode="numeric" autocomplete="username" autocapitalize="off" spellcheck="false"
-             autofocus required placeholder="e.g. 1001">
+             required placeholder="e.g. 1001">
     </div>
 
     <div class="auth-field">
@@ -93,6 +93,17 @@
 
 <script>
   (function () {
+    // Autofocus is set here rather than as an HTML attribute so it can be
+    // skipped on touch devices. On a phone, focusing a field on load
+    // throws up the keyboard and covers the card before the user has
+    // even seen it; with a mouse and keyboard it saves a click.
+    var code = document.getElementById("{{ form.username.id_for_label }}");
+    try {
+      if (code && window.matchMedia && window.matchMedia("(pointer: fine)").matches) {
+        code.focus();
+      }
+    } catch (e) { /* no matchMedia — leave focus alone */ }
+
     var pw = document.getElementById("{{ form.password.id_for_label }}");
     var toggle = document.getElementById("pwToggle");
     var caps = document.getElementById("capsHint");

@@ -3,7 +3,7 @@
 
 <div class="page-head">
   <div>
-    <h1>{{ product.name }}{% if product.reference_id %} <span class="cell-muted" style="font-size:14px; font-weight:400;">{{ product.reference_id }}</span>{% endif %}</h1>
+    <h1>{% if product.reference_id %}<span class="mono">{{ product.reference_id }}</span>{% if product.name %} <span class="cell-muted" style="font-size:14px; font-weight:400;">{{ product.name }}</span>{% endif %}{% else %}{{ product.name }}{% endif %}</h1>
     <p>{{ product.category.name }}{% if product.metal %} · {{ product.metal.name }}{% if product.purity %} {{ product.purity.name }}{% endif %}{% endif %} · {{ product.item_count }} physical piece{{ product.item_count|pluralize }} in the system.</p>
   </div>
   <div class="page-head-actions">

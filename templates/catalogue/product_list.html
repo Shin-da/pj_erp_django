@@ -1,110 +1,250 @@
 {% extends "base.html" %}
+{% load humanize %}
 {% block content %}
 
 <div class="page-head">
   <div>
     <h1>Products</h1>
-    <p>Every design in the catalogue, with live piece counts rolled up from the physical stock. Search matches product names, reference IDs, and barcodes.</p>
+    <p>One row per design. Reference ID is the unique catalogue code; style names often repeat across designs. Paste a PJ / barcode to open that piece directly.</p>
   </div>
   <div class="page-head-actions">
     <a href="{% url 'inventory:location_list' %}" class="btn btn-ghost"><i class="fa-solid fa-boxes-stacked"></i> By location</a>
   </div>
 </div>
 
-<form method="get" class="filter-bar">
-  <input type="text" name="q" value="{{ q }}" class="field fbar-input" placeholder="Search product name, reference, or barcode…">
-  <select name="category" class="field fbar-select">
-    <option value="">All categories</option>
-    {% for c in categories %}
-    <option value="{{ c.code }}" {% if category == c.code %}selected{% endif %}>{{ c.name }}</option>
-    {% endfor %}
-  </select>
-  <select name="supplier" class="field fbar-select">
-    <option value="">All suppliers</option>
-    {% for s in suppliers %}
-    <option value="{{ s.pk }}" {% if supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-    {% endfor %}
-  </select>
-  <select name="subcategory" class="field fbar-select">
-    <option value="">All sub-categories</option>
-    {% for code, label in subcategory_choices %}
-    <option value="{{ code }}" {% if subcategory == code %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
-  <select name="stock" class="field fbar-select">
-    <option value="">Any stock level</option>
-    <option value="AVAILABLE" {% if stock == "AVAILABLE" %}selected{% endif %}>Has available stock</option>
-    <option value="SOLD" {% if stock == "SOLD" %}selected{% endif %}>Has sold pieces</option>
-    <option value="ASSIGNED" {% if stock == "ASSIGNED" %}selected{% endif %}>Has assigned pieces</option>
-    <option value="OUT" {% if stock == "OUT" %}selected{% endif %}>Nothing available</option>
-    <option value="NONE" {% if stock == "NONE" %}selected{% endif %}>No pieces at all</option>
-  </select>
-  <select name="sort" class="field fbar-select">
-    <option value="name" {% if sort == "name" %}selected{% endif %}>Name A–Z</option>
-    <option value="-name" {% if sort == "-name" %}selected{% endif %}>Name Z–A</option>
-    <option value="-stock" {% if sort == "-stock" %}selected{% endif %}>Most pieces</option>
-    <option value="-available" {% if sort == "-available" %}selected{% endif %}>Most available</option>
-    <option value="-price" {% if sort == "-price" %}selected{% endif %}>Highest price</option>
-    <option value="price" {% if sort == "price" %}selected{% endif %}>Lowest price</option>
-  </select>
-  <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-  {% if q or category or supplier or subcategory or stock %}<a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+<div class="pl-summary">
+  <a href="?{{ qs_stock_all }}" class="pl-sum{% if not stock %} is-active{% endif %}">
+    <span class="pl-sum-n">{{ stats.design_total|default:0|intcomma }}</span>
+    <span class="pl-sum-l">Designs</span>
+  </a>
+  <a href="?{{ qs_stock_available }}" class="pl-sum pl-sum-ok{% if stock == 'AVAILABLE' %} is-active{% endif %}">
+    <span class="pl-sum-n">{{ stats.with_available|default:0|intcomma }}</span>
+    <span class="pl-sum-l">With available</span>
+  </a>
+  <a href="?{{ qs_stock_out }}" class="pl-sum pl-sum-warn{% if stock == 'OUT' %} is-active{% endif %}">
+    <span class="pl-sum-n">{{ stats.out_of_stock|default:0|intcomma }}</span>
+    <span class="pl-sum-l">None available</span>
+  </a>
+  <a href="?{{ qs_stock_none }}" class="pl-sum{% if stock == 'NONE' %} is-active{% endif %}">
+    <span class="pl-sum-n">{{ stats.no_pieces|default:0|intcomma }}</span>
+    <span class="pl-sum-l">No pieces</span>
+  </a>
+  <div class="pl-sum pl-sum-static">
+    <span class="pl-sum-n">{{ stats.available_total|default:0|intcomma }}</span>
+    <span class="pl-sum-l">of {{ stats.piece_total|default:0|intcomma }} pieces free</span>
+  </div>
+</div>
+
+<form method="get" class="pl-filters" id="plFilters">
+  {% if view == 'list' %}<input type="hidden" name="view" value="list">{% endif %}
+  <div class="pl-search">
+    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+    <input type="search" name="q" value="{{ q }}" class="field" placeholder="Search reference, style, or PJ / barcode…" autocomplete="off">
+  </div>
+  <div class="pl-filter-row">
+    <select name="category" class="field fbar-select" aria-label="Category">
+      <option value="">All categories</option>
+      {% for c in categories %}
+      <option value="{{ c.code }}" {% if category == c.code %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="subcategory" class="field fbar-select" aria-label="Sub-category">
+      <option value="">All sub-categories</option>
+      {% for code, label in subcategory_choices %}
+      <option value="{{ code }}" {% if subcategory == code %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="supplier" class="field fbar-select" aria-label="Supplier">
+      <option value="">All suppliers</option>
+      {% for s in suppliers %}
+      <option value="{{ s.pk }}" {% if supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="stock" class="field fbar-select" aria-label="Stock level">
+      <option value="">Any stock level</option>
+      <option value="AVAILABLE" {% if stock == "AVAILABLE" %}selected{% endif %}>Has available stock</option>
+      <option value="SOLD" {% if stock == "SOLD" %}selected{% endif %}>Has sold pieces</option>
+      <option value="ASSIGNED" {% if stock == "ASSIGNED" %}selected{% endif %}>Has assigned pieces</option>
+      <option value="OUT" {% if stock == "OUT" %}selected{% endif %}>Nothing available</option>
+      <option value="NONE" {% if stock == "NONE" %}selected{% endif %}>No pieces at all</option>
+    </select>
+    <select name="sort" class="field fbar-select" aria-label="Sort by">
+      <option value="reference" {% if sort == "reference" %}selected{% endif %}>Reference A–Z</option>
+      <option value="-reference" {% if sort == "-reference" %}selected{% endif %}>Reference Z–A</option>
+      <option value="name" {% if sort == "name" %}selected{% endif %}>Style name A–Z</option>
+      <option value="-name" {% if sort == "-name" %}selected{% endif %}>Style name Z–A</option>
+      <option value="-stock" {% if sort == "-stock" %}selected{% endif %}>Most pieces</option>
+      <option value="-available" {% if sort == "-available" %}selected{% endif %}>Most available</option>
+      <option value="-price" {% if sort == "-price" %}selected{% endif %}>Highest price</option>
+      <option value="price" {% if sort == "price" %}selected{% endif %}>Lowest price</option>
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter"></i> Apply</button>
+  </div>
 </form>
 
-<div class="table-wrap" style="margin-top:12px;">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:52px;"></th>
-          <th>Product</th>
-          <th>Reference</th>
-          <th>Category</th>
-          <th>Metal</th>
-          <th>Selling price</th>
-          <th>Pieces</th>
-          <th>Stock</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in page_obj %}
-        <tr>
-          <td style="width:52px;padding:6px;">
-            {% with im=p.images.all.0 %}
-            {% if im %}<a href="{% url 'catalogue:product_detail' p.pk %}"><img src="{{ im.image.url }}" alt="" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:6px;display:block;"></a>
-            {% else %}<span style="display:block;width:44px;height:44px;border-radius:6px;background:var(--neutral-bg);"></span>{% endif %}
-            {% endwith %}
-          </td>
-          <td class="cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}">{{ p.name }}</a></td>
-          <td class="mono cell-muted">{{ p.reference_id|default:"—" }}</td>
-          <td class="cell-muted">{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</td>
-          <td class="cell-muted">{% if p.metal %}{{ p.metal.name }}{% if p.purity %} {{ p.purity.name }}{% endif %}{% else %}—{% endif %}</td>
-          <td class="mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
-          <td class="mono">{{ p.item_count }}</td>
-          <td>
-            {% if p.item_count == 0 %}<span class="pill pill-neutral">No pieces</span>
-            {% elif p.available_count > 0 %}<span class="pill pill-ok">{{ p.available_count }} available</span>
-            {% else %}<span class="pill pill-warn">None available</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="8" class="cell-muted">No products match.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% if q or category or supplier or subcategory or stock %}
+<div class="pl-chips">
+  <span class="pl-chips-label">Filtered by</span>
+  {% if q %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_q %}?{{ qs_clear_q }}{% endif %}" title="Remove search"><i class="fa-solid fa-magnifying-glass"></i> “{{ q }}” <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if category_obj %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_category %}?{{ qs_clear_category }}{% endif %}" title="Remove category">{{ category_obj.name }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if subcategory %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_subcategory %}?{{ qs_clear_subcategory }}{% endif %}" title="Remove sub-category">{{ subcategory_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if supplier_obj %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_supplier %}?{{ qs_clear_supplier }}{% endif %}" title="Remove supplier">{{ supplier_obj.name }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if stock %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_stock %}?{{ qs_clear_stock }}{% endif %}" title="Remove stock filter">{{ stock_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  <a href="{% url 'catalogue:product_list' %}{% if qs_clear_all %}?{{ qs_clear_all }}{% endif %}" class="pl-chip-clear">Clear all</a>
+</div>
+{% endif %}
+
+<div class="pl-toolbar">
+  <div class="pl-toolbar-meta">
+    {% if total_count %}
+    Showing <b>{{ page_obj.start_index }}–{{ page_obj.end_index }}</b> of <b>{{ total_count|intcomma }}</b>
+    {% if page_obj.paginator.num_pages > 1 %}· page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}
+    {% else %}
+    <b>0</b> products match
+    {% endif %}
   </div>
-  <div class="table-foot">
-    <div>{{ total_count }} product{{ total_count|pluralize }} · page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+  <div class="seg pl-view-seg" role="group" aria-label="View mode">
+    <a href="{% url 'catalogue:product_list' %}{% if qs_grid %}?{{ qs_grid }}{% endif %}" class="{% if view == 'grid' %}active{% endif %}" title="Grid view"><i class="fa-solid fa-border-all"></i></a>
+    <a href="{% url 'catalogue:product_list' %}{% if qs_list %}?{{ qs_list }}{% endif %}" class="{% if view == 'list' %}active{% endif %}" title="List view"><i class="fa-solid fa-list"></i></a>
+  </div>
+</div>
+
+{% if total_count %}
+  {% if view == 'grid' %}
+  <div class="pl-grid">
+    {% for p in page_obj %}
+    <a href="{% url 'catalogue:product_detail' p.pk %}" class="pl-card">
+      <div class="pl-card-media">
+        {% with im=p.images.all.0 %}
+        {% if im %}
+        <img src="{{ im.image.url }}" alt="" loading="lazy">
+        {% else %}
+        <div class="pl-card-placeholder"><i class="fa-solid fa-gem"></i></div>
+        {% endif %}
+        {% endwith %}
+        <div class="pl-card-badge">
+          {% if p.item_count == 0 %}<span class="pill pill-neutral">No pieces</span>
+          {% elif p.available_count > 0 %}<span class="pill pill-ok">{{ p.available_count }} avail</span>
+          {% else %}<span class="pill pill-warn">None avail</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="pl-card-body">
+        <div class="pl-card-ref mono">{{ p.reference_id|default:p.name }}</div>
+        {% if p.reference_id and p.name %}<div class="pl-card-style">{{ p.name }}</div>{% endif %}
+        <div class="pl-card-meta">
+          {% if p.sample_barcode %}
+          <span class="mono">{% if p.item_count == 1 %}{{ p.sample_barcode }}{% else %}{{ p.sample_barcode }} · {{ p.item_count }} pcs{% endif %}</span>
+          {% endif %}
+          <span>{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</span>
+        </div>
+        <div class="pl-card-foot">
+          <span class="pl-card-metal">{% if p.metal %}{{ p.metal.name }}{% if p.purity %} {{ p.purity.name }}{% endif %}{% else %}—{% endif %}</span>
+          <span class="pl-card-price mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</span>
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="table-wrap pl-table">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="pl-th-img"></th>
+            <th>Reference</th>
+            <th>Style</th>
+            <th>PJ / barcode</th>
+            <th>Category</th>
+            <th>Metal</th>
+            <th>Selling price</th>
+            <th>Pieces</th>
+            <th>Stock</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in page_obj %}
+          <tr class="pl-row" onclick="window.location='{% url 'catalogue:product_detail' p.pk %}'">
+            <td class="pl-td-img">
+              {% with im=p.images.all.0 %}
+              {% if im %}<img src="{{ im.image.url }}" alt="" loading="lazy" class="pl-thumb">
+              {% else %}<span class="pl-thumb pl-thumb-empty"><i class="fa-solid fa-gem"></i></span>{% endif %}
+              {% endwith %}
+            </td>
+            <td class="mono cell-strong"><a href="{% url 'catalogue:product_detail' p.pk %}" onclick="event.stopPropagation()">{{ p.reference_id|default:"—" }}</a></td>
+            <td class="cell-muted">{{ p.name }}</td>
+            <td class="mono">
+              {% if p.sample_barcode %}
+                {% if p.item_count == 1 %}
+                <a href="{% url 'catalogue:item_detail' p.sample_barcode %}" onclick="event.stopPropagation()">{{ p.sample_barcode }}</a>
+                {% else %}
+                <span class="cell-muted">{{ p.sample_barcode }}</span>
+                <span class="cell-muted">+{{ p.item_count|add:"-1" }}</span>
+                {% endif %}
+              {% else %}
+              <span class="cell-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="cell-muted">{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</td>
+            <td class="cell-muted">{% if p.metal %}{{ p.metal.name }}{% if p.purity %} {{ p.purity.name }}{% endif %}{% else %}—{% endif %}</td>
+            <td class="mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td class="mono">{{ p.item_count }}</td>
+            <td>
+              {% if p.item_count == 0 %}<span class="pill pill-neutral">No pieces</span>
+              {% elif p.available_count > 0 %}<span class="pill pill-ok">{{ p.available_count }} available</span>
+              {% else %}<span class="pill pill-warn">None available</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div class="pl-pager">
+    <div class="pl-pager-meta">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
     <div class="pagination">
       {% if page_obj.has_previous %}
-      <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if supplier %}&supplier={{ supplier }}{% endif %}{% if stock %}&stock={{ stock }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"><button type="button">&laquo;</button></a>
+      <a href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ page_obj.previous_page_number }}" aria-label="Previous page"><button type="button">&laquo;</button></a>
       {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if num == page_obj.number %}
+        <button type="button" class="active" aria-current="page">{{ num }}</button>
+        {% elif num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+        <a href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ num }}"><button type="button">{{ num }}</button></a>
+        {% elif num == page_obj.number|add:"-3" or num == page_obj.number|add:"3" %}
+        <span class="pl-pager-ellipsis">…</span>
+        {% endif %}
+      {% endfor %}
       {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if supplier %}&supplier={{ supplier }}{% endif %}{% if stock %}&stock={{ stock }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"><button type="button">&raquo;</button></a>
+      <a href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ page_obj.next_page_number }}" aria-label="Next page"><button type="button">&raquo;</button></a>
       {% endif %}
     </div>
   </div>
+  {% endif %}
+
+{% else %}
+<div class="empty-state pl-empty">
+  <i class="fa-solid fa-gem"></i>
+  <p>{% if q or category or supplier or subcategory or stock %}No products match these filters.{% else %}No products in the catalogue yet.{% endif %}</p>
+  {% if q or category or supplier or subcategory or stock %}
+  <a href="{% url 'catalogue:product_list' %}{% if qs_clear_all %}?{{ qs_clear_all }}{% endif %}" class="btn btn-ghost btn-sm" style="margin-top:14px;">Clear filters</a>
+  {% endif %}
 </div>
+{% endif %}
+
+<script>
+(function () {
+  var form = document.getElementById("plFilters");
+  if (!form) return;
+  form.querySelectorAll("select").forEach(function (el) {
+    el.addEventListener("change", function () { form.submit(); });
+  });
+})();
+</script>
 
 {% endblock %}

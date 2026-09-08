@@ -7,6 +7,23 @@
   {% load static %}
   <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
 
+  {% comment %}
+    Brand icons. The gold monogram is mid-tone, so one transparent set
+    reads on both light and dark browser chrome; the Apple/Android icons
+    are baked onto the app's dark ground because those platforms
+    composite transparency to black.
+
+    NOTE: {# #} is single-line only in Django — its regex does not span
+    newlines, so a multi-line one renders as visible text. Use
+    {% templatetag openblock %} comment {% templatetag closeblock %} for
+    anything longer than one line.
+  {% endcomment %}
+  <link rel="icon" href="{% static 'core/img/brand/favicon.ico' %}" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/brand/favicon-32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'core/img/brand/favicon-16.png' %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'core/img/brand/apple-touch-icon.png' %}">
+  <meta name="theme-color" content="#15120f">
+
   <!-- Theme is applied here, before CSS paints, to avoid a flash of the wrong theme.
      Reads a saved preference; falls back to the OS preference; falls back to light. -->
   <script>

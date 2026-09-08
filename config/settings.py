@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "django_q",
+    "storages",
     # Perfect Jewel apps — order matters somewhat for migration dependency
     # readability, not for Django itself.
     "apps.core",
@@ -154,21 +155,80 @@ USE_I18N = True
 USE_TZ = True
 
 # --- Static / media --------------------------------------------------------
-STATIC_URL = "static/"
+# Leading slashes so {% static %} / FileField.url resolve from the site root
+# on nested paths (/products/123/), not relative to the current URL.
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Production media: S3-compatible object storage (Cloudflare R2 preferred,
+# AWS S3 also fine). Set AWS_STORAGE_BUCKET_NAME to enable. Without it,
+# uploads stay on local MEDIA_ROOT — fine for runserver; on Render the
+# disk is ephemeral unless you also attach a persistent disk.
+AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="").strip()
+USE_S3_MEDIA = bool(AWS_STORAGE_BUCKET_NAME)
+
+_staticfiles_backend = {
+    "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
 }
 
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+if USE_S3_MEDIA:
+    AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY")
+    AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="").strip() or None
+    AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="auto")
+    AWS_S3_CUSTOM_DOMAIN = config("AWS_S3_CUSTOM_DOMAIN", default="").strip() or None
+    AWS_S3_SIGNATURE_VERSION = "s3v4"
+    AWS_DEFAULT_ACL = None
+    # Public-read bucket / custom domain: False. Private bucket: True (signed URLs).
+    AWS_QUERYSTRING_AUTH = config("AWS_QUERYSTRING_AUTH", default=False, cast=bool)
+    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=86400"}
+    AWS_S3_FILE_OVERWRITE = False
+
+    _s3_options = {
+        "bucket_name": AWS_STORAGE_BUCKET_NAME,
+        "access_key": AWS_ACCESS_KEY_ID,
+        "secret_key": AWS_SECRET_ACCESS_KEY,
+        "region_name": AWS_S3_REGION_NAME,
+        "default_acl": AWS_DEFAULT_ACL,
+        "querystring_auth": AWS_QUERYSTRING_AUTH,
+        "file_overwrite": AWS_S3_FILE_OVERWRITE,
+        "object_parameters": AWS_S3_OBJECT_PARAMETERS,
+        "signature_version": AWS_S3_SIGNATURE_VERSION,
+    }
+    if AWS_S3_ENDPOINT_URL:
+        _s3_options["endpoint_url"] = AWS_S3_ENDPOINT_URL
+    if AWS_S3_CUSTOM_DOMAIN:
+        _s3_options["custom_domain"] = AWS_S3_CUSTOM_DOMAIN
+        MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": _s3_options,
+        },
+        "staticfiles": _staticfiles_backend,
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": _staticfiles_backend,
+    }
+
+# Serve MEDIA_ROOT from Django when not on S3. Needed on Render/gunicorn
+# (no nginx alias). Dev always; production only if SERVE_MEDIA=True or
+# unset while still on local storage (set SERVE_MEDIA=False behind a
+# real web-server media alias).
+SERVE_MEDIA = config(
+    "SERVE_MEDIA",
+    default=not USE_S3_MEDIA,
+    cast=bool,
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

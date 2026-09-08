@@ -33,8 +33,23 @@ rather than a bill, which is why they're reproduced verbatim.
 """
 
 from decimal import Decimal
+from pathlib import Path
 
 from django.template.loader import render_to_string
+
+
+def media_uri(file_field):
+    """
+    WeasyPrint-friendly URI for a FileField.
+    Local storage → file:// path (no round-trip to the app server).
+    S3/R2 → https URL (`.path` raises NotImplementedError there).
+    """
+    if not file_field:
+        return ""
+    try:
+        return Path(file_field.path).as_uri()
+    except NotImplementedError:
+        return file_field.url
 
 # Categories whose lines show a "Price Per Gram" column. The legacy page
 # decided this from `hndcategory.Value == "1" || == "4"` inside
@@ -94,10 +109,12 @@ def build_invoice_context(master, *, payments=None):
         payments = list(master.payments.all())
     paid = sum((p.amount for p in payments), Decimal("0"))
 
+    location = master.reseller_location
     return {
         "master": master,
         "reseller": master.reseller,
-        "location": master.reseller_location,
+        "location": location,
+        "logo_uri": media_uri(location.logo) if location and location.logo else "",
         "rows": rows,
         "show_per_gram": show_per_gram,
         "subtotal": subtotal,

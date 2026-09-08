@@ -319,3 +319,4 @@ def scale_dot(value, from_dpi, to_dpi):
     if from_dpi == to_dpi:
         return int(value or 0)
     return int(round((int(value or 0) * to_dpi) / from_dpi))
+

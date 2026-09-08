@@ -70,6 +70,118 @@
 </div>
 {% endif %}
 
+<div class="section-heading"><span class="tag">Tag sequences</span></div>
+<p class="dash-seq-intro">Highest used PJ and PJGOLD codes in this catalog. Use the suggested next value when tagging a new piece so barcodes stay unique — nothing is reserved automatically.</p>
+<div class="dash-seq-grid">
+  <div class="panel dash-seq-card">
+    <div class="dash-seq-head">
+      <div>
+        <div class="kpi-label">Standard PJ</div>
+        <div class="dash-seq-series mono">PJ#####</div>
+      </div>
+      <span class="kpi-icon"><i class="fa-solid fa-barcode"></i></span>
+    </div>
+    {% if latest_pj %}
+    <div class="dash-seq-next">
+      <span class="dash-seq-next-label">Suggested next</span>
+      <span class="dash-seq-next-code mono">{{ latest_pj.next_code }}</span>
+    </div>
+    <div class="dash-seq-last">
+      <span class="cell-muted">Highest used</span>
+      <a class="mono cell-strong" href="{% url 'catalogue:item_detail' latest_pj.item.barcode %}">{{ latest_pj.item.barcode }}</a>
+    </div>
+    <dl class="dash-seq-meta">
+      <div>
+        <dt>Reference</dt>
+        <dd class="mono"><a href="{% url 'catalogue:product_detail' latest_pj.item.product_id %}">{{ latest_pj.item.product.reference_id|default:"—" }}</a></dd>
+      </div>
+      <div>
+        <dt>Style</dt>
+        <dd>{{ latest_pj.item.product.name }}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd>
+          {% if latest_pj.item.status == "PENDING" %}<span class="pill pill-ok">{{ latest_pj.item.get_status_display }}</span>
+          {% elif latest_pj.item.status == "ASSIGNED" %}<span class="pill pill-info">{{ latest_pj.item.get_status_display }}</span>
+          {% elif latest_pj.item.status == "SOLD" %}<span class="pill pill-neutral">{{ latest_pj.item.get_status_display }}</span>
+          {% else %}<span class="pill pill-warn">{{ latest_pj.item.get_status_display }}</span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt>Location</dt>
+        <dd>{% if latest_pj.item.location %}<a href="{% url 'inventory:location_detail' latest_pj.item.location.code %}">{{ latest_pj.item.location.name }}</a> <span class="mono cell-muted">{{ latest_pj.item.location.code }}</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Category</dt>
+        <dd>{{ latest_pj.item.product.category.name }}{% if latest_pj.item.product.supplier %} · {{ latest_pj.item.product.supplier.name }}{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Recorded</dt>
+        <dd class="mono">{{ latest_pj.item.created_at|date:"d M Y H:i" }}</dd>
+      </div>
+    </dl>
+    {% else %}
+    <p class="cell-muted" style="margin:12px 0 0;">No <span class="mono">PJ</span> barcodes in this catalog yet. First code is typically <span class="mono">PJ1</span>.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel dash-seq-card">
+    <div class="dash-seq-head">
+      <div>
+        <div class="kpi-label">PJ Gold</div>
+        <div class="dash-seq-series mono">PJGOLD####</div>
+      </div>
+      <span class="kpi-icon" style="--kpi-accent:var(--brand); --kpi-bg:var(--brand-dim);"><i class="fa-solid fa-coins"></i></span>
+    </div>
+    {% if latest_pjgold %}
+    <div class="dash-seq-next">
+      <span class="dash-seq-next-label">Suggested next</span>
+      <span class="dash-seq-next-code mono">{{ latest_pjgold.next_code }}</span>
+    </div>
+    <div class="dash-seq-last">
+      <span class="cell-muted">Highest used</span>
+      <a class="mono cell-strong" href="{% url 'catalogue:item_detail' latest_pjgold.item.barcode %}">{{ latest_pjgold.item.barcode }}</a>
+    </div>
+    <dl class="dash-seq-meta">
+      <div>
+        <dt>Reference</dt>
+        <dd class="mono"><a href="{% url 'catalogue:product_detail' latest_pjgold.item.product_id %}">{{ latest_pjgold.item.product.reference_id|default:"—" }}</a></dd>
+      </div>
+      <div>
+        <dt>Style</dt>
+        <dd>{{ latest_pjgold.item.product.name }}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd>
+          {% if latest_pjgold.item.status == "PENDING" %}<span class="pill pill-ok">{{ latest_pjgold.item.get_status_display }}</span>
+          {% elif latest_pjgold.item.status == "ASSIGNED" %}<span class="pill pill-info">{{ latest_pjgold.item.get_status_display }}</span>
+          {% elif latest_pjgold.item.status == "SOLD" %}<span class="pill pill-neutral">{{ latest_pjgold.item.get_status_display }}</span>
+          {% else %}<span class="pill pill-warn">{{ latest_pjgold.item.get_status_display }}</span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt>Location</dt>
+        <dd>{% if latest_pjgold.item.location %}<a href="{% url 'inventory:location_detail' latest_pjgold.item.location.code %}">{{ latest_pjgold.item.location.name }}</a> <span class="mono cell-muted">{{ latest_pjgold.item.location.code }}</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Category</dt>
+        <dd>{{ latest_pjgold.item.product.category.name }}{% if latest_pjgold.item.product.supplier %} · {{ latest_pjgold.item.product.supplier.name }}{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Recorded</dt>
+        <dd class="mono">{{ latest_pjgold.item.created_at|date:"d M Y H:i" }}</dd>
+      </div>
+    </dl>
+    {% else %}
+    <p class="cell-muted" style="margin:12px 0 0;">No <span class="mono">PJGOLD</span> barcodes in this catalog yet. First code is typically <span class="mono">PJGOLD0001</span>.</p>
+    {% endif %}
+  </div>
+</div>
+
 <div class="dash-sales">
   <div class="section-heading" style="margin-top:0;"><span class="tag">Sales</span></div>
   <div class="kpi-grid" style="margin-bottom:0;">

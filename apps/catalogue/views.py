@@ -23,12 +23,14 @@ product with 400 pieces costs the same as one with 4.
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
-from django.shortcuts import get_object_or_404, render
+from django.db.models import Count, OuterRef, Q, Subquery, Sum
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import urlencode
 
 from apps.catalogue.labels import subcategory_label
 from apps.catalogue.models import Category, ProductMaster, Supplier
 from apps.core.models import AuditLogEntry
+from apps.core.search import _exact_item
 from apps.inventory.models import ProductItem, StockStatus
 from apps.locations.models import Location
 
@@ -45,20 +47,51 @@ def _stock_annotations():
     }
 
 
+def _product_list_query(request, **overrides):
+    """Preserve list filters across pagination / view toggles."""
+    params = {
+        "q": request.GET.get("q", "").strip(),
+        "category": request.GET.get("category", "").strip(),
+        "supplier": request.GET.get("supplier", "").strip(),
+        "subcategory": request.GET.get("subcategory", "").strip(),
+        "stock": request.GET.get("stock", "").strip(),
+        "sort": request.GET.get("sort", "reference").strip() or "reference",
+        "view": request.GET.get("view", "grid").strip() or "grid",
+    }
+    params.update(overrides)
+    cleaned = {
+        k: v for k, v in params.items()
+        if v not in ("", None)
+        and not (k == "sort" and v == "reference")
+        and not (k == "view" and v == "grid")
+    }
+    return urlencode(cleaned)
+
+
 @login_required
 def product_list(request):
     """
     The product master list. Search matches the design's own fields AND the
-    barcodes cut from it, so pasting a barcode in here finds its design —
-    the same string works in the nav search bar and lands you deeper.
+    barcodes cut from it. An exact PJ/barcode (or RFID EPC) redirects to the
+    piece page — same scan-and-go path as the nav search bar.
     """
+    q = request.GET.get("q", "").strip()
+    if q:
+        exact = _exact_item(q)
+        if exact:
+            return redirect("catalogue:item_detail", barcode=exact.barcode)
+
+    sample_barcode = Subquery(
+        ProductItem.objects.filter(product_id=OuterRef("pk"))
+        .order_by("barcode")
+        .values("barcode")[:1]
+    )
     products = (
         ProductMaster.objects.select_related("category", "currency", "metal", "purity", "supplier")
         .prefetch_related("images")
-        .annotate(**_stock_annotations())
+        .annotate(**_stock_annotations(), sample_barcode=sample_barcode)
     )
 
-    q = request.GET.get("q", "").strip()
     if q:
         products = products.filter(
             Q(name__icontains=q)
@@ -79,6 +112,18 @@ def product_list(request):
     if subcategory:
         products = products.filter(subcategory=subcategory)
 
+    # Summary chips reflect search/category/supplier filters, but ignore the
+    # stock chip itself — otherwise clicking "With available" collapses the
+    # other counts to zero and the strip stops being useful for switching.
+    stats = products.aggregate(
+        design_total=Count("pk"),
+        with_available=Count("pk", filter=Q(available_count__gt=0)),
+        out_of_stock=Count("pk", filter=Q(item_count__gt=0, available_count=0)),
+        no_pieces=Count("pk", filter=Q(item_count=0)),
+        piece_total=Sum("item_count"),
+        available_total=Sum("available_count"),
+    )
+
     # "stock" filter works on the annotated rollups, not on a stored field —
     # there is no denormalised stock column to drift out of sync here.
     stock = request.GET.get("stock", "").strip()
@@ -89,24 +134,33 @@ def product_list(request):
     elif stock == "ASSIGNED":
         products = products.filter(assigned_count__gt=0)
     elif stock == "OUT":
-        products = products.filter(available_count=0)
+        products = products.filter(available_count=0, item_count__gt=0)
     elif stock == "NONE":
         products = products.filter(item_count=0)
 
-    sort = request.GET.get("sort", "name")
+    # Default by reference_id: many legacy designs share a style name
+    # (e.g. ANICH1) while the reference is what actually distinguishes them.
+    sort = request.GET.get("sort", "reference").strip() or "reference"
     sort_map = {
-        "name": "name",
-        "-name": "-name",
-        "stock": "item_count",
-        "-stock": "-item_count",
-        "available": "available_count",
-        "-available": "-available_count",
-        "price": "selling_price",
-        "-price": "-selling_price",
+        "reference": ("reference_id", "name"),
+        "-reference": ("-reference_id", "-name"),
+        "name": ("name", "reference_id"),
+        "-name": ("-name", "-reference_id"),
+        "stock": ("item_count", "reference_id"),
+        "-stock": ("-item_count", "reference_id"),
+        "available": ("available_count", "reference_id"),
+        "-available": ("-available_count", "reference_id"),
+        "price": ("selling_price", "reference_id"),
+        "-price": ("-selling_price", "reference_id"),
     }
-    products = products.order_by(sort_map.get(sort, "name"))
+    products = products.order_by(*sort_map.get(sort, sort_map["reference"]))
 
-    paginator = Paginator(products, 50)
+    view = request.GET.get("view", "grid").strip()
+    if view not in ("grid", "list"):
+        view = "grid"
+    per_page = 24 if view == "grid" else 50
+
+    paginator = Paginator(products, per_page)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     subcategory_choices = [
@@ -119,6 +173,16 @@ def product_list(request):
         )
     ]
 
+    category_obj = Category.objects.filter(code=category).first() if category else None
+    supplier_obj = Supplier.objects.filter(pk=supplier).first() if supplier else None
+    stock_labels = {
+        "AVAILABLE": "Has available stock",
+        "SOLD": "Has sold pieces",
+        "ASSIGNED": "Has assigned pieces",
+        "OUT": "Nothing available",
+        "NONE": "No pieces at all",
+    }
+
     return render(request, "catalogue/product_list.html", {
         "page_obj": page_obj,
         "q": q,
@@ -127,12 +191,30 @@ def product_list(request):
         "subcategory": subcategory,
         "stock": stock,
         "sort": sort,
+        "view": view,
         "categories": Category.objects.order_by("name"),
         "suppliers": Supplier.objects.order_by("name"),
         "subcategory_choices": subcategory_choices,
         "total_count": paginator.count,
+        "stats": stats,
+        "category_obj": category_obj,
+        "supplier_obj": supplier_obj,
+        "subcategory_label": subcategory_label(subcategory) if subcategory else "",
+        "stock_label": stock_labels.get(stock, ""),
+        "query_base": _product_list_query(request, page=None),
+        "qs_grid": _product_list_query(request, view="grid", page=None),
+        "qs_list": _product_list_query(request, view="list", page=None),
+        "qs_stock_all": _product_list_query(request, stock="", page=None),
+        "qs_stock_available": _product_list_query(request, stock="AVAILABLE", page=None),
+        "qs_stock_out": _product_list_query(request, stock="OUT", page=None),
+        "qs_stock_none": _product_list_query(request, stock="NONE", page=None),
+        "qs_clear_q": _product_list_query(request, q="", page=None),
+        "qs_clear_category": _product_list_query(request, category="", page=None),
+        "qs_clear_subcategory": _product_list_query(request, subcategory="", page=None),
+        "qs_clear_supplier": _product_list_query(request, supplier="", page=None),
+        "qs_clear_stock": _product_list_query(request, stock="", page=None),
+        "qs_clear_all": _product_list_query(request, q="", category="", supplier="", subcategory="", stock="", page=None),
     })
-
 
 @login_required
 def product_detail(request, pk):

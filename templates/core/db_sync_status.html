@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}DB Sync Status — Perfect Jewel ERP{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Database sync status</h1>
+    <p>Live iadmin MSSQL vs local Postgres catalogs. Active profile:
+      <strong>{{ report.active_profile }}</strong> → {{ report.active_name }}.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'core:db_sync_status' %}" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i> Refresh</a>
+    <form method="post" action="{% url 'core:db_sync_run' %}" style="margin:0;display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary" {% if sync_running %}disabled{% endif %}>
+        <i class="fa-solid fa-cloud-arrow-down"></i>
+        {% if sync_running %}Sync running…{% else %}Sync now{% endif %}
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="margin-bottom:14px;border-color:var(--info);">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<div class="kpi-grid">
+  <div class="kpi-card" style="--kpi-accent:{% if report.overall_synced %}var(--ok){% else %}var(--warn){% endif %}; --kpi-bg:{% if report.overall_synced %}var(--ok-bg){% else %}var(--warn-bg){% endif %};">
+    <div class="kpi-top">
+      <span class="kpi-label">Overall</span>
+      <span class="kpi-icon"><i class="fa-solid {% if report.overall_synced %}fa-circle-check{% else %}fa-triangle-exclamation{% endif %}"></i></span>
+    </div>
+    <div class="kpi-num" style="font-size:22px;">{% if report.overall_synced %}Synced{% else %}Out of sync{% endif %}</div>
+    <div class="kpi-sub">prod {% if report.prod.synced %}matches{% else %}≠{% endif %} MSSQL ·
+      dev {% if report.dev.synced %}matches{% else %}≠{% endif %} MSSQL ·
+      catalogs {% if report.prod_dev_match %}match{% else %}differ{% endif %}</div>
+  </div>
+
+  <div class="kpi-card" style="--kpi-accent:{% if report.mssql.ok %}var(--ok){% else %}var(--danger){% endif %}; --kpi-bg:{% if report.mssql.ok %}var(--ok-bg){% else %}var(--danger-bg){% endif %};">
+    <div class="kpi-top">
+      <span class="kpi-label">Live MSSQL</span>
+      <span class="kpi-icon"><i class="fa-solid fa-server"></i></span>
+    </div>
+    <div class="kpi-num" style="font-size:22px;">{% if report.mssql.ok %}Online{% else %}Unreachable{% endif %}</div>
+    <div class="kpi-sub">{{ report.mssql.host }}:{{ report.mssql.port }} / {{ report.mssql.name }}</div>
+  </div>
+
+  <div class="kpi-card" style="--kpi-accent:{% if report.prod.synced %}var(--ok){% elif report.prod.ok %}var(--warn){% else %}var(--danger){% endif %};">
+    <div class="kpi-top">
+      <span class="kpi-label">pj_erp_prod</span>
+      <span class="kpi-icon"><i class="fa-solid fa-database"></i></span>
+    </div>
+    <div class="kpi-num" style="font-size:22px;">
+      {% if not report.prod.ok %}Down{% elif report.prod.synced %}Synced{% else %}Behind / ahead{% endif %}
+    </div>
+    <div class="kpi-sub">{{ report.prod.name }}{% if report.active_profile == 'prod' %} · active{% endif %}</div>
+  </div>
+
+  <div class="kpi-card" style="--kpi-accent:{% if report.dev.synced %}var(--ok){% elif report.dev.ok %}var(--warn){% else %}var(--danger){% endif %};">
+    <div class="kpi-top">
+      <span class="kpi-label">pj_erp_dev</span>
+      <span class="kpi-icon"><i class="fa-solid fa-database"></i></span>
+    </div>
+    <div class="kpi-num" style="font-size:22px;">
+      {% if not report.dev.ok %}Down{% elif report.dev.synced %}Synced{% else %}Behind / ahead{% endif %}
+    </div>
+    <div class="kpi-sub">{{ report.dev.name }}{% if report.active_profile == 'dev' %} · active{% endif %}</div>
+  </div>
+</div>
+
+<div class="section-heading"><span class="tag">Row counts</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Entity</th>
+          <th style="text-align:right;">MSSQL</th>
+          <th style="text-align:right;">prod</th>
+          <th style="text-align:right;">Δ prod</th>
+          <th style="text-align:right;">dev</th>
+          <th style="text-align:right;">Δ dev</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in report.rows %}
+        <tr>
+          <td>{{ row.label }}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">
+            {% if row.mssql is None %}—{% else %}{{ row.mssql|intcomma }}{% endif %}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">
+            {% if row.prod is None %}—{% else %}{{ row.prod|intcomma }}{% endif %}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">
+            {% if row.prod_delta is None %}—
+            {% elif row.prod_delta == 0 %}<span style="color:var(--ok);">0</span>
+            {% elif row.prod_delta > 0 %}<span style="color:var(--info);">+{{ row.prod_delta }}</span>
+            {% else %}<span style="color:var(--warn);">{{ row.prod_delta }}</span>{% endif %}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">
+            {% if row.dev is None %}—{% else %}{{ row.dev|intcomma }}{% endif %}
+          </td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">
+            {% if row.dev_delta is None %}—
+            {% elif row.dev_delta == 0 %}<span style="color:var(--ok);">0</span>
+            {% elif row.dev_delta > 0 %}<span style="color:var(--info);">+{{ row.dev_delta }}</span>
+            {% else %}<span style="color:var(--warn);">{{ row.dev_delta }}</span>{% endif %}
+          </td>
+          <td>
+            {% if row.prod_ok and row.dev_ok %}
+            <span class="pill pill-ok">{% if row.match_mode == 'exact' %}Match{% else %}OK{% endif %}</span>
+            {% elif row.mssql is None or row.prod is None or row.dev is None %}
+            <span class="pill pill-neutral">Unknown</span>
+            {% else %}
+            <span class="pill pill-warn">Diff</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="two-col" style="margin-top:18px;">
+  <div class="panel">
+    <div class="section-heading" style="margin-top:0;"><span class="tag">Connections</span></div>
+    <table class="mini-table">
+      <tbody>
+        <tr>
+          <td>MSSQL</td>
+          <td>
+            {% if report.mssql.ok %}<span class="pill pill-ok">OK</span>{% else %}<span class="pill pill-danger">Fail</span>{% endif %}
+            {{ report.mssql.detail }}
+          </td>
+        </tr>
+        <tr>
+          <td>prod</td>
+          <td>
+            {% if report.prod.ok %}<span class="pill pill-ok">OK</span>{% else %}<span class="pill pill-danger">Fail</span>{% endif %}
+            {{ report.prod.detail }}
+          </td>
+        </tr>
+        <tr>
+          <td>dev</td>
+          <td>
+            {% if report.dev.ok %}<span class="pill pill-ok">OK</span>{% else %}<span class="pill pill-danger">Fail</span>{% endif %}
+            {{ report.dev.detail }}
+          </td>
+        </tr>
+        <tr>
+          <td>Sync job</td>
+          <td>
+            {% if sync_running %}<span class="pill pill-info">Running</span>{% else %}<span class="pill pill-neutral">Idle</span>{% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin:12px 0 0;font-size:12px;color:var(--text-muted);">
+      Sync writes into the <strong>active</strong> catalog only ({{ report.active_name }}).
+      After syncing prod, run <code>clone_prod_to_dev --yes</code> if you want dev to match.
+      Locations/categories may be ahead of MSSQL (local-only rows). Items may be −1 (one skipped import row).
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="section-heading" style="margin-top:0;"><span class="tag">Last sync log</span></div>
+    {% if last_result %}
+    <pre style="margin:0;max-height:280px;overflow:auto;font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;">{{ last_result }}</pre>
+    {% else %}
+    <p style="margin:0;color:var(--text-muted);font-size:13px;">No sync run recorded in cache yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

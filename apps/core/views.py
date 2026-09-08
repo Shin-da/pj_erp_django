@@ -5,25 +5,28 @@ import logging
 import threading
 import traceback
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import (
     Count,
     DecimalField,
     ExpressionWrapper,
     F,
+    IntegerField,
     OuterRef,
     Q,
     Subquery,
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce
-from django.shortcuts import render
+from django.db.models.functions import Cast, Coalesce, Substr
+from django.shortcuts import redirect, render
 from django.conf import settings
 from django.core.management import call_command
 from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from apps.assignment.models import AssignmentLine, AssignmentMaster, InvoiceStatus, Reseller
 from apps.catalogue.labels import subcategory_label
@@ -34,6 +37,7 @@ from apps.payments.models import ResellerPayment
 from apps.returns.models import ReserveAlert
 from apps.tracker.models import TrackerSession
 from apps.transfers.models import Transfer, TransferStatus
+from apps.core.sync_status import build_sync_report
 
 
 def _pct(part, whole):
@@ -52,6 +56,33 @@ def _money(qs_filter):
 def _zero_money():
     return Value(Decimal("0.00"), output_field=DecimalField(max_digits=14, decimal_places=2))
 
+
+def _latest_barcode_series(regex, digit_start, next_code):
+    """
+    Highest numeric barcode in a series (not lexicographic — PJ9 must not
+    beat PJ24645). Returns the piece plus a suggested next code for operators
+    entering new items by hand. Display-only; nothing is reserved in the DB.
+    """
+    item = (
+        ProductItem.objects.filter(barcode__regex=regex)
+        .annotate(seq=Cast(Substr("barcode", digit_start), IntegerField()))
+        .select_related(
+            "product",
+            "product__category",
+            "product__supplier",
+            "product__metal",
+            "location",
+        )
+        .order_by("-seq")
+        .first()
+    )
+    if not item:
+        return None
+    return {
+        "item": item,
+        "seq": item.seq,
+        "next_code": next_code(item.seq),
+    }
 
 def _net_line(prefix=""):
     """
@@ -246,6 +277,19 @@ def home(request):
     for alert in reserve_alerts:
         alert.is_overdue = alert.expires_at < now
 
+    # Highest used PJ / PJGOLD — operators need these when tagging new pieces
+    # so the next barcode does not collide. Two independent series.
+    latest_pj = _latest_barcode_series(
+        r"^PJ[0-9]+$",
+        3,
+        lambda n: f"PJ{n + 1}",
+    )
+    latest_pjgold = _latest_barcode_series(
+        r"^PJGOLD[0-9]+$",
+        7,
+        lambda n: f"PJGOLD{n + 1:04d}",
+    )
+
     context = {
         "greeting": greeting,
         "today_label": now.strftime("%A, %d %B %Y"),
@@ -287,6 +331,8 @@ def home(request):
         "reserve_alerts": reserve_alerts,
         "reserve_open_count": reserve_open_count,
         "reserve_overdue": reserve_overdue,
+        "latest_pj": latest_pj,
+        "latest_pjgold": latest_pjgold,
     }
     return render(request, "core/home.html", context)
 
@@ -308,6 +354,42 @@ def _run_sync_in_background():
     finally:
         cache.set(_SYNC_LAST_RESULT_KEY, result, timeout=60 * 60 * 48)
         cache.delete(_SYNC_LOCK_KEY)
+
+
+@login_required
+def db_sync_status(request):
+    """Dev page: live MSSQL vs local pj_erp_prod / pj_erp_dev row counts."""
+    report = build_sync_report()
+    last_result = cache.get(_SYNC_LAST_RESULT_KEY)
+    sync_running = cache.get(_SYNC_LOCK_KEY) is not None
+    return render(
+        request,
+        "core/db_sync_status.html",
+        {
+            "report": report,
+            "last_result": last_result,
+            "sync_running": sync_running,
+        },
+    )
+
+
+@login_required
+@require_POST
+def db_sync_run(request):
+    """Kick off sync_legacy_mssql in a background thread (same as the webhook)."""
+    if not cache.add(_SYNC_LOCK_KEY, "1", timeout=60 * 20):
+        messages.warning(request, "A sync is already running.")
+        return redirect("core:db_sync_status")
+
+    thread = threading.Thread(target=_run_sync_in_background, daemon=True)
+    thread.start()
+    messages.info(
+        request,
+        "Sync started into the active catalog "
+        f"({settings.DB_PROFILE} / {settings.DATABASES['default']['NAME']}). "
+        "Refresh in a minute to see updated counts.",
+    )
+    return redirect("core:db_sync_status")
 
 
 def sync_legacy_webhook(request):

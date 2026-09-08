@@ -93,7 +93,7 @@ def _product_matches(q, limit):
             item_count=Count("items", distinct=True),
             available_count=Count("items", filter=Q(items__status=StockStatus.PENDING), distinct=True),
         )
-        .order_by("name")[:limit]
+        .order_by("reference_id", "name")[:limit]
     )
 
 
@@ -170,9 +170,11 @@ def search_suggest(request):
 
     products = [
         {
-            "label": p.name,
-            "sub": (f"{p.reference_id} · " if p.reference_id else "")
-                   + f"{p.category.name} · {p.item_count} pc, {p.available_count} available",
+            "label": p.reference_id or p.name,
+            "sub": (
+                (f"{p.name} · " if p.reference_id and p.name else "")
+                + f"{p.category.name} · {p.item_count} pc, {p.available_count} available"
+            ),
             "url": reverse("catalogue:product_detail", kwargs={"pk": p.pk}),
         }
         for p in _product_matches(q, SUGGEST_LIMIT)

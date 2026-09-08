@@ -79,3 +79,50 @@ def fetch_live_tables(wanted: set[str], stdout=None) -> dict[str, list[dict]]:
     finally:
         conn.close()
     return tables
+
+
+def count_live_tables(wanted: set[str]) -> tuple[dict[str, int | None], str | None]:
+    """
+    COUNT(*) for each table in `wanted`.
+
+    Returns ({table.lower(): count_or_None}, error_message_or_None).
+    A per-table None means that specific SELECT failed; a top-level error
+    means the connection itself failed.
+    """
+    counts: dict[str, int | None] = {name.lower(): None for name in wanted}
+    try:
+        conn = _connect()
+    except Exception as exc:  # CommandError from missing settings / connect failure
+        return counts, str(exc)
+
+    try:
+        cur = conn.cursor()
+        for table in sorted(wanted):
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM dbo.[{table}]")
+                counts[table.lower()] = int(cur.fetchone()[0])
+            except Exception:
+                counts[table.lower()] = None
+    finally:
+        conn.close()
+    return counts, None
+
+
+def ping_live() -> tuple[bool, str]:
+    """Quick connectivity check. Returns (ok, detail)."""
+    try:
+        conn = _connect()
+    except Exception as exc:
+        return False, str(exc)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.fetchone()
+        host = settings.LEGACY_MSSQL_HOST
+        port = settings.LEGACY_MSSQL_PORT
+        db = settings.LEGACY_MSSQL_DB
+        return True, f"{host}:{port}/{db}"
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        conn.close()

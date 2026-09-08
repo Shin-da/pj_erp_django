@@ -1,7 +1,7 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path, re_path
+from django.views.static import serve
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -15,11 +15,17 @@ urlpatterns = [
     path("", include("apps.core.urls")),
 ]
 
-# Migrated legacy PDFs and images live under MEDIA_ROOT. Django's dev
-# server does not serve those by default, so wire it here — DEBUG only.
-# In production the web server serves MEDIA_URL directly and this block
-# does nothing, which is deliberate: `static()` returns an empty list when
-# DEBUG is False rather than silently exposing the media tree through
-# Django.
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Product photos / reseller logos / legacy PDFs. Prefer S3/R2
+# (USE_S3_MEDIA) so gunicorn never serves the tree. When media is still
+# on local disk (dev, or Render + persistent disk), SERVE_MEDIA wires
+# Django's serve view — WhiteNoise does not cover uploads.
+# Note: django.conf.urls.static.static() is a no-op when DEBUG=False,
+# so we call serve directly.
+if settings.SERVE_MEDIA and not settings.USE_S3_MEDIA:
+    urlpatterns += [
+        re_path(
+            r"^media/(?P<path>.*)$",
+            serve,
+            {"document_root": settings.MEDIA_ROOT},
+        ),
+    ]

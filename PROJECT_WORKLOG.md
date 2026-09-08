@@ -37,7 +37,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**Uncommitted catalogue + dashboard UX:** reference-first products list, PJ/PJGOLD tag-sequence panel on home — commit + push with the R2 media stack when ready. Local catalogs refreshed from live `stock_rfid`; **DB Sync** page at `/dev/db-sync/` is local/uncommitted (no sidebar link yet — ship urls/views/template together). **Production media on Cloudflare R2** still local (settings/`upload_local_media`/deps); confirm Render `AWS_*` vars, then redeploy. Brand assets under `static/core/img/brand/` still untracked. Irys RFID + expanded search + work log are on `main` (`a151c45`). Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
+Catalogue UX, dashboard tag sequences, R2 media stack, DB Sync page, and brand icons are on `main` (see latest commit). Confirm Render `AWS_*` vars, then redeploy so product photos hit R2. DB Sync is at `/dev/db-sync/` — sidebar link still withheld so a missing route cannot 500 the shell (`0112cfb`). Ops gaps from the 2026-09-02 audit remain (payments UI, transfers UI, authz, tests).
 
 ---
 
@@ -50,6 +50,18 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-08 — Ship local catalogue, media, and DB Sync
+
+- **Source:** this chat; git after `6332eeb`
+- **Goal:** Commit and push the unpublished local work already logged below (nothing was left unpushed on `main`).
+- **Done:**
+  - Pushed products list UX, dashboard tag sequences, search tweaks, R2 storage settings + `upload_local_media`, DB Sync page (`/dev/db-sync/`), brand icons used by the shell/login.
+- **Follow-ups / open:**
+  - Confirm Render `AWS_*` and redeploy.
+  - Do not add a sidebar DB Sync link until you want it visible; the URL works without it.
+  - Left untracked: `.cursor/`, and ~352 MB of extra login JPGs (not the `pj-01.jpg`… set already referenced).
+- **Commits (if any):** this push.
 
 ### 2026-09-03 → 2026-09-07 — Live MSSQL sync + DB Sync status page
 
