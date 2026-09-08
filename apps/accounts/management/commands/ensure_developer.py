@@ -1,5 +1,6 @@
 """Create the single developer login. Does not touch other employees."""
 
+import os
 import secrets
 
 from django.conf import settings
@@ -26,7 +27,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         code = (opts["code"] or DEFAULT_CODE).strip()
-        password = (opts["password"] or "").strip()
+        password = (opts["password"] or os.environ.get("DEV_ACCOUNT_PASSWORD") or "").strip()
         first_name = (opts["first_name"] or "Jeffmathew").strip()
         last_name = (opts["last_name"] or "Garcia").strip()
         user, created = Employee.objects.get_or_create(
@@ -46,7 +47,7 @@ class Command(BaseCommand):
         user.is_superuser = True
         user.is_active = True
         user.is_developer = True
-        changed_password = created or opts["reset_password"] or bool(opts["password"])
+        changed_password = created or opts["reset_password"] or bool(password)
         if changed_password:
             if not password:
                 password = secrets.token_urlsafe(12)
