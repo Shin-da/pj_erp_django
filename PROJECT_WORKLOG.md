@@ -61,7 +61,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - Render `start.sh` runs that command after migrate. Migration `0011` upserts the same spec once.
 - **Follow-ups / open:**
   - Designer edits to `jefffffff` need a dump back into `saved_layouts.py` or the next boot restores this snapshot.
-- **Commits (if any):** none yet.
+- **Commits (if any):** `79ca85e` — Persist the jefffffff label layout across deploys.
 
 ### 2026-09-08 — Developer login for /dev/ pages
 
