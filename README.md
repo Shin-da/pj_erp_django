@@ -46,15 +46,15 @@ Real, migrated, exercised end-to-end against local PostgreSQL — not just scaff
   `DecimalField`/`DateField` types replacing the legacy schema's
   `nvarchar`-for-everything pattern (confirmed schema-wide in `_schema_columns.txt`).
   Location is deliberately **not** a field here — see `inventory` below.
-- **`api`** — external read API at `/api/v1/` (DRF). Auth is
-  `Authorization: Api-Key <key>` (`ApiClient`; mint with
-  `python manage.py create_api_client "<name>"`). Phase 0–1: paginated
-  read resources for products, catalogue lookups, locations, stock items,
-  resellers, invoices (+ lines on retrieve), returns, reserve alerts,
-  tracker sessions, label templates, and print logs. OpenAPI at
-  `/api/v1/schema/` and `/api/v1/docs/`. Product detail is by numeric `id`;
-  items by barcode; locations by code; tracker sessions by `scan_index`.
-  Staff HTML login remains the primary ERP UI (writes come in Phase 2).
+- **`api`** — `/api/v1/` (DRF).
+  - **Read (Api-Key):** products, catalogue lookups, locations, items, resellers,
+    invoices, returns, tracker sessions, label templates/logs. Mint with
+    `create_api_client`. Docs: `/api/v1/schema/`, `/api/v1/docs/`.
+  - **Write (Employee Token/Session):** `POST /api/v1/auth/token/` then
+    `Authorization: Token …` for invoice create/stamp, returns process,
+    photo upload/delete, tracker opening, print-log create — gated by the
+    same Django permission codenames as Manage Employee Access.
+  Staff HTML remains the primary ERP UI.
 - **`inventory`** — `ProductItem` (one row per barcode), with `status` as a
   real `TextChoices` + a server-enforced transition table
   (`transition_status()`) instead of the free-text, casing-dependent
