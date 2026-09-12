@@ -58,7 +58,7 @@ except ImportError:  # pragma: no cover - environment dependent
 
 # PJ codes: 4–6 digits, optional single-letter category prefix we discard
 # (B-/N-/E-/P-/R- = Bracelet/Necklace/Earring/Pendant/Ring).
-CODE_RE = re.compile(r"(?:\b[A-Z]-)?\b(PJ\d{4,6})\b", re.IGNORECASE)
+CODE_RE = re.compile(r"(?:(?<![A-Za-z])[A-Z]-)?(?<![A-Za-z])(PJ\d{4,6})\b", re.IGNORECASE)  # lookbehind, not \b: real filenames are "<timestamp>_PJ22171 ..." and "_" is a word char so \b never fires there
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 CERT_HINT = re.compile(r"cert", re.IGNORECASE)
 
