@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django_q",
     "storages",
+    "rest_framework",
+    "drf_spectacular",
     # Perfect Jewel apps — order matters somewhat for migration dependency
     # readability, not for Django itself.
     "apps.core",
@@ -44,6 +46,7 @@ INSTALLED_APPS = [
     "apps.sync",
     "apps.hr",
     "apps.reporting",
+    "apps.api",
 ]
 
 MIDDLEWARE = [
@@ -257,6 +260,41 @@ PRODUCT_PHOTO_MAX_UPLOAD_BYTES = config(
 )
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- External REST API (apps.api) -------------------------------------------
+# Deny-by-default. ViewSets also set authentication_classes explicitly.
+# Staff HTML login is separate; machine clients use Authorization: Api-Key …
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.api.authentication.ApiKeyAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "apps.api.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 50,
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "30/min",
+        "user": "120/min",
+    },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Perfect Jewel ERP API",
+    "DESCRIPTION": (
+        "Machine-facing read API. Authenticate with "
+        "`Authorization: Api-Key <key>` issued by "
+        "`python manage.py create_api_client \"<name>\"`."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
 
 # --- Background jobs (Tiara/Irys sync, etc.) --------------------------------
 # django-q2 over the ORM as a broker for now — no Redis dependency to stand

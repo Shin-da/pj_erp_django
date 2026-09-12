@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**Photo upload** now supports remove + full-resolution camera files (up to 100&nbsp;MB). Grant `catalogue.can_upload_photos`; point Spaces/R2 env at DigitalOcean when going live. Still: Render sync for 2026-09-09 mirror fix; audit remediations.
+**API Phase 1 read coverage live** under `/api/v1/` (items, invoices, returns, tracker, hardware, lookups). Next: Phase 2 write API with the same `require_perm` map as HTML. Staff UI unchanged.
 
 ---
 
@@ -51,6 +51,33 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-12 — API Phase 1: domain read coverage
+
+- **Source:** Cursor chat “Phase 1”
+- **Goal:** Expose authenticated read endpoints across ERP domains (not products-only).
+- **Done:**
+  - Split `apps/api` serializers/views by domain; shared `ApiClientReadMixin`.
+  - Resources: categories, currencies, metals, purities, suppliers, locations (by code), items (by barcode), reseller-groups/locations/resellers, invoices (+ lines on retrieve; commissions omitted), returns, reserve-alerts, tracker-sessions (by scan_index + scans on retrieve), label-templates, label-print-logs.
+  - Tests for auth gates + list/retrieve/filter smoke across domains (17 API tests).
+- **Follow-ups / open:**
+  - Phase 2: mutating endpoints + Employee session/token auth + `require_perm`.
+  - Optional: ApiClient scopes (prices / invoices).
+- **Commits (if any):** _(pending)_
+
+### 2026-09-12 — API Phase 0: secure mount + products read
+
+- **Source:** Cursor chat “start Phase 0” (full API layer program)
+- **Goal:** Wire DRF safely: deny-by-default auth, pagination, OpenAPI, fix product lookup, tests — no unauthenticated catalog leak.
+- **Done:**
+  - Added `djangorestframework` + `drf-spectacular`; `apps.api` in `INSTALLED_APPS`; `REST_FRAMEWORK` defaults (Api-Key only, `IsAuthenticated`, throttle, page size 50 / max 200).
+  - Mounted `path("api/v1/", …)`; schema/docs require Api-Key.
+  - `ProductViewSet`: explicit auth; detail by `pk`; `reference_id` filter-only (duplicate-safe).
+  - Tests: 401 without/invalid/revoked key; 200 list; retrieve-by-pk; dup filter; pagination cap; inactive excluded; schema auth.
+- **Follow-ups / open:**
+  - Phase 1: read endpoints for inventory, invoices, returns, tracker, hardware.
+  - Deploy: `pip install -r requirements.txt` + `migrate` (api.0001 if not applied) + mint a key.
+- **Commits (if any):** _(pending)_
 
 ### 2026-09-12 — Photo remove + keep full-resolution camera files
 

@@ -1,6 +1,47 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.catalogue.models import ProductImage, ProductMaster
+from apps.catalogue.models import (
+    Category,
+    Currency,
+    Metal,
+    ProductImage,
+    ProductMaster,
+    Purity,
+    Supplier,
+)
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "code", "created_at", "updated_at"]
+
+
+class CurrencySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Currency
+        fields = ["id", "code", "symbol", "created_at", "updated_at"]
+
+
+class MetalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Metal
+        fields = ["id", "name", "created_at", "updated_at"]
+
+
+class PuritySerializer(serializers.ModelSerializer):
+    metal = serializers.CharField(source="metal.name", default="")
+
+    class Meta:
+        model = Purity
+        fields = ["id", "name", "metal", "created_at", "updated_at"]
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ["id", "name", "reference_code", "created_at", "updated_at"]
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -10,6 +51,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
         model = ProductImage
         fields = ["url", "kind", "is_primary", "caption", "order"]
 
+    @extend_schema_field(serializers.URLField(allow_null=True))
     def get_url(self, obj):
         request = self.context.get("request")
         if not obj.image:
