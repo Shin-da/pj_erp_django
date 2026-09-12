@@ -65,7 +65,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - Run `migrate` + `setup_permission_groups` (no baseline change for photos) and grant `can_upload_photos` to photo employees.
   - Unverified almarphoto → real stock merge still not implemented.
-- **Commits (if any):** `e96eb16` — Add PJ/barcode photo upload separate from stock intake. (hash may change after rebase onto origin)
+- **Commits (if any):** `3bb63e2` — Add PJ/barcode photo upload separate from stock intake.
 
 ### 2026-09-11 — Principal engineer / red-team full-system audit
 
