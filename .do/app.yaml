@@ -1,0 +1,93 @@
+# DigitalOcean App Platform spec for Perfect Jewel ERP (Django).
+#
+# How to use:
+# 1. Create an App from GitHub repo Shin-da/pj_erp_django (branch main), OR
+#    paste this spec and adjust github.repo / region / size.
+# 2. Attach Spaces credentials + secrets in the Control Panel (encrypted).
+# 3. After first deploy: create staff users / Manage Employee Access;
+#    mint Api-Key with `python manage.py create_api_client "…"`.
+#
+# Docs: DEPLOY-DIGITALOCEAN.md
+
+name: pj-erp
+region: sgp
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    # Dev DB is fine to start; upgrade to a production Managed DB when ready:
+    # production: true
+    # cluster_name: pj-erp-pg
+
+services:
+  - name: web
+    github:
+      repo: Shin-da/pj_erp_django
+      branch: main
+      deploy_on_push: true
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    build_command: bash scripts/build.sh
+    run_command: bash scripts/start.sh
+    routes:
+      - path: /
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: DJANGO_DEBUG
+        scope: RUN_TIME
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        scope: RUN_TIME
+        value: ${APP_DOMAIN}
+      - key: CSRF_TRUSTED_ORIGINS
+        scope: RUN_TIME
+        # Set in dashboard after first deploy, e.g. https://pj-erp-xxx.ondigitalocean.app
+        # (APP_DOMAIN alone is not enough — scheme required.)
+        value: "https://REPLACE-WITH-APP-HOST.ondigitalocean.app"
+      - key: DJANGO_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: "CHANGE-ME-IN-DASHBOARD"
+      - key: DJANGO_TIME_ZONE
+        scope: RUN_TIME
+        value: Asia/Manila
+      - key: DB_SSLMODE
+        scope: RUN_TIME
+        value: require
+      # --- Spaces (product photos). Create bucket + keys in DO Spaces. ---
+      - key: AWS_STORAGE_BUCKET_NAME
+        scope: RUN_TIME
+        value: pj-erp-media
+      - key: AWS_S3_ENDPOINT_URL
+        scope: RUN_TIME
+        value: https://sgp1.digitaloceanspaces.com
+      - key: AWS_S3_REGION_NAME
+        scope: RUN_TIME
+        value: sgp1
+      - key: AWS_S3_CUSTOM_DOMAIN
+        scope: RUN_TIME
+        value: pj-erp-media.sgp1.digitaloceanspaces.com
+      - key: AWS_QUERYSTRING_AUTH
+        scope: RUN_TIME
+        value: "False"
+      - key: AWS_ACCESS_KEY_ID
+        scope: RUN_TIME
+        type: SECRET
+        value: "SET-IN-DASHBOARD"
+      - key: AWS_SECRET_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: "SET-IN-DASHBOARD"
+      # Optional: MSSQL sync + developer login (encrypted in dashboard).
+      # - key: SYNC_TRIGGER_TOKEN
+      #   scope: RUN_TIME
+      #   type: SECRET
+      # - key: DEV_ACCOUNT_PASSWORD
+      #   scope: RUN_TIME
+      #   type: SECRET
+      # - key: LEGACY_MSSQL_HOST / USER / PASSWORD / DB …

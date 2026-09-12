@@ -7,7 +7,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 |---|---|
 | Repo | https://github.com/Shin-da/pj_erp_django |
 | Branch | `main` |
-| Deploy | Render (migrate + collectstatic on build; gunicorn) |
+| Deploy | DigitalOcean App Platform (+ Spaces); see `DEPLOY-DIGITALOCEAN.md` |
 | Related docs | `OWNER-ONE-PAGER.md` (plain-language status, both systems), `README.md` (what’s built), `DATABASE.md` / `DATABASE-GUIDE.md` |
 | Sibling spec | https://github.com/Shin-da/ftp_perfect-jewel-active-sync (`PROJECT_WORKLOG.md` there) |
 
@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**HTML mutators gated with `@require_perm`** (aligned with API). Deploy: migrate (if pending) + `setup_permission_groups`. Next: finish remaining write API (tracker closing, label template save) or OpenAPI polish.
+**DigitalOcean deploy ready:** `DATABASE_URL`, HTTPS cookies, `.do/app.yaml`, `DEPLOY-DIGITALOCEAN.md`. Create App + Spaces + env, then Manage Employee Access + Api-Key.
 
 ---
 
@@ -51,6 +51,19 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-12 — DigitalOcean App Platform deploy prep
+
+- **Source:** Cursor chat “going to digital ocean now”
+- **Goal:** Make the repo deployable on DO App Platform with Spaces (not Render-only).
+- **Done:**
+  - `DATABASE_URL` (+ `DB_SSLMODE`) in settings; local profile DB when unset.
+  - Production HTTPS cookie / HSTS / `CSRF_TRUSTED_ORIGINS` when `DEBUG=False`.
+  - `.do/app.yaml`, `DEPLOY-DIGITALOCEAN.md`; start.sh runs `setup_permission_groups` + longer gunicorn timeout.
+- **Follow-ups / open:**
+  - Create Spaces bucket + App in DO dashboard; set encrypted secrets.
+  - After live: staff access, `create_api_client`, optional `upload_local_media`.
+- **Commits (if any):** _(pending)_
 
 ### 2026-09-12 — HTML mutators require same perms as API
 

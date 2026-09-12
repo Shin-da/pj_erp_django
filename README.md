@@ -141,20 +141,24 @@ python manage.py runserver
 
 Two local catalogs (`pj_erp_dev` / `pj_erp_prod`) and how to switch: [`DATABASE.md`](DATABASE.md).
 
-## Media files (product photos) on Render
+## Deploying on DigitalOcean
 
-WhiteNoise only serves collected static assets. Uploads live in object storage:
+Step-by-step: [`DEPLOY-DIGITALOCEAN.md`](DEPLOY-DIGITALOCEAN.md)  
+App spec: [`.do/app.yaml`](.do/app.yaml)
 
-1. Create a **Cloudflare R2** (or S3) bucket with public read (or a custom domain).
-2. Set the `AWS_*` vars from `.env.example` on the Render service.
+Summary: App Platform web service (`bash scripts/build.sh` / `bash scripts/start.sh`) + Postgres (`DATABASE_URL`) + Spaces (`AWS_*`). Set `DJANGO_DEBUG=False` and `CSRF_TRUSTED_ORIGINS=https://…`.
+
+## Media files (product photos)
+
+WhiteNoise only serves collected static assets. Uploads live in object storage (DigitalOcean Spaces, Cloudflare R2, or S3):
+
+1. Create a **Spaces** (or R2) bucket with public read (or a CDN hostname).
+2. Set the `AWS_*` vars from `.env.example` on the App / service.
 3. Deploy, then from a machine that has the local `media/` tree and the same env:
 
    ```bash
    python manage.py upload_local_media
    ```
-
-   That copies existing keys (`product_images/…`, etc.) so DB rows keep working.
-   New admin uploads go straight to the bucket.
 
 Brand logos under `static/core/img/brand/` are static files (git + `collectstatic`), not media.
 
