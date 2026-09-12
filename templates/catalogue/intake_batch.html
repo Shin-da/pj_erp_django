@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Upload {{ batch.serial_no }} — Perfect Jewel ERP{% endblock %}
+{% block crumb %}Add stock · Upload {{ batch.serial_no }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Upload {{ batch.serial_no }}</h1>
+    <p>
+      {% if batch.source == "form" %}One piece saved{% else %}{{ batch.sheet|default:"Jewellery Excel" }}{% endif %}
+      · {{ batch.created_at|date:"Y-m-d H:i" }}
+      {% if batch.uploaded_by %}· {{ batch.uploaded_by }}{% endif %}
+    </p>
+  </div>
+  <div class="page-head-actions">
+    {% if batch.workbook %}
+    <a href="{% url 'catalogue:intake_batch_file' batch.pk %}" class="btn btn-ghost"><i class="fa-solid fa-file-arrow-down"></i> Original file</a>
+    {% endif %}
+    <a href="{% url 'catalogue:product_intake' %}" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload another</a>
+    <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-gem"></i> Products</a>
+  </div>
+</div>
+
+<div class="panel in-result">
+  <div class="kpi-label">{{ batch.filename|default:batch.get_source_display }}</div>
+  <h2>{{ batch.created_count }} new · {{ batch.updated_count }} updated · {{ batch.error_count }} skipped</h2>
+  <p>
+    {% if batch.status == "success" %}Caught.{% elif batch.status == "partial" %}Caught, with row errors.{% else %}Not this file.{% endif %}
+    {% if batch.location %}New pieces sit at <strong>{{ batch.location }}</strong> unless that barcode was already placed.{% endif %}
+  </p>
+  {% if batch.notes %}
+  <p>{{ batch.notes|linebreaksbr }}</p>
+  {% endif %}
+</div>
+
+<div class="panel" style="padding:0; overflow:auto; margin-bottom:16px;">
+  <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:10px 12px;">SNo</th>
+        <th style="text-align:left; padding:10px 12px;">PJ Number</th>
+        <th style="text-align:left; padding:10px 12px;">Supplier code</th>
+        <th style="text-align:left; padding:10px 12px;">Action</th>
+        <th style="text-align:left; padding:10px 12px;">Status / note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td style="padding:8px 12px;" class="mono cell-muted">{{ forloop.counter }}</td>
+        <td style="padding:8px 12px;" class="mono cell-strong">
+          {% if line.item %}
+          <a href="{% url 'catalogue:item_detail' line.item.barcode %}">{{ line.barcode }}</a>
+          {% elif line.barcode %}
+          {{ line.barcode }}
+          {% else %}
+          <span class="cell-muted">—</span>
+          {% endif %}
+        </td>
+        <td style="padding:8px 12px;" class="mono">{{ line.reference|default:"—" }}</td>
+        <td style="padding:8px 12px;">
+          {% if line.action == "created" %}
+          <span class="pill pill-ok">New</span>
+          {% elif line.action == "updated" %}
+          <span class="pill pill-info">Updated</span>
+          {% else %}
+          <span class="pill pill-danger">Skipped</span>
+          {% endif %}
+        </td>
+        <td style="padding:8px 12px;" class="cell-muted">
+          {% if line.item %}{{ line.item.get_status_display }}{% endif %}
+          {% if line.message %}{{ line.message }}{% elif not line.item and line.action != "error" %}—{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5" style="padding:20px 12px;" class="cell-muted">No rows on this upload.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="page-head">
+  <div>
+    <h2 style="margin:0; font-size:18px;">Earlier uploads</h2>
+  </div>
+</div>
+{% include "catalogue/_intake_history.html" with current_batch=batch %}
+
+<style>
+  .in-result { margin-bottom: 12px; }
+  .in-result p { margin: 6px 0 12px; font-size: 13px; color: var(--text-muted); }
+  .in-result h2 { margin: 4px 0 8px; font-size: 18px; }
+  .in-result ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .in-history-current { background: var(--ok-bg, rgba(16, 128, 67, 0.08)); }
+</style>
+
+{% endblock %}

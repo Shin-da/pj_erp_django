@@ -8,7 +8,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 | Repo | https://github.com/Shin-da/pj_erp_django |
 | Branch | `main` |
 | Deploy | Render (migrate + collectstatic on build; gunicorn) |
-| Related docs | `OWNER-ONE-PAGER.md` (plain-language status, both systems), `README.md` (what’s built), `DATABASE.md` (DB notes) |
+| Related docs | `OWNER-ONE-PAGER.md` (plain-language status, both systems), `README.md` (what’s built), `DATABASE.md` / `DATABASE-GUIDE.md` |
 | Sibling spec | https://github.com/Shin-da/ftp_perfect-jewel-active-sync (`PROJECT_WORKLOG.md` there) |
 
 ---
@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-Run a sync on Render so the 2026-09-09 mirror fix actually lands — until it does, the live dashboard still shows the stale sold/location figures. After that: payments UI, transfers UI, authz, and the remaining ops gaps from the 2026-09-02 audit. `README.md` still describes hardware/UI as unbuilt — trust this work log over the README until that file is refreshed.
+**Photo upload UI for PJ/barcode** is in place — grant `catalogue.can_upload_photos` to photo staff. Also: run a sync on Render so the 2026-09-09 mirror fix lands; continue audit remediations (authz, payments/transfers UI). Trust this work log over the README until refreshed.
 
 ---
 
@@ -51,6 +51,111 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-12 — ERP photo upload by PJ / barcode (separate from stock intake)
+
+- **Source:** Cursor chat “check barcode photo upload / implement separate flow”
+- **Goal:** Give photo people an ERP screen to attach pictures by PJ/barcode, separate from `/products/add/` stock intake, while keeping the same login/permission system and the same design↔image chain.
+- **Done:**
+  - Shared helpers in `apps/catalogue/photos.py` (resolve barcode → design, attach uploads, bulk-by-filename).
+  - New permission `catalogue.can_upload_photos` (Manage Employee Access + migration `0010`); not auto-granted to Vault Staff baseline — photo staff are dialed in individually.
+  - UI `/products/photos/` (`product_photo_upload`): look up PJ, show design + existing gallery, multi-file upload; optional bulk match by PJ in filename.
+  - Product list / design / piece pages link to upload when permitted; Add stock / Upload photos buttons gated by their permissions.
+  - Tests: forbidden without perm, barcode upload, bulk filename match, unknown code does not create stock.
+- **Follow-ups / open:**
+  - Run `migrate` + `setup_permission_groups` (no baseline change for photos) and grant `can_upload_photos` to photo employees.
+  - Unverified almarphoto → real stock merge still not implemented.
+- **Commits (if any):** `e96eb16` — Add PJ/barcode photo upload separate from stock intake. (hash may change after rebase onto origin)
+
+### 2026-09-11 — Principal engineer / red-team full-system audit
+
+- **Source:** Cursor chat “Principal Engineer + Red-Team Full-System Audit”
+- **Goal:** Determine actual system state from evidence (code, live local Postgres, executed tests), not docs.
+- **Done:**
+  - Full audit report: [`SYSTEM-AUDIT-2026-09-11.md`](SYSTEM-AUDIT-2026-09-11.md).
+  - Executed: `manage.py check` (clean), `manage.py test` (**14 passed**), live constraint/row probes on `pj_erp_prod`, auth smoke tests.
+  - Corrected false/stale claims in `README.md`, `apps/accounts/models.py`, `apps/inventory/models.py`; expanded `.env.example`; ignored export xlsx in `.gitignore`.
+- **Follow-ups / open (critical):**
+  - Sync path still calls `ensure_local_admin` → resets `1001`/`changeme123` — remove + rotate if present on Render.
+  - Authz still `@login_required` only on mutators.
+  - `reference_id` not unique (160 duplicate groups / 359 rows locally); API lookup unsafe.
+  - No `select_for_update`; status CHECK claimed in docs was never in DB.
+  - Local `main` **4 commits behind** `origin/main` + large dirty/untracked tree (incl. `apps/api/`).
+  - django-q configured but no worker; WeasyPrint used but not in `requirements.txt`.
+- **Commits (if any):** none yet
+
+### 2026-09-11 — Product intake template + upload history
+
+- **Source:** Cursor chat; iadmin Product Master `Upload Excel` → `website_product_reference.aspx` + Excel Logs (`excel_log.aspx` / `tblUploadexcel_list`)
+- **Goal:** Add stock should offer a downloadable jewellery Excel template, then keep a history of each upload once it lands.
+- **Done:**
+  - `/products/add/template/` downloads `JewelleryExcelDData.xlsx` — same `Jewellery Excel` sheet, row-2 headers (`PJNUMBER`, `Supplier_product_code`, purity, dates, …).
+  - Each Excel drop (and one-piece save) writes `ProductIntakeBatch` + lines. After upload you land on `/products/add/history/<id>/` with the PJ numbers from that file. The add page lists earlier drops.
+  - Sheet `purchase_type` / `purchase_date` / `due_date` now store on the design (consignment lots included).
+- **Follow-ups / open:**
+  - Local check left `PJTESTINTAKE1` in the prod-snapshot catalog (upload 1). Delete if it should not stay.
+  - Not on Render until this is committed and deployed. Live iadmin Excel Logs stay on MSSQL.
+- **Commits (if any):** none yet
+
+### 2026-09-11 — Product photos on the piece page + has-photos filter
+
+- **Source:** Cursor chat screenshots of `/products/13512/` → `/products/item/PJ6781/` → View design
+- **Goal:** Photos should not require hopping Design → barcode → View design. Filter the catalogue to designs that have pictures.
+- **Done:**
+  - Piece page shows the design’s photo gallery when one exists (same shots as `/products/<id>/`).
+  - `/products/` filter **Has photos** / **No photos**, plus a **With photos** summary chip.
+- **Follow-ups / open:**
+  - `01690755` / `PJ6781` has **no** `ProductImage` row — gem placeholder is correct until that photo is imported. ~1,060 of ~8,733 designs have photos locally.
+- **Commits (if any):** none yet
+
+### 2026-09-11 — Consignment lot details page (practice copy)
+
+- **Source:** Cursor chat screenshot of `Consignment_productdetails.aspx?productid=4561`
+- **Goal:** Same chrome as the due list: show which design this is, due date, and where each piece sits. Return stays a real stock action.
+- **Done:** Work is on `ftp_perfect-jewel-active-sync` (not this Django repo): header + white panel; reference / style / supplier / purchase / due; free-sold-reserved-assigned counts; empty states; confirm before return. Header hides when opened from consignment payment (`?embed=1`). Removed the leftover `openBarcodePopup()` call that was not defined on this page.
+- **Follow-ups / open:**
+  - Not FTP’d to live. Upload `ConsignmentDue.cs` with this page.
+  - Return still uses the existing `product_return_bybarcode` SP.
+- **Commits (if any):** none yet
+
+### 2026-09-11 — iadmin dashboard UX + consignment list (practice copy)
+
+- **Source:** Cursor chat “enhance the ui/ux of the dashboard… add or enhance consignment_alert_master.aspx”
+- **Goal:** Owner/floor-first dashboard with numbers that do not double-count; consignment list filter matches rows.
+- **Done:** Work is on `ftp_perfect-jewel-active-sync` (not this Django repo): company stock excludes reserved pieces; unpaid is peso outstanding; cancelled invoices left out of sales KPIs; consignment chips `?due=` filter in SQL. Dashboard uses the same white panel as the consignment list. Stock KPIs were stuck at 0 (`NOT EXISTS` inside `SUM`); fixed with a reserve `LEFT JOIN`. Rechecked live: 8,472 tagged = 7,862 company + 610 sold.
+- **Follow-ups / open:**
+  - Not FTP’d to live. Upload `ConsignmentDue.cs` first.
+  - Django catalogue still needs a re-sync for dates (see entry below).
+- **Commits (if any):** none yet
+
+### 2026-09-11 — Guide to both databases (ERD + page map)
+
+- **Source:** Cursor chat “absorb the two databases… tables on what page… ERD for both”
+- **Goal:** One readable map of live iadmin `stock_rfid` and Django Postgres — not just catalog-switch notes.
+- **Done:**
+  - New [`DATABASE-GUIDE.md`](DATABASE-GUIDE.md): design vs piece vs invoice, mermaid ERDs, iadmin and Django page → table maps (including multi-table pages), name translation, metal-id trap, sync direction.
+  - Pointer in the FTP tree: `ftp_perfect-jewel-active-sync/docs/DATABASE-GUIDE.md`.
+  - Links from `README.md` and `DATABASE.md`. Interactive canvas beside chat for the same ERDs / page picker.
+- **Follow-ups / open:**
+  - In-app `/dev/db-workbench/` and `/dev/data-map/` remain the live browsers; this guide is the reading version.
+  - Gold batch / invoice-create approval still iadmin-only (called out in the guide).
+- **Commits (if any):** none yet
+
+### 2026-09-11 — Consignment due alarm (warn only)
+
+- **Source:** Cursor chat “can the alarm act like a notification window… Carry product_type + purchase_date + due_date onto ProductMaster”
+- **Goal:** Copy iadmin supplier-consignment dates onto Django, then remind (sound + window + header bell) for overdue / due within 7 days — same shape as reserve alerts, without auto-returning stock.
+- **Done:**
+  - `ProductMaster` now has `product_type`, `purchase_date`, `due_date` (`DateField`) plus migration `0007`. Sync parses DD-MM-YYYY, Excel serials, and “consignment” vs “Purchased”.
+  - Home KPI + table, header bell (replaces fake INV/TR rows), and a reminder modal with a two-tone chime. Dismiss today / mute / session snooze. Nothing writes stock or payments.
+  - Product list filters: purchase type + due (open / overdue / today / soon). Spec sheet shows the dates.
+  - Tests cover date parse, summary counts, home/bell HTML, and product detail.
+- **Follow-ups / open:**
+  - Same alarm is now on local iadmin (`ftp_perfect-jewel-active-sync`) — popup + Consign header count + rebuilt `consignment_alert_master.aspx` (chips, SQL filters). Dashboard company stock no longer includes reserved pieces; unpaid is pesos. Not on live FTP until those files are uploaded.
+  - Re-run `sync_legacy_mssql` / snapshot import so the ~4,100 live consignment lots get dates. Until then the Django alarm only sees demo `ZZ-ALARM-*` rows (and any later sync).
+  - After that re-sync the Django bell badge will be large (thousands overdue in the dump as of 11 Sep 2026) — summary counts are intentional.
+  - Browsers often block the chime until the first click.
+- **Commits (if any):** none yet
 
 ### 2026-09-09 — Live data health on the developer pages
 

@@ -24,6 +24,7 @@ Legacy findings this fixes:
 import re
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.db import models
 
 from apps.core.models import TimeStampedModel
@@ -110,6 +111,13 @@ class Supplier(TimeStampedModel):
         return self.name
 
 
+class PurchaseType(models.TextChoices):
+    """tblproduct_master.product_type — purchase vs supplier consignment."""
+
+    PURCHASED = "purchased", "Purchased"
+    CONSIGNMENT = "consignment", "Consignment"
+
+
 class ProductMaster(TimeStampedModel):
     reference_id = models.CharField(max_length=100, blank=True, db_index=True)
     legacy_id = models.IntegerField(
@@ -127,6 +135,25 @@ class ProductMaster(TimeStampedModel):
     metal = models.ForeignKey(Metal, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
     purity = models.ForeignKey(Purity, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
     supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
+
+    product_type = models.CharField(
+        max_length=20,
+        choices=PurchaseType.choices,
+        default=PurchaseType.PURCHASED,
+        db_index=True,
+        help_text="tblproduct_master.product_type. Consignment lots keep a due_date for return/settle reminders.",
+    )
+    purchase_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="tblproduct_master.purchase_date — when the lot was taken in.",
+    )
+    due_date = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="tblproduct_master.due_date — consignment return/settle-by date. Warn only; stock is not returned automatically.",
+    )
 
     net_weight = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     gross_weight = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
@@ -186,12 +213,43 @@ class ProductMaster(TimeStampedModel):
     )
 
     is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(
+        default=True,
+        help_text="False for a design created from an unverified source (e.g. photographed "
+        "into almarphoto) with no matching iadmin/RFID record yet — legacy_id is null and "
+        "nothing here has been confirmed against actual tagged stock. A later legacy sync "
+        "that finds a matching barcode/reference_id should flip this back to True and reuse "
+        "this row rather than creating a duplicate.",
+    )
 
     class Meta:
         ordering = ["name"]
+        indexes = [
+            models.Index(fields=["product_type", "due_date"], name="catalogue_pm_consign_due"),
+        ]
+        permissions = [
+            (
+                "can_intake_stock",
+                "Can bring in stock via Excel upload or one-piece intake (C2 fix — "
+                "SYSTEM-AUDIT-2026-09-11.md)",
+            ),
+            (
+                "can_upload_photos",
+                "Can upload design photos by PJ / barcode (separate from stock intake)",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.reference_id})" if self.reference_id else self.name
+
+    def days_until_due(self, today=None):
+        """None when there is no due_date. Negative means overdue."""
+        if not self.due_date:
+            return None
+        if today is None:
+            from django.utils import timezone
+            today = timezone.localdate()
+        return (self.due_date - today).days
 
     @property
     def effective_rate(self):
@@ -293,3 +351,82 @@ class ProductImage(TimeStampedModel):
 
     def __str__(self):
         return f"{self.product} — {self.get_kind_display()}"
+
+
+class ProductIntakeBatch(TimeStampedModel):
+    """One jewellery Excel (or one-piece form) drop — tblUploadexcel_list."""
+
+    class Source(models.TextChoices):
+        EXCEL = "excel", "Jewellery Excel"
+        FORM = "form", "One piece"
+
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Caught"
+        PARTIAL = "partial", "Caught with row errors"
+        FAILED = "failed", "Not this file"
+
+    serial_no = models.PositiveIntegerField(db_index=True)
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.EXCEL)
+    filename = models.CharField(max_length=255, blank=True)
+    workbook = models.FileField(upload_to="intake_uploads/%Y/%m/", blank=True)
+    sheet = models.CharField(max_length=100, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="product_intake_batches",
+    )
+    location = models.ForeignKey(
+        "locations.Location",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="product_intake_batches",
+    )
+    created_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.SUCCESS)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Excel {self.serial_no} ({self.filename or self.source})"
+
+    @property
+    def row_count(self):
+        return self.created_count + self.updated_count
+
+
+class ProductIntakeLine(TimeStampedModel):
+    """One PJ from an intake batch — the Excel Logs popup of barcodes."""
+
+    class Action(models.TextChoices):
+        CREATED = "created", "New"
+        UPDATED = "updated", "Updated"
+        ERROR = "error", "Skipped"
+
+    batch = models.ForeignKey(
+        ProductIntakeBatch, on_delete=models.CASCADE, related_name="lines",
+    )
+    barcode = models.CharField(max_length=100, blank=True, db_index=True)
+    reference = models.CharField(max_length=100, blank=True)
+    action = models.CharField(max_length=10, choices=Action.choices)
+    row_number = models.PositiveIntegerField(default=0)
+    message = models.CharField(max_length=500, blank=True)
+    item = models.ForeignKey(
+        "inventory.ProductItem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="intake_lines",
+    )
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.barcode or 'row'} — {self.action}"

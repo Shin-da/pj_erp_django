@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Upload photos — Perfect Jewel ERP{% endblock %}
+{% block crumb %}Upload photos{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Upload photos</h1>
+    <p>Photo team only — not stock intake. Scan or type a PJ / barcode, then attach pictures to that design. Pieces that share a design share the same shots.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Products</a>
+  </div>
+</div>
+
+{% if messages %}
+<div class="pu-flash">
+  {% for message in messages %}
+  <div class="panel pu-msg pu-msg-{{ message.tags|default:'info' }}">{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if lookup_error %}
+<div class="panel pu-msg pu-msg-error">{{ lookup_error }}</div>
+{% endif %}
+
+<form method="post" class="panel pu-lookup">
+  {% csrf_token %}
+  <input type="hidden" name="mode" value="lookup">
+  <div class="kpi-label">Find by PJ / barcode</div>
+  <p>Same codes stock people use. Lookup opens the design’s gallery so you upload to the right product.</p>
+  <label class="pu-code">
+    <span>PJ / barcode</span>
+    <input class="field mono" name="code" value="{{ code }}" placeholder="PJ22899" autofocus required>
+  </label>
+  <div class="pu-actions">
+    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> Look up</button>
+  </div>
+</form>
+
+{% if product %}
+<div class="panel pu-target">
+  <div class="kpi-label">Design</div>
+  <div class="pu-target-row">
+    <div>
+      <div class="mono cell-strong" style="font-size:18px;">{{ sample_barcode|default:product.reference_id|default:product.name }}</div>
+      <div class="cell-muted" style="margin-top:4px;">
+        {% if product.reference_id %}<span class="mono">{{ product.reference_id }}</span> · {% endif %}
+        {{ product.name }} · {{ piece_count }} piece{{ piece_count|pluralize }}
+        {% if not product.is_verified %} · <span class="pill pill-warn">Unverified</span>{% endif %}
+      </div>
+    </div>
+    <div class="pu-actions">
+      <a href="{% url 'catalogue:product_detail' product.pk %}" class="btn btn-ghost"><i class="fa-solid fa-gem"></i> View design</a>
+      {% if sample_barcode %}
+      <a href="{% url 'catalogue:item_detail' sample_barcode %}" class="btn btn-ghost"><i class="fa-solid fa-barcode"></i> Piece</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% with photos=product.images.all %}
+  {% if photos %}
+  <div class="pu-existing">
+    <div class="kpi-label" style="margin-bottom:8px;">Current photos <span class="cell-muted">({{ photos|length }})</span></div>
+    <div class="pu-thumbs">
+      {% for im in photos %}
+      <a href="{{ im.image.url }}" target="_blank" rel="noopener" class="pu-thumb" title="{{ im.source_filename|default:im.get_kind_display }}">
+        <img src="{{ im.image.url }}" alt="" loading="lazy">
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <p class="cell-muted" style="margin:10px 0 0;">No photos on this design yet.</p>
+  {% endif %}
+  {% endwith %}
+</div>
+
+<form method="post" enctype="multipart/form-data" class="panel pu-upload">
+  {% csrf_token %}
+  <input type="hidden" name="mode" value="upload">
+  <input type="hidden" name="code" value="{{ code }}">
+  <div class="kpi-label">Attach photos to {{ code }}</div>
+  <p>You can select several files. Re-uploading the same filename for this design is skipped.</p>
+  <label class="pu-file">
+    <span>Image files</span>
+    <input type="file" name="photos" accept="image/*,.jpg,.jpeg,.png,.webp" multiple required>
+  </label>
+  <div class="pu-actions">
+    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-camera"></i> Upload photos</button>
+  </div>
+</form>
+{% endif %}
+
+<details class="panel pu-bulk"{% if bulk_report %} open{% endif %}>
+  <summary>Bulk upload by filename</summary>
+  <p>For a folder of shots already named with PJ codes (e.g. <span class="mono">PJ22899 18K WG…JPG</span>). Same matching as the import command — barcode first, then reference ID.</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="mode" value="bulk">
+    <label class="pu-file">
+      <span>Image files</span>
+      <input type="file" name="photos" accept="image/*,.jpg,.jpeg,.png,.webp" multiple required>
+    </label>
+    <div class="pu-actions">
+      <button type="submit" class="btn btn-ghost"><i class="fa-solid fa-images"></i> Match and upload</button>
+    </div>
+  </form>
+  {% if bulk_report %}
+  <div class="pu-bulk-report">
+    <p>
+      Matched files: {{ bulk_report.matched_files }} ·
+      Photos created: {{ bulk_report.created }} ·
+      Designs touched: {{ bulk_report.products_touched }} ·
+      Skipped: {{ bulk_report.skipped }}
+    </p>
+    {% if bulk_report.unmatched %}
+    <div class="kpi-label" style="margin:10px 0 6px;">Unmatched</div>
+    <ul>
+      {% for name, reason in bulk_report.unmatched|slice:":20" %}
+      <li><span class="mono">{{ name }}</span> — {{ reason }}</li>
+      {% endfor %}
+      {% if bulk_report.unmatched|length > 20 %}
+      <li class="cell-muted">… and more</li>
+      {% endif %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+</details>
+
+<style>
+  .pu-lookup, .pu-target, .pu-upload, .pu-bulk { margin-bottom: 12px; max-width: 640px; }
+  .pu-flash { max-width: 640px; margin-bottom: 12px; display: grid; gap: 8px; }
+  .pu-msg { margin-bottom: 12px; max-width: 640px; font-size: 13px; }
+  .pu-msg-error, .pu-msg-error { border-color: var(--danger, #c0392b); }
+  .pu-msg-success, .pu-msg-success { border-color: var(--ok, #16803c); }
+  .pu-msg-warning, .pu-msg-warning { border-color: var(--warn, #b8860b); }
+  .pu-lookup p, .pu-upload p, .pu-bulk > p, .pu-bulk form + .pu-bulk-report p {
+    margin: 6px 0 12px; font-size: 13px; color: var(--text-muted);
+  }
+  .pu-code, .pu-file { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
+  .pu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .pu-target-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .pu-existing { margin-top: 14px; }
+  .pu-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pu-thumb {
+    display: block; width: 72px; height: 72px; border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border, #ddd); background: var(--surface-2, #f5f5f5);
+  }
+  .pu-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pu-bulk summary { cursor: pointer; font-weight: 650; }
+  .pu-bulk form { margin-top: 10px; display: grid; gap: 10px; }
+  .pu-bulk-report ul { margin: 0; padding-left: 18px; font-size: 13px; }
+</style>
+
+{% endblock %}

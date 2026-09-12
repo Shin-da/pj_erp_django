@@ -1,0 +1,61 @@
+<div class="panel in-history" style="padding:0; overflow:auto;">
+  <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px; min-width:720px;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:10px 12px;">SNo</th>
+        <th style="text-align:left; padding:10px 12px;">When</th>
+        <th style="text-align:left; padding:10px 12px;">File</th>
+        <th style="text-align:left; padding:10px 12px;">By</th>
+        <th style="text-align:right; padding:10px 12px;">New</th>
+        <th style="text-align:right; padding:10px 12px;">Updated</th>
+        <th style="text-align:right; padding:10px 12px;">Skipped</th>
+        <th style="text-align:left; padding:10px 12px;">Status</th>
+        <th style="text-align:right; padding:10px 12px; width:72px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for batch in history %}
+      <tr{% if current_batch and batch.pk == current_batch.pk %} class="in-history-current"{% endif %}>
+        <td style="padding:8px 12px;" class="mono">{{ batch.serial_no }}</td>
+        <td style="padding:8px 12px; white-space:nowrap;" class="mono cell-muted">{{ batch.created_at|date:"Y-m-d H:i" }}</td>
+        <td style="padding:8px 12px;">
+          <span class="cell-strong">{{ batch.filename|default:batch.get_source_display }}</span>
+          {% if batch.sheet %}<div class="cell-muted mono" style="font-size:11px;">{{ batch.sheet }}{% if batch.location %} · {{ batch.location.code }}{% endif %}</div>
+          {% elif batch.location %}<div class="cell-muted" style="font-size:11px;">{{ batch.location }}</div>{% endif %}
+        </td>
+        <td style="padding:8px 12px;">{% if batch.uploaded_by %}{{ batch.uploaded_by.get_short_name }}{% else %}<span class="cell-muted">—</span>{% endif %}</td>
+        <td style="padding:8px 12px; text-align:right;" class="mono">{{ batch.created_count }}</td>
+        <td style="padding:8px 12px; text-align:right;" class="mono">{{ batch.updated_count }}</td>
+        <td style="padding:8px 12px; text-align:right;" class="mono">{{ batch.error_count }}</td>
+        <td style="padding:8px 12px;">
+          {% if batch.status == "success" %}
+          <span class="pill pill-ok">Caught</span>
+          {% elif batch.status == "partial" %}
+          <span class="pill pill-warn">With errors</span>
+          {% else %}
+          <span class="pill pill-danger">Not this file</span>
+          {% endif %}
+        </td>
+        <td style="padding:8px 12px; text-align:right; white-space:nowrap;">
+          <a href="{% url 'catalogue:intake_batch' batch.pk %}" class="btn btn-ghost btn-sm">View</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="9" style="padding:20px 12px;" class="cell-muted">No uploads yet. They appear here after you drop a jewellery Excel or save one piece.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if history.has_other_pages %}
+<div style="display:flex; gap:8px; margin-top:14px; align-items:center;">
+  {% if history.has_previous %}
+  <a class="btn btn-ghost btn-sm" href="?page={{ history.previous_page_number }}">← Prev</a>
+  {% endif %}
+  <span class="cell-muted" style="font-size:12px;">Page {{ history.number }} / {{ history.paginator.num_pages }}</span>
+  {% if history.has_next %}
+  <a class="btn btn-ghost btn-sm" href="?page={{ history.next_page_number }}">Next →</a>
+  {% endif %}
+</div>
+{% endif %}

@@ -1,47 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Add stock — Perfect Jewel ERP{% endblock %}
+{% block crumb %}Add stock{% endblock %}
 {% block content %}
 
 <div class="page-head">
   <div>
     <h1>Add stock</h1>
-    <p>The usual way is the jewellery Excel from Product Master — the file with a <span class="mono">Jewellery Excel</span> sheet, <span class="mono">PJNUMBER</span>, and <span class="mono">DFLT - 18K</span>. A blank metal name is not saved as Silver.</p>
+    <p>Same jewellery Excel as Product Master — download the template, fill row 3 onward, then upload. A blank metal name is not saved as Silver.</p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'catalogue:intake_template' %}" class="btn btn-primary"><i class="fa-solid fa-file-arrow-down"></i> Download sample Excel</a>
     <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Products</a>
   </div>
 </div>
-
-{% if report %}
-<div class="panel in-result">
-  <div class="kpi-label">Upload caught</div>
-  <h2>{{ result.sheet }} · {{ result.rows|length }} rows</h2>
-  <p>{{ report.created }} new pieces, {{ report.updated }} already here and updated. They sit at <strong>{{ default_location }}</strong> unless that barcode was already placed.</p>
-  {% if result.errors %}
-  <ul>
-    {% for err in result.errors|slice:":8" %}
-    <li>{{ err }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  {% if report.notes %}
-  <ul>
-    {% for note in report.notes %}
-    <li>{{ note }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-</div>
-{% elif result and result.errors %}
-<div class="panel in-result">
-  <div class="kpi-label">Not this file</div>
-  <ul>
-    {% for err in result.errors %}
-    <li>{{ err }}</li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
 
 {% if show_dev_nav %}
 <form method="post" class="panel in-upload">
@@ -62,7 +33,7 @@
 <form method="post" enctype="multipart/form-data" class="panel in-upload">
   {% csrf_token %}
   <div class="kpi-label">Upload Excel</div>
-  <p>Same workbook Cylver drops on iadmin. Header is row 2. Each row is one PJ code.</p>
+  <p>Header is row 2 of the <span class="mono">Jewellery Excel</span> sheet. Each row is one PJ code. After upload you land on that file’s history — every drop stays listed below.</p>
   <label class="in-file">
     <span>Jewellery Excel file</span>
     <input type="file" name="workbook" accept=".xlsx,.xlsm" required>
@@ -77,7 +48,10 @@
       {% endfor %}
     </select>
   </label>
-  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload</button>
+  <div class="in-actions">
+    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload Excel</button>
+    <a href="{% url 'catalogue:intake_template' %}" class="btn btn-ghost"><i class="fa-solid fa-file-excel"></i> {{ template_filename }}</a>
+  </div>
 </form>
 
 <details class="panel in-one">
@@ -99,6 +73,13 @@
       <label><span>Rate</span><input class="field" name="rate" placeholder="63"></label>
       <label><span>Size</span><input class="field" name="size"></label>
       <label>
+        <span>Purchase type</span>
+        <select name="purchase_type" class="field">
+          <option value="purchased">Purchased</option>
+          <option value="consignment">Consignment</option>
+        </select>
+      </label>
+      <label>
         <span>Location</span>
         <select name="location" class="field">
           {% for loc in locations %}
@@ -111,6 +92,14 @@
   </form>
 </details>
 
+<div class="page-head" style="margin-top:8px;">
+  <div>
+    <h2 style="margin:0; font-size:18px;">Upload history</h2>
+    <p>Every Excel drop and one-piece save. Open a row to see the PJ numbers from that file.</p>
+  </div>
+</div>
+{% include "catalogue/_intake_history.html" %}
+
 <style>
   .in-upload, .in-one, .in-result { margin-bottom: 12px; }
   .in-upload p, .in-result p { margin: 6px 0 12px; font-size: 13px; color: var(--text-muted); }
@@ -118,6 +107,7 @@
   .in-result ul { margin: 0; padding-left: 18px; font-size: 13px; }
   .in-file, .in-upload label, .in-one label { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
   .in-upload { display: grid; gap: 10px; max-width: 520px; }
+  .in-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .in-one summary { cursor: pointer; font-weight: 650; }
   .in-grid {
     display: grid;
@@ -125,6 +115,7 @@
     gap: 10px;
     margin: 12px 0;
   }
+  .in-history-current { background: var(--ok-bg, rgba(16, 128, 67, 0.08)); }
   @media (max-width: 800px) {
     .in-grid { grid-template-columns: 1fr; }
   }

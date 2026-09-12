@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% load humanize %}
+{% block title %}Products — Perfect Jewel ERP{% endblock %}
+{% block crumb %}Products{% endblock %}
 {% block content %}
 
 <div class="page-head">
@@ -8,7 +10,12 @@
     <p>One row per design. Reference ID is the unique catalogue code; style names often repeat across designs. Paste a PJ / barcode to open that piece directly.</p>
   </div>
   <div class="page-head-actions">
+    {% if perms.catalogue.can_intake_stock %}
     <a href="{% url 'catalogue:product_intake' %}" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Add stock</a>
+    {% endif %}
+    {% if perms.catalogue.can_upload_photos %}
+    <a href="{% url 'catalogue:photo_upload' %}" class="btn {% if perms.catalogue.can_intake_stock %}btn-ghost{% else %}btn-primary{% endif %}"><i class="fa-solid fa-camera"></i> Upload photos</a>
+    {% endif %}
     <a href="{% url 'inventory:location_list' %}" class="btn btn-ghost"><i class="fa-solid fa-boxes-stacked"></i> By location</a>
   </div>
 </div>
@@ -29,6 +36,10 @@
   <a href="?{{ qs_stock_none }}" class="pl-sum{% if stock == 'NONE' %} is-active{% endif %}">
     <span class="pl-sum-n">{{ stats.no_pieces|default:0|intcomma }}</span>
     <span class="pl-sum-l">No pieces</span>
+  </a>
+  <a href="?{{ qs_media_photos }}" class="pl-sum{% if media == 'photos' %} is-active{% endif %}">
+    <span class="pl-sum-n">{{ stats.with_photos|default:0|intcomma }}</span>
+    <span class="pl-sum-l">With photos</span>
   </a>
   <div class="pl-sum pl-sum-static">
     <span class="pl-sum-n">{{ stats.available_total|default:0|intcomma }}</span>
@@ -69,6 +80,23 @@
       <option value="OUT" {% if stock == "OUT" %}selected{% endif %}>Nothing available</option>
       <option value="NONE" {% if stock == "NONE" %}selected{% endif %}>No pieces at all</option>
     </select>
+    <select name="purchase" class="field fbar-select" aria-label="Purchase type">
+      <option value="">Any purchase type</option>
+      <option value="consignment" {% if purchase == "consignment" %}selected{% endif %}>Consignment</option>
+      <option value="purchased" {% if purchase == "purchased" %}selected{% endif %}>Purchased</option>
+    </select>
+    <select name="due" class="field fbar-select" aria-label="Consignment due">
+      <option value="">Any due date</option>
+      <option value="open" {% if due == "open" %}selected{% endif %}>Due soon or overdue</option>
+      <option value="overdue" {% if due == "overdue" %}selected{% endif %}>Overdue</option>
+      <option value="today" {% if due == "today" %}selected{% endif %}>Due today</option>
+      <option value="soon" {% if due == "soon" %}selected{% endif %}>Due within 7 days</option>
+    </select>
+    <select name="media" class="field fbar-select" aria-label="Photos">
+      <option value="">Any photos</option>
+      <option value="photos" {% if media == "photos" %}selected{% endif %}>Has photos</option>
+      <option value="none" {% if media == "none" %}selected{% endif %}>No photos</option>
+    </select>
     <select name="sort" class="field fbar-select" aria-label="Sort by">
       <option value="reference" {% if sort == "reference" %}selected{% endif %}>Reference A–Z</option>
       <option value="-reference" {% if sort == "-reference" %}selected{% endif %}>Reference Z–A</option>
@@ -78,12 +106,14 @@
       <option value="-available" {% if sort == "-available" %}selected{% endif %}>Most available</option>
       <option value="-price" {% if sort == "-price" %}selected{% endif %}>Highest price</option>
       <option value="price" {% if sort == "price" %}selected{% endif %}>Lowest price</option>
+      <option value="due" {% if sort == "due" %}selected{% endif %}>Due date soonest</option>
+      <option value="-due" {% if sort == "-due" %}selected{% endif %}>Due date latest</option>
     </select>
     <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter"></i> Apply</button>
   </div>
 </form>
 
-{% if q or category or supplier or subcategory or stock %}
+{% if q or category or supplier or subcategory or stock or purchase or due or media %}
 <div class="pl-chips">
   <span class="pl-chips-label">Filtered by</span>
   {% if q %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_q %}?{{ qs_clear_q }}{% endif %}" title="Remove search"><i class="fa-solid fa-magnifying-glass"></i> “{{ q }}” <i class="fa-solid fa-xmark"></i></a>{% endif %}
@@ -91,6 +121,9 @@
   {% if subcategory %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_subcategory %}?{{ qs_clear_subcategory }}{% endif %}" title="Remove sub-category">{{ subcategory_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
   {% if supplier_obj %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_supplier %}?{{ qs_clear_supplier }}{% endif %}" title="Remove supplier">{{ supplier_obj.name }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
   {% if stock %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_stock %}?{{ qs_clear_stock }}{% endif %}" title="Remove stock filter">{{ stock_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if purchase %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_purchase %}?{{ qs_clear_purchase }}{% endif %}" title="Remove purchase type">{{ purchase_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if media %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_media %}?{{ qs_clear_media }}{% endif %}" title="Remove photo filter">{{ media_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
+  {% if due %}<a class="pl-chip" href="{% url 'catalogue:product_list' %}{% if qs_clear_due %}?{{ qs_clear_due }}{% endif %}" title="Remove due filter">{{ due_label }} <i class="fa-solid fa-xmark"></i></a>{% endif %}
   <a href="{% url 'catalogue:product_list' %}{% if qs_clear_all %}?{{ qs_clear_all }}{% endif %}" class="pl-chip-clear">Clear all</a>
 </div>
 {% endif %}
@@ -128,6 +161,11 @@
           {% elif p.available_count > 0 %}<span class="pill pill-ok">{{ p.available_count }} avail</span>
           {% else %}<span class="pill pill-warn">None avail</span>
           {% endif %}
+          {% if p.product_type == "consignment" and p.due_label %}
+            {% if p.is_overdue %}<span class="pill pill-danger">{{ p.due_label }}</span>
+            {% elif p.is_due_today %}<span class="pill pill-warn">{{ p.due_label }}</span>
+            {% endif %}
+          {% endif %}
         </div>
       </div>
       <div class="pl-card-body">
@@ -160,6 +198,7 @@
             <th>Category</th>
             <th>Metal</th>
             <th>Selling price</th>
+            <th>Due</th>
             <th>Pieces</th>
             <th>Stock</th>
           </tr>
@@ -190,6 +229,7 @@
             <td class="cell-muted">{{ p.category.name }}{% if p.subcategory %} · {{ p.subcategory }}{% endif %}</td>
             <td class="cell-muted">{{ p.display_metal|default:"—" }}</td>
             <td class="mono">{% if p.selling_price %}{{ p.currency.symbol|default:p.currency.code }}{{ p.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td>{% if p.product_type == "consignment" and p.due_label %}{% if p.is_overdue %}<span class="pill pill-danger">{{ p.due_label }}</span>{% elif p.is_due_today %}<span class="pill pill-warn">{{ p.due_label }}</span>{% else %}<span class="cell-muted">{{ p.due_label }}</span>{% endif %}{% elif p.due_date %}<span class="cell-muted">{{ p.due_date|date:"M j" }}</span>{% else %}<span class="cell-muted">—</span>{% endif %}</td>
             <td class="mono">{{ p.item_count }}</td>
             <td>
               {% if p.item_count == 0 %}<span class="pill pill-neutral">No pieces</span>
@@ -231,8 +271,8 @@
 {% else %}
 <div class="empty-state pl-empty">
   <i class="fa-solid fa-gem"></i>
-  <p>{% if q or category or supplier or subcategory or stock %}No products match these filters.{% else %}No products in the catalogue yet.{% endif %}</p>
-  {% if q or category or supplier or subcategory or stock %}
+  <p>{% if q or category or supplier or subcategory or stock or purchase or due or media %}No products match these filters.{% else %}No products in the catalogue yet.{% endif %}</p>
+  {% if q or category or supplier or subcategory or stock or purchase or due or media %}
   <a href="{% url 'catalogue:product_list' %}{% if qs_clear_all %}?{{ qs_clear_all }}{% endif %}" class="btn btn-ghost btn-sm" style="margin-top:14px;">Clear filters</a>
   {% endif %}
 </div>

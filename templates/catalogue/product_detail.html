@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+{% load status_tags %}
+{% block title %}{{ product.reference_id|default:product.name }} — Perfect Jewel ERP{% endblock %}
+{% block crumb %}{{ product.reference_id|default:product.name }}{% endblock %}
 {% block content %}
 
 <div class="page-head">
@@ -7,6 +10,9 @@
     <p>{{ product.category.name }}{% if product.display_metal %} · {{ product.display_metal }}{% endif %} · {{ product.item_count }} physical piece{{ product.item_count|pluralize }} in the system.</p>
   </div>
   <div class="page-head-actions">
+    {% if perms.catalogue.can_upload_photos and photo_lookup_code %}
+    <a href="{% url 'catalogue:photo_upload' %}?code={{ photo_lookup_code }}" class="btn btn-ghost"><i class="fa-solid fa-camera"></i> Upload photos</a>
+    {% endif %}
     <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> All products</a>
   </div>
 </div>
@@ -45,6 +51,9 @@
       <tr><th>Metal</th><td>{{ product.metal.name|default:"—" }}</td></tr>
       <tr><th>Purity</th><td>{{ product.display_purity|default:"—" }}</td></tr>
       <tr><th>Supplier</th><td>{{ product.supplier.name|default:"—" }}</td></tr>
+      <tr><th>Purchase type</th><td>{% if product.product_type == "consignment" %}<span class="pill pill-info">Consignment</span>{% else %}<span class="pill pill-neutral">Purchased</span>{% endif %}</td></tr>
+      <tr><th>Purchase date</th><td>{{ product.purchase_date|date:"M j, Y"|default:"—" }}</td></tr>
+      <tr><th>Due date</th><td>{% if product.due_date %}{% if product.is_overdue %}<span class="pill pill-danger">{{ product.due_label }}</span> <span class="cell-muted">{{ product.due_date|date:"M j, Y" }}</span>{% elif product.is_due_today %}<span class="pill pill-warn">{{ product.due_label }}</span> <span class="cell-muted">{{ product.due_date|date:"M j, Y" }}</span>{% elif product.due_label %}{{ product.due_date|date:"M j, Y" }} <span class="cell-muted">({{ product.due_label|lower }})</span>{% else %}{{ product.due_date|date:"M j, Y" }}{% endif %}{% else %}—{% endif %}</td></tr>
       <tr><th>Net weight</th><td class="mono">{% if product.display_net_weight %}{{ product.display_net_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
       <tr><th>Gross weight</th><td class="mono">{% if product.gross_weight %}{{ product.gross_weight|floatformat:3 }} g{% else %}—{% endif %}</td></tr>
       <tr><th>Purchase price</th><td class="mono">{% if product.purchase_price %}{{ product.currency.symbol|default:product.currency.code }}{{ product.purchase_price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
@@ -114,15 +123,7 @@
         <tr>
           <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' item.barcode %}">{{ item.barcode }}</a></td>
           <td><a href="{% url 'inventory:location_detail' item.location.code %}">{{ item.location.name }}</a></td>
-          <td>
-            {% if item.status == "PENDING" %}<span class="pill pill-ok">Available</span>
-            {% elif item.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
-            {% elif item.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
-            {% elif item.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
-            {% elif item.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
-            {% else %}<span class="pill pill-neutral">{{ item.get_status_display }}</span>
-            {% endif %}
-          </td>
+          <td>{{ item|stock_status_pill }}</td>
           <td class="cell-muted">{{ item.get_reprint_status_display }}</td>
           <td class="cell-muted">{{ item.updated_at|date:"M j, Y H:i" }}</td>
         </tr>

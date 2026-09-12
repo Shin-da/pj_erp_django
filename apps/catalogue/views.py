@@ -19,25 +19,55 @@ only stock views were location-scoped grids).
 
 Counts are annotated in one query per page rather than looped, so a
 product with 400 pieces costs the same as one with 4.
+
+C2 fix (SYSTEM-AUDIT-2026-09-11.md): write views here are gated by real
+permissions instead of just @login_required — see
+apps/accounts/access.py::require_perm and apps/accounts/permissions.py.
+
+  product_intake       — catalogue.can_intake_stock  (Excel / one-piece stock)
+  product_photo_upload — catalogue.can_upload_photos (design photos by PJ)
+
+Same employee login; separate people and screens. Photos still attach to
+the design via barcode → ProductMaster → ProductImage (see photos.py).
+Everything else on this page stays read-only/@login_required; view-only
+access was never the security gap the audit found.
 """
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, Exists, OuterRef, Q, Subquery, Sum
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
-from apps.accounts.access import is_developer
+from apps.accounts.access import is_developer, require_perm
+from apps.catalogue.consignment import NEAR_DAYS, decorate_due_rows, due_horizon
 from apps.catalogue.datafile import sync_datafile
 from apps.catalogue.intake import (
+    TEMPLATE_FILENAME,
     IntakeRow,
     apply_rows,
+    build_jewellery_template,
     default_location,
     parse_jewellery_workbook,
+    record_intake_batch,
 )
 from apps.catalogue.labels import subcategory_label
-from apps.catalogue.models import Category, ProductMaster, Supplier
+from apps.catalogue.models import (
+    Category,
+    ProductImage,
+    ProductIntakeBatch,
+    ProductMaster,
+    PurchaseType,
+    Supplier,
+)
+from apps.catalogue.photos import (
+    attach_bulk_by_filename,
+    attach_uploaded_images,
+    normalize_code,
+    resolve_product_by_code,
+)
 from apps.core.models import AuditLogEntry
 from apps.core.search import _exact_item
 from apps.inventory.models import ProductItem, StockStatus
@@ -64,6 +94,9 @@ def _product_list_query(request, **overrides):
         "supplier": request.GET.get("supplier", "").strip(),
         "subcategory": request.GET.get("subcategory", "").strip(),
         "stock": request.GET.get("stock", "").strip(),
+        "purchase": request.GET.get("purchase", "").strip(),
+        "due": request.GET.get("due", "").strip(),
+        "media": request.GET.get("media", "").strip(),
         "sort": request.GET.get("sort", "reference").strip() or "reference",
         "view": request.GET.get("view", "grid").strip() or "grid",
     }
@@ -95,10 +128,11 @@ def product_list(request):
         .order_by("barcode")
         .values("barcode")[:1]
     )
+    has_photo = Exists(ProductImage.objects.filter(product_id=OuterRef("pk")))
     products = (
         ProductMaster.objects.select_related("category", "currency", "metal", "purity", "supplier")
         .prefetch_related("images")
-        .annotate(**_stock_annotations(), sample_barcode=sample_barcode)
+        .annotate(**_stock_annotations(), sample_barcode=sample_barcode, has_photo=has_photo)
     )
 
     if q:
@@ -129,6 +163,7 @@ def product_list(request):
         with_available=Count("pk", filter=Q(available_count__gt=0)),
         out_of_stock=Count("pk", filter=Q(item_count__gt=0, available_count=0)),
         no_pieces=Count("pk", filter=Q(item_count=0)),
+        with_photos=Count("pk", filter=Q(has_photo=True)),
         piece_total=Sum("item_count"),
         available_total=Sum("available_count"),
     )
@@ -147,9 +182,37 @@ def product_list(request):
     elif stock == "NONE":
         products = products.filter(item_count=0)
 
+    purchase = request.GET.get("purchase", "").strip()
+    if purchase in {PurchaseType.PURCHASED, PurchaseType.CONSIGNMENT}:
+        products = products.filter(product_type=purchase)
+
+    media = request.GET.get("media", "").strip()
+    if media == "photos":
+        products = products.filter(has_photo=True)
+    elif media == "none":
+        products = products.filter(has_photo=False)
+
+    today, horizon = due_horizon()
+    due = request.GET.get("due", "").strip()
+    if due in {"overdue", "today", "soon", "open"}:
+        products = products.filter(
+            product_type=PurchaseType.CONSIGNMENT,
+            due_date__isnull=False,
+        )
+        if due == "overdue":
+            products = products.filter(due_date__lt=today)
+        elif due == "today":
+            products = products.filter(due_date=today)
+        elif due == "soon":
+            products = products.filter(due_date__gt=today, due_date__lte=horizon)
+        else:
+            products = products.filter(due_date__lte=horizon)
+
     # Default by reference_id: many legacy designs share a style name
     # (e.g. ANICH1) while the reference is what actually distinguishes them.
     sort = request.GET.get("sort", "reference").strip() or "reference"
+    if due and sort == "reference":
+        sort = "due"
     sort_map = {
         "reference": ("reference_id", "name"),
         "-reference": ("-reference_id", "-name"),
@@ -161,6 +224,8 @@ def product_list(request):
         "-available": ("-available_count", "reference_id"),
         "price": ("selling_price", "reference_id"),
         "-price": ("-selling_price", "reference_id"),
+        "due": ("due_date", "name"),
+        "-due": ("-due_date", "name"),
     }
     products = products.order_by(*sort_map.get(sort, sort_map["reference"]))
 
@@ -171,6 +236,7 @@ def product_list(request):
 
     paginator = Paginator(products, per_page)
     page_obj = paginator.get_page(request.GET.get("page"))
+    decorate_due_rows(page_obj.object_list, today=today)
 
     subcategory_choices = [
         (code, subcategory_label(code))
@@ -192,6 +258,21 @@ def product_list(request):
         "NONE": "No pieces at all",
     }
 
+    due_labels = {
+        "overdue": "Consignment overdue",
+        "today": "Consignment due today",
+        "soon": f"Consignment due within {NEAR_DAYS} days",
+        "open": "Consignment due soon or overdue",
+    }
+    purchase_labels = {
+        PurchaseType.PURCHASED: "Purchased",
+        PurchaseType.CONSIGNMENT: "Consignment",
+    }
+    media_labels = {
+        "photos": "Has photos",
+        "none": "No photos",
+    }
+
     return render(request, "catalogue/product_list.html", {
         "page_obj": page_obj,
         "q": q,
@@ -199,6 +280,9 @@ def product_list(request):
         "supplier": supplier,
         "subcategory": subcategory,
         "stock": stock,
+        "purchase": purchase,
+        "due": due,
+        "media": media,
         "sort": sort,
         "view": view,
         "categories": Category.objects.order_by("name"),
@@ -210,6 +294,9 @@ def product_list(request):
         "supplier_obj": supplier_obj,
         "subcategory_label": subcategory_label(subcategory) if subcategory else "",
         "stock_label": stock_labels.get(stock, ""),
+        "purchase_label": purchase_labels.get(purchase, ""),
+        "due_label": due_labels.get(due, ""),
+        "media_label": media_labels.get(media, ""),
         "query_base": _product_list_query(request, page=None),
         "qs_grid": _product_list_query(request, view="grid", page=None),
         "qs_list": _product_list_query(request, view="list", page=None),
@@ -217,12 +304,20 @@ def product_list(request):
         "qs_stock_available": _product_list_query(request, stock="AVAILABLE", page=None),
         "qs_stock_out": _product_list_query(request, stock="OUT", page=None),
         "qs_stock_none": _product_list_query(request, stock="NONE", page=None),
+        "qs_media_photos": _product_list_query(request, media="photos", page=None),
+        "qs_media_all": _product_list_query(request, media="", page=None),
         "qs_clear_q": _product_list_query(request, q="", page=None),
         "qs_clear_category": _product_list_query(request, category="", page=None),
         "qs_clear_subcategory": _product_list_query(request, subcategory="", page=None),
         "qs_clear_supplier": _product_list_query(request, supplier="", page=None),
         "qs_clear_stock": _product_list_query(request, stock="", page=None),
-        "qs_clear_all": _product_list_query(request, q="", category="", supplier="", subcategory="", stock="", page=None),
+        "qs_clear_purchase": _product_list_query(request, purchase="", page=None),
+        "qs_clear_due": _product_list_query(request, due="", page=None),
+        "qs_clear_media": _product_list_query(request, media="", page=None),
+        "qs_clear_all": _product_list_query(
+            request, q="", category="", supplier="", subcategory="", stock="",
+            purchase="", due="", media="", page=None,
+        ),
     })
 
 @login_required
@@ -230,9 +325,12 @@ def product_detail(request, pk):
     """One design: its spec sheet, its stock rollup, and every piece of it."""
     product = get_object_or_404(
         ProductMaster.objects.select_related("category", "currency", "metal", "purity", "supplier")
+        .prefetch_related("images")
         .annotate(**_stock_annotations()),
         pk=pk,
     )
+
+    decorate_due_rows([product])
 
     items = (
         ProductItem.objects.filter(product=product)
@@ -274,6 +372,16 @@ def product_detail(request, pk):
         "location": location,
         "status_choices": StockStatus.choices,
         "locations": Location.objects.order_by("name"),
+        # Prefer a real piece barcode for the photo upload deep-link;
+        # reference_id is often a supplier code, not PJ….
+        "photo_lookup_code": (
+            ProductItem.objects.filter(product=product)
+            .order_by("barcode")
+            .values_list("barcode", flat=True)
+            .first()
+            or product.reference_id
+            or ""
+        ),
     })
 
 
@@ -290,7 +398,7 @@ def item_detail(request, barcode):
             "product", "product__category", "product__currency",
             "product__metal", "product__purity", "product__supplier",
             "location",
-        ),
+        ).prefetch_related("product__images"),
         barcode=barcode,
     )
 
@@ -314,7 +422,13 @@ def item_detail(request, barcode):
     })
 
 
-def _intake_context(result=None, report=None, datafile_report=None, datafile_error=""):
+def _intake_history(request):
+    batches = ProductIntakeBatch.objects.select_related("uploaded_by", "location")
+    paginator = Paginator(batches, 25)
+    return paginator.get_page(request.GET.get("page"))
+
+
+def _intake_context(request, result=None, report=None, datafile_report=None, datafile_error=""):
     locations = Location.objects.filter(is_active=True).order_by("name")
     return {
         "locations": locations,
@@ -323,12 +437,22 @@ def _intake_context(result=None, report=None, datafile_report=None, datafile_err
         "report": report,
         "datafile_report": datafile_report,
         "datafile_error": datafile_error,
+        "history": _intake_history(request),
+        "template_filename": TEMPLATE_FILENAME,
     }
 
 
-@login_required
+@require_perm("catalogue.can_intake_stock")
 def product_intake(request):
-    """Default: jewellery Excel upload. One-piece form is the other way in."""
+    """
+    Default: jewellery Excel upload. One-piece form is the other way in.
+
+    C2 fix: this is the view that actually creates/updates stock
+    (ProductMaster/ProductItem via apply_rows()), so it's gated by
+    `catalogue.can_intake_stock` — see require_perm in accounts/access.py.
+    The datafile/is_developer branch below is a separate, narrower gate
+    (developer-only sync tooling) and is unaffected by this change.
+    """
     if request.method == "POST" and request.POST.get("mode") == "datafile":
         if not is_developer(request.user):
             messages.error(request, "Print-sheet sync is only for the developer account.")
@@ -336,8 +460,8 @@ def product_intake(request):
         try:
             datafile_report = sync_datafile()
         except RuntimeError as exc:
-            return render(request, "catalogue/intake.html", _intake_context(datafile_error=str(exc)))
-        return render(request, "catalogue/intake.html", _intake_context(datafile_report=datafile_report))
+            return render(request, "catalogue/intake.html", _intake_context(request, datafile_error=str(exc)))
+        return render(request, "catalogue/intake.html", _intake_context(request, datafile_report=datafile_report))
 
     if request.method == "POST":
         location = Location.objects.filter(
@@ -345,7 +469,7 @@ def product_intake(request):
         ).first() or default_location()
         if location is None:
             messages.error(request, "Add a location first. A new piece has to sit somewhere.")
-            return render(request, "catalogue/intake.html", _intake_context())
+            return render(request, "catalogue/intake.html", _intake_context(request))
 
         if request.POST.get("mode") == "one":
             row = IntakeRow(
@@ -366,14 +490,24 @@ def product_intake(request):
                 markup_amount=None,
                 size=(request.POST.get("size") or "").strip(),
                 diamond_weight="",
+                purchase_type=(request.POST.get("purchase_type") or "").strip(),
             )
             from apps.catalogue.intake import _decimal
             row.actual_price = _decimal(request.POST.get("actual_price"))
             row.rate = _decimal(request.POST.get("rate"))
             if not row.pj or not row.reference or not row.owner:
                 messages.error(request, "PJ code, supplier product code, and owner are required.")
-                return render(request, "catalogue/intake.html", _intake_context())
+                return render(request, "catalogue/intake.html", _intake_context(request))
             report = apply_rows([row], location)
+            record_intake_batch(
+                user=request.user,
+                location=location,
+                filename=row.pj,
+                raw_bytes=None,
+                parsed=None,
+                report=report,
+                source=ProductIntakeBatch.Source.FORM,
+            )
             messages.success(
                 request,
                 f"Saved {row.pj}. {report['created']} new, {report['updated']} updated.",
@@ -383,11 +517,187 @@ def product_intake(request):
         upload = request.FILES.get("workbook")
         if not upload:
             messages.error(request, "Choose the jewellery Excel file first.")
-            return render(request, "catalogue/intake.html", _intake_context())
-        parsed = parse_jewellery_workbook(upload)
+            return render(request, "catalogue/intake.html", _intake_context(request))
+        from io import BytesIO
+        raw = upload.read()
+        parsed = parse_jewellery_workbook(BytesIO(raw))
+        report = None
+        if parsed.rows:
+            report = apply_rows(parsed.rows, location)
+        batch = record_intake_batch(
+            user=request.user,
+            location=location,
+            filename=upload.name,
+            raw_bytes=raw,
+            parsed=parsed,
+            report=report,
+        )
         if parsed.errors and not parsed.rows:
-            return render(request, "catalogue/intake.html", _intake_context(result=parsed))
-        report = apply_rows(parsed.rows, location)
-        return render(request, "catalogue/intake.html", _intake_context(result=parsed, report=report))
+            messages.error(request, "That file was not the jewellery upload.")
+        else:
+            messages.success(
+                request,
+                f"Upload {batch.serial_no}: {batch.created_count} new, {batch.updated_count} updated.",
+            )
+        return redirect("catalogue:intake_batch", pk=batch.pk)
 
-    return render(request, "catalogue/intake.html", _intake_context())
+    return render(request, "catalogue/intake.html", _intake_context(request))
+
+
+@login_required
+def intake_template(request):
+    """Download Sample Excel — same Jewellery Excel layout as iadmin."""
+    payload = build_jewellery_template()
+    response = HttpResponse(
+        payload,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{TEMPLATE_FILENAME}"'
+    return response
+
+
+@login_required
+def intake_batch_detail(request, pk):
+    """One upload after it lands — Excel Logs popup, as its own page."""
+    batch = get_object_or_404(
+        ProductIntakeBatch.objects.select_related("uploaded_by", "location"),
+        pk=pk,
+    )
+    lines = batch.lines.select_related("item", "item__product", "item__location")
+    return render(request, "catalogue/intake_batch.html", {
+        "batch": batch,
+        "lines": lines,
+        "history": _intake_history(request),
+        "template_filename": TEMPLATE_FILENAME,
+    })
+
+
+@login_required
+def intake_batch_file(request, pk):
+    batch = get_object_or_404(ProductIntakeBatch, pk=pk)
+    if not batch.workbook:
+        messages.error(request, "That upload did not keep the original file.")
+        return redirect("catalogue:intake_batch", pk=batch.pk)
+    return FileResponse(
+        batch.workbook.open("rb"),
+        as_attachment=True,
+        filename=batch.filename or TEMPLATE_FILENAME,
+    )
+
+
+def _photo_upload_context(request, *, code="", product=None, bulk_report=None, lookup_error=""):
+    sample_barcode = ""
+    piece_count = 0
+    if product is not None:
+        sample = (
+            ProductItem.objects.filter(product=product)
+            .order_by("barcode")
+            .values_list("barcode", flat=True)
+            .first()
+        )
+        sample_barcode = sample or ""
+        piece_count = ProductItem.objects.filter(product=product).count()
+    return {
+        "code": code,
+        "product": product,
+        "sample_barcode": sample_barcode,
+        "piece_count": piece_count,
+        "bulk_report": bulk_report,
+        "lookup_error": lookup_error,
+    }
+
+
+@require_perm("catalogue.can_upload_photos")
+def product_photo_upload(request):
+    """
+    Photo-team flow: look up a PJ / barcode, attach files to that design.
+
+    Separate from stock intake (`product_intake`). Does not create stock.
+    Uses the same ProductImage rows the CLI imports and catalogue pages show.
+    """
+    if request.method == "POST":
+        mode = (request.POST.get("mode") or "lookup").strip()
+
+        if mode == "bulk":
+            uploads = request.FILES.getlist("photos")
+            if not uploads:
+                messages.error(request, "Choose one or more image files named with a PJ code.")
+                return render(request, "catalogue/photo_upload.html", _photo_upload_context(request))
+            report = attach_bulk_by_filename(uploads)
+            if report["created"]:
+                messages.success(
+                    request,
+                    f"Attached {report['created']} photo(s) across "
+                    f"{report['products_touched']} design(s).",
+                )
+            if report["skipped"]:
+                messages.info(request, f"Skipped {report['skipped']} already-stored file(s).")
+            if report["unmatched"]:
+                messages.warning(
+                    request,
+                    f"{len(report['unmatched'])} file(s) could not be matched to a PJ in stock.",
+                )
+            if not report["created"] and not report["skipped"] and report["unmatched"]:
+                messages.error(request, "Nothing was attached — check filenames include a PJ code.")
+            return render(
+                request,
+                "catalogue/photo_upload.html",
+                _photo_upload_context(request, bulk_report=report),
+            )
+
+        code = normalize_code(request.POST.get("code") or request.POST.get("pj") or "")
+        if not code:
+            messages.error(request, "Enter a PJ / barcode first.")
+            return render(request, "catalogue/photo_upload.html", _photo_upload_context(request))
+
+        product = resolve_product_by_code(code)
+        if product is None:
+            err = (
+                f"No design found for {code}. Stock people add the piece first; "
+                "photos attach to an existing PJ."
+            )
+            return render(
+                request,
+                "catalogue/photo_upload.html",
+                _photo_upload_context(request, code=code, lookup_error=err),
+            )
+
+        if mode == "lookup":
+            return redirect(f"{request.path}?code={code}")
+
+        # mode == "upload"
+        uploads = request.FILES.getlist("photos")
+        if not uploads:
+            messages.error(request, "Choose at least one photo to upload.")
+            return render(
+                request,
+                "catalogue/photo_upload.html",
+                _photo_upload_context(request, code=code, product=product),
+            )
+
+        result = attach_uploaded_images(product, uploads, caption=code)
+        if result["created"]:
+            messages.success(request, f"Attached {result['created']} photo(s) to {code}.")
+        if result["skipped"]:
+            messages.info(request, f"Skipped {result['skipped']} already-stored file(s).")
+        for err in result["errors"]:
+            messages.warning(request, err)
+        if not result["created"] and not result["skipped"]:
+            messages.error(request, "Nothing was attached.")
+        return redirect(f"{request.path}?code={code}")
+
+    code = normalize_code(request.GET.get("code") or "")
+    product = resolve_product_by_code(code) if code else None
+    lookup_error = ""
+    if code and product is None:
+        lookup_error = (
+            f"No design found for {code}. Stock people add the piece first; "
+            "photos attach to an existing PJ."
+        )
+    return render(
+        request,
+        "catalogue/photo_upload.html",
+        _photo_upload_context(
+            request, code=code, product=product, lookup_error=lookup_error,
+        ),
+    )
