@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Manage Employee Access — Perfect Jewel ERP{% endblock %}
+{% block crumb %}Manage Employee Access{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Manage Employee Access</h1>
+    <p>Owner/Admin only. Pick an employee to see and change exactly what they're allowed to do — grouped
+      by category, with an individual override per person. Group membership below only sets a starting
+      point; the checkboxes on each employee's own page are what actually decide their access.</p>
+  </div>
+</div>
+
+<div class="section-heading"><span class="tag">Employees</span></div>
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Code</th>
+          <th>Groups</th>
+          <th>Owner/Admin?</th>
+          <th>Active?</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in employees %}
+        <tr>
+          <td class="cell-strong">{{ e.first_name }} {{ e.last_name }}</td>
+          <td class="mono cell-muted">{{ e.employee_code }}</td>
+          <td>
+            {% for g in e.groups.all %}<span class="pill">{{ g.name }}</span>{% empty %}<span
+              class="cell-muted">—</span>{% endfor %}
+          </td>
+          <td>
+            {% if e.is_superuser %}<span class="pill pill-ok">Owner/Admin</span>{% else %}<span
+              class="cell-muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if e.is_active %}<span class="pill pill-ok">Active</span>{% else %}<span
+              class="pill">Inactive</span>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'accounts:employee_access_edit' e.pk %}" class="btn btn-ghost btn-sm">
+              <i class="fa-solid fa-key"></i> Manage access</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="cell-muted">No employees yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

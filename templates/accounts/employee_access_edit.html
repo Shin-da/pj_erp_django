@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.first_name }} {{ employee.last_name }} — Access — Perfect Jewel ERP{% endblock %}
+{% block crumb %}<a href="{% url 'accounts:employee_access_list' %}">Manage Employee Access</a> / {{ employee.first_name }} {{ employee.last_name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ employee.first_name }} {{ employee.last_name }}</h1>
+    <p class="cell-muted mono">{{ employee.employee_code }}{% if employee.is_superuser %} — Owner/Admin (already has every permission below; changes here won't remove that){% endif %}</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'accounts:employee_access_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Back to list</a>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="panel" style="border-color:var(--brand); margin-bottom:16px;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="kpi-label" style="margin-bottom:8px;">Groups (starting point only)</div>
+    <p class="cell-muted" style="margin-bottom:10px;">
+      A group gives a baseline set of permissions (see the setup_permission_groups command). The
+      checkboxes below are what actually control this person's access — checking a group here does not
+      by itself grant anything beyond what's already checked below.
+    </p>
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+      {% for g in groups %}
+      <label style="display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" name="group" value="{{ g.id }}" {% if g.checked %}checked{% endif %}>
+        {{ g.name }}
+      </label>
+      {% empty %}
+      <span class="cell-muted">No groups exist yet — run setup_permission_groups.</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% for category in categories %}
+  <div class="section-heading"><span class="tag">{{ category.label }}</span></div>
+  <div class="panel" style="margin-bottom:20px;">
+    <table>
+      <tbody>
+        {% for row in category.rows %}
+        <tr>
+          <td style="width:32px;">
+            <input type="checkbox" name="permission" value="{{ row.full_codename }}" {% if row.checked %}checked{% endif %}>
+          </td>
+          <td class="cell-strong" style="width:220px;">{{ row.short_label }}</td>
+          <td class="cell-muted">{{ row.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save access</button>
+</form>
+
+{% endblock %}

@@ -41,7 +41,7 @@ instead of in iadmin, and the wrong one until then.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from dateutil import parser as date_parser
@@ -54,7 +54,8 @@ from django.utils import timezone
 from apps.core.models import AuditLogEntry
 from apps.locations.models import Location, LocationType
 from apps.catalogue.models import (
-    Category, Currency, Metal, Purity, Supplier, ProductMaster, strip_dflt_prefix,
+    Category, Currency, Metal, Purity, Supplier, ProductMaster, PurchaseType,
+    strip_dflt_prefix,
 )
 from apps.inventory.models import ProductItem, StockStatus
 from apps.assignment.models import (
@@ -162,16 +163,52 @@ def as_str(val, default=""):
 
 
 def as_date(val):
+    """Parse legacy nvarchar dates, including DD-MM-YYYY and Excel serials."""
     if val is None or val == "":
         return None
     if isinstance(val, datetime):
         return val.date()
     if isinstance(val, date):
         return val
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        n = int(val)
+        if 20000 < n < 80000:
+            return date(1899, 12, 30) + timedelta(days=n)
+        return None
+    s = str(val).strip()
+    if not s or s.lower() in ("null", "none"):
+        return None
+    if re.fullmatch(r"\d+(\.0+)?", s):
+        n = int(float(s))
+        if 20000 < n < 80000:
+            return date(1899, 12, 30) + timedelta(days=n)
+    for fmt in (
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%d %B %Y",
+        "%d %b %Y",
+    ):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
     try:
-        return date_parser.parse(str(val)).date()
+        return date_parser.parse(s, dayfirst=True).date()
     except (ValueError, TypeError, OverflowError):
         return None
+
+
+def as_purchase_type(val):
+    s = as_str(val).lower()
+    if "consign" in s:
+        return PurchaseType.CONSIGNMENT
+    return PurchaseType.PURCHASED
 
 
 def is_active_flag(row):

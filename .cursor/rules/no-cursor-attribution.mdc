@@ -1,0 +1,12 @@
+---
+description: Never attribute commits, PRs, or GitHub Actions to Cursor/cursoragent
+alwaysApply: true
+---
+
+# No Cursor attribution
+
+Never add `Co-authored-by: Cursor`, `Co-authored-by: cursoragent`, `Made-with: Cursor`, or any Cursor/cursoragent trailer to git commits, pull requests, or GitHub Actions.
+
+Commits must be authored and committed only as the repo user (Shin). Do not list Cursor as a co-author.
+
+If a commit message would include those trailers, strip them before committing.

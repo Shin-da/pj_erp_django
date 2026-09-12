@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pj-erp-django",
+      "runtimeExecutable": "C:\\Users\\ONEGAI_SERVER\\pj_erp_django\\pj-erp\\venv\\Scripts\\python.exe",
+      "runtimeArgs": ["C:\\Users\\ONEGAI_SERVER\\pj_erp_django\\pj-erp\\manage.py", "runserver", "127.0.0.1:8000", "--noreload"],
+      "port": 8000
+    }
+  ]
+}
