@@ -66,7 +66,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - Deploy migrate + `setup_permission_groups`.
   - Apply `@require_perm` on matching HTML mutators (still login-only in places).
   - Closing/check tracker modes; label template save API.
-- **Commits (if any):** _(pending)_
+- **Commits (if any):** `0fa0757` — Add Employee write API with shared invoice/return services.
 
 ### 2026-09-12 — API Phase 1: domain read coverage
 
