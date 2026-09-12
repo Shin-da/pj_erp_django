@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <h1>Upload photos</h1>
-    <p>Photo team only — not stock intake. Scan or type a PJ / barcode, then attach pictures to that design. Pieces that share a design share the same shots.</p>
+    <p>Photo team only — not stock intake. Scan or type a PJ / barcode, then attach or remove pictures on that design. Pieces that share a design share the same shots.</p>
   </div>
   <div class="page-head-actions">
     <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Products</a>
@@ -28,7 +28,7 @@
   {% csrf_token %}
   <input type="hidden" name="mode" value="lookup">
   <div class="kpi-label">Find by PJ / barcode</div>
-  <p>Same codes stock people use. Lookup opens the design’s gallery so you upload to the right product.</p>
+  <p>Same codes stock people use. Lookup opens the design’s gallery so you upload or remove the right pictures.</p>
   <label class="pu-code">
     <span>PJ / barcode</span>
     <input class="field mono" name="code" value="{{ code }}" placeholder="PJ22899" autofocus required>
@@ -58,22 +58,37 @@
     </div>
   </div>
 
-  {% with photos=product.images.all %}
   {% if photos %}
   <div class="pu-existing">
-    <div class="kpi-label" style="margin-bottom:8px;">Current photos <span class="cell-muted">({{ photos|length }})</span></div>
+    <div class="pu-existing-head">
+      <div class="kpi-label" style="margin:0;">Current photos <span class="cell-muted">({{ photos|length }})</span></div>
+      <form method="post" class="pu-delete-all" onsubmit="return confirm('Remove all {{ photos|length }} photo(s) from {{ code }}?');">
+        {% csrf_token %}
+        <input type="hidden" name="mode" value="delete_all">
+        <input type="hidden" name="code" value="{{ code }}">
+        <button type="submit" class="btn btn-ghost btn-sm pu-danger"><i class="fa-solid fa-trash"></i> Remove all</button>
+      </form>
+    </div>
     <div class="pu-thumbs">
       {% for im in photos %}
-      <a href="{{ im.image.url }}" target="_blank" rel="noopener" class="pu-thumb" title="{{ im.source_filename|default:im.get_kind_display }}">
-        <img src="{{ im.image.url }}" alt="" loading="lazy">
-      </a>
+      <div class="pu-thumb-wrap">
+        <a href="{{ im.image.url }}" target="_blank" rel="noopener" class="pu-thumb" title="{{ im.source_filename|default:im.get_kind_display }}{% if im.is_primary %} · primary{% endif %}">
+          <img src="{{ im.image.url }}" alt="" loading="lazy">
+        </a>
+        <form method="post" class="pu-delete-one" onsubmit="return confirm('Remove this photo?');">
+          {% csrf_token %}
+          <input type="hidden" name="mode" value="delete">
+          <input type="hidden" name="code" value="{{ code }}">
+          <input type="hidden" name="image_id" value="{{ im.pk }}">
+          <button type="submit" class="pu-del-btn" title="Remove photo"><i class="fa-solid fa-xmark"></i></button>
+        </form>
+      </div>
       {% endfor %}
     </div>
   </div>
   {% else %}
   <p class="cell-muted" style="margin:10px 0 0;">No photos on this design yet.</p>
   {% endif %}
-  {% endwith %}
 </div>
 
 <form method="post" enctype="multipart/form-data" class="panel pu-upload">
@@ -81,10 +96,15 @@
   <input type="hidden" name="mode" value="upload">
   <input type="hidden" name="code" value="{{ code }}">
   <div class="kpi-label">Attach photos to {{ code }}</div>
-  <p>You can select several files. Re-uploading the same filename for this design is skipped.</p>
+  <p>
+    Select several files if needed. Full-resolution camera files are stored as uploaded
+    (JPEG/PNG/WebP, up to {{ photo_max_mb }}&nbsp;MB each){% if photo_max_width %}
+    and downscaled to about {{ photo_max_width }}px wide{% endif %}.
+    Re-uploading the same filename for this design is skipped.
+  </p>
   <label class="pu-file">
     <span>Image files</span>
-    <input type="file" name="photos" accept="image/*,.jpg,.jpeg,.png,.webp" multiple required>
+    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple required>
   </label>
   <div class="pu-actions">
     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-camera"></i> Upload photos</button>
@@ -94,13 +114,19 @@
 
 <details class="panel pu-bulk"{% if bulk_report %} open{% endif %}>
   <summary>Bulk upload by filename</summary>
-  <p>For a folder of shots already named with PJ codes (e.g. <span class="mono">PJ22899 18K WG…JPG</span>). Same matching as the import command — barcode first, then reference ID.</p>
+  <p>
+    Drop many shots named with PJ codes (e.g. <span class="mono">PJ22899 18K WG…JPG</span>).
+    Matching is barcode first, then reference ID — same as single upload.
+    Prefer JPEG/PNG/WebP; each file may be up to {{ photo_max_mb }}&nbsp;MB
+    {% if photo_keeps_original %}and is stored at full resolution{% else %}(stored width ~{{ photo_max_width }}px){% endif %}.
+    For hundreds of large files, upload in batches so the request does not time out.
+  </p>
   <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <input type="hidden" name="mode" value="bulk">
     <label class="pu-file">
       <span>Image files</span>
-      <input type="file" name="photos" accept="image/*,.jpg,.jpeg,.png,.webp" multiple required>
+      <input type="file" name="photos" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple required>
     </label>
     <div class="pu-actions">
       <button type="submit" class="btn btn-ghost"><i class="fa-solid fa-images"></i> Match and upload</button>
@@ -133,9 +159,9 @@
   .pu-lookup, .pu-target, .pu-upload, .pu-bulk { margin-bottom: 12px; max-width: 640px; }
   .pu-flash { max-width: 640px; margin-bottom: 12px; display: grid; gap: 8px; }
   .pu-msg { margin-bottom: 12px; max-width: 640px; font-size: 13px; }
-  .pu-msg-error, .pu-msg-error { border-color: var(--danger, #c0392b); }
-  .pu-msg-success, .pu-msg-success { border-color: var(--ok, #16803c); }
-  .pu-msg-warning, .pu-msg-warning { border-color: var(--warn, #b8860b); }
+  .pu-msg-error { border-color: var(--danger, #c0392b); }
+  .pu-msg-success { border-color: var(--ok, #16803c); }
+  .pu-msg-warning { border-color: var(--warn, #b8860b); }
   .pu-lookup p, .pu-upload p, .pu-bulk > p, .pu-bulk form + .pu-bulk-report p {
     margin: 6px 0 12px; font-size: 13px; color: var(--text-muted);
   }
@@ -143,12 +169,22 @@
   .pu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
   .pu-target-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
   .pu-existing { margin-top: 14px; }
+  .pu-existing-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .pu-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pu-thumb-wrap { position: relative; width: 72px; height: 72px; }
   .pu-thumb {
     display: block; width: 72px; height: 72px; border-radius: 6px; overflow: hidden;
     border: 1px solid var(--border, #ddd); background: var(--surface-2, #f5f5f5);
   }
   .pu-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pu-del-btn {
+    position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0;
+    border-radius: 50%; border: 1px solid var(--border, #ccc); background: var(--surface, #fff);
+    color: var(--danger, #c0392b); cursor: pointer; font-size: 11px; line-height: 1;
+    display: grid; place-items: center;
+  }
+  .pu-del-btn:hover { background: var(--danger, #c0392b); color: #fff; }
+  .pu-danger { color: var(--danger, #c0392b); }
   .pu-bulk summary { cursor: pointer; font-weight: 650; }
   .pu-bulk form { margin-top: 10px; display: grid; gap: 10px; }
   .pu-bulk-report ul { margin: 0; padding-left: 18px; font-size: 13px; }

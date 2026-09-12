@@ -169,10 +169,10 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Production media: S3-compatible object storage (Cloudflare R2 preferred,
-# AWS S3 also fine). Set AWS_STORAGE_BUCKET_NAME to enable. Without it,
-# uploads stay on local MEDIA_ROOT — fine for runserver; on Render the
-# disk is ephemeral unless you also attach a persistent disk.
+# Production media: S3-compatible object storage (Cloudflare R2, DigitalOcean
+# Spaces, or AWS S3). Set AWS_STORAGE_BUCKET_NAME to enable. Without it,
+# uploads stay on local MEDIA_ROOT — fine for runserver; on a Droplet/App
+# Platform the disk is ephemeral unless you attach a volume or use Spaces.
 AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="").strip()
 USE_S3_MEDIA = bool(AWS_STORAGE_BUCKET_NAME)
 
@@ -233,6 +233,27 @@ SERVE_MEDIA = config(
     "SERVE_MEDIA",
     default=not USE_S3_MEDIA,
     cast=bool,
+)
+
+# Product photo uploads (catalogue /products/photos/). Default keeps the
+# original camera file (PRODUCT_PHOTO_MAX_WIDTH=0). Spaces / R2 / S3 store
+# the full object; raise DATA_UPLOAD_* if bulk drops hit request limits.
+FILE_UPLOAD_MAX_MEMORY_SIZE = config(
+    "FILE_UPLOAD_MAX_MEMORY_SIZE",
+    default=20 * 1024 * 1024,  # 20 MB in RAM, then spill to temp disk
+    cast=int,
+)
+DATA_UPLOAD_MAX_MEMORY_SIZE = config(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE",
+    default=220 * 1024 * 1024,  # several large camera JPEGs per POST
+    cast=int,
+)
+PRODUCT_PHOTO_MAX_WIDTH = config("PRODUCT_PHOTO_MAX_WIDTH", default=0, cast=int)
+PRODUCT_PHOTO_JPEG_QUALITY = config("PRODUCT_PHOTO_JPEG_QUALITY", default=88, cast=int)
+PRODUCT_PHOTO_MAX_UPLOAD_BYTES = config(
+    "PRODUCT_PHOTO_MAX_UPLOAD_BYTES",
+    default=100 * 1024 * 1024,  # 100 MB per file
+    cast=int,
 )
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

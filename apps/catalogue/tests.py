@@ -471,3 +471,57 @@ class ProductPhotoUploadTests(TestCase):
         self.assertEqual(ProductMaster.objects.count(), before)
         self.assertEqual(ProductImage.objects.count(), 0)
 
+    def test_can_remove_one_photo_and_all(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.catalogue.models import ProductImage
+
+        self.client.force_login(self.user)
+        with self._static():
+            self.client.post(
+                "/products/photos/",
+                {
+                    "mode": "upload",
+                    "code": "PJ99001",
+                    "photos": [
+                        SimpleUploadedFile("a.jpg", b"\xff\xd8\xff\xd9", content_type="image/jpeg"),
+                        SimpleUploadedFile("b.jpg", b"\xff\xd8\xff\xd9", content_type="image/jpeg"),
+                    ],
+                },
+            )
+            self.assertEqual(ProductImage.objects.filter(product=self.product).count(), 2)
+            keep = ProductImage.objects.filter(product=self.product).order_by("id").first()
+            gone = ProductImage.objects.filter(product=self.product).order_by("id").last()
+            deleted = self.client.post(
+                "/products/photos/",
+                {"mode": "delete", "code": "PJ99001", "image_id": str(gone.pk)},
+            )
+            self.assertEqual(deleted.status_code, 302)
+            self.assertEqual(ProductImage.objects.filter(product=self.product).count(), 1)
+            self.assertTrue(ProductImage.objects.filter(pk=keep.pk).exists())
+
+            cleared = self.client.post(
+                "/products/photos/",
+                {"mode": "delete_all", "code": "PJ99001"},
+            )
+            self.assertEqual(cleared.status_code, 302)
+            self.assertEqual(ProductImage.objects.filter(product=self.product).count(), 0)
+
+    def test_oversized_upload_is_reported(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+
+        from apps.catalogue.models import ProductImage
+
+        self.client.force_login(self.user)
+        big = SimpleUploadedFile("huge.jpg", b"\xff\xd8" + (b"\x00" * 2000) + b"\xd9", content_type="image/jpeg")
+        with self._static(), override_settings(PRODUCT_PHOTO_MAX_UPLOAD_BYTES=500):
+            posted = self.client.post(
+                "/products/photos/",
+                {"mode": "upload", "code": "PJ99001", "photos": big},
+                follow=True,
+            )
+        self.assertEqual(posted.status_code, 200)
+        self.assertEqual(ProductImage.objects.filter(product=self.product).count(), 0)
+        self.assertContains(posted, "MB limit")
+

@@ -65,6 +65,8 @@ from apps.catalogue.models import (
 from apps.catalogue.photos import (
     attach_bulk_by_filename,
     attach_uploaded_images,
+    delete_all_product_images,
+    delete_product_image,
     normalize_code,
     resolve_product_by_code,
 )
@@ -586,8 +588,11 @@ def intake_batch_file(request, pk):
 
 
 def _photo_upload_context(request, *, code="", product=None, bulk_report=None, lookup_error=""):
+    from apps.catalogue.photos import _photo_limits
+
     sample_barcode = ""
     piece_count = 0
+    photos = []
     if product is not None:
         sample = (
             ProductItem.objects.filter(product=product)
@@ -597,20 +602,26 @@ def _photo_upload_context(request, *, code="", product=None, bulk_report=None, l
         )
         sample_barcode = sample or ""
         piece_count = ProductItem.objects.filter(product=product).count()
+        photos = list(product.images.all())
+    resize, quality, max_bytes = _photo_limits()
     return {
         "code": code,
         "product": product,
         "sample_barcode": sample_barcode,
         "piece_count": piece_count,
+        "photos": photos,
         "bulk_report": bulk_report,
         "lookup_error": lookup_error,
+        "photo_max_width": resize,
+        "photo_max_mb": max(1, max_bytes // (1024 * 1024)),
+        "photo_keeps_original": resize <= 0,
     }
 
 
 @require_perm("catalogue.can_upload_photos")
 def product_photo_upload(request):
     """
-    Photo-team flow: look up a PJ / barcode, attach files to that design.
+    Photo-team flow: look up a PJ / barcode, attach or remove files on that design.
 
     Separate from stock intake (`product_intake`). Does not create stock.
     Uses the same ProductImage rows the CLI imports and catalogue pages show.
@@ -635,10 +646,15 @@ def product_photo_upload(request):
             if report["unmatched"]:
                 messages.warning(
                     request,
-                    f"{len(report['unmatched'])} file(s) could not be matched to a PJ in stock.",
+                    f"{len(report['unmatched'])} file(s) could not be matched "
+                    f"(missing PJ, unknown code, or over size limit).",
                 )
             if not report["created"] and not report["skipped"] and report["unmatched"]:
-                messages.error(request, "Nothing was attached — check filenames include a PJ code.")
+                messages.error(
+                    request,
+                    "Nothing was attached — check filenames include a PJ code "
+                    "and each file is under the size limit.",
+                )
             return render(
                 request,
                 "catalogue/photo_upload.html",
@@ -663,6 +679,27 @@ def product_photo_upload(request):
             )
 
         if mode == "lookup":
+            return redirect(f"{request.path}?code={code}")
+
+        if mode == "delete":
+            try:
+                image_id = int(request.POST.get("image_id") or "0")
+            except ValueError:
+                image_id = 0
+            image = ProductImage.objects.filter(pk=image_id, product=product).first()
+            if image is None:
+                messages.error(request, "That photo is not on this design.")
+            else:
+                delete_product_image(image)
+                messages.success(request, "Photo removed.")
+            return redirect(f"{request.path}?code={code}")
+
+        if mode == "delete_all":
+            removed = delete_all_product_images(product)
+            if removed:
+                messages.success(request, f"Removed {removed} photo(s) from {code}.")
+            else:
+                messages.info(request, "No photos to remove.")
             return redirect(f"{request.path}?code={code}")
 
         # mode == "upload"

@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**Photo upload UI for PJ/barcode** is in place — grant `catalogue.can_upload_photos` to photo staff. Also: run a sync on Render so the 2026-09-09 mirror fix lands; continue audit remediations (authz, payments/transfers UI). Trust this work log over the README until refreshed.
+**Photo upload** now supports remove + full-resolution camera files (up to 100&nbsp;MB). Grant `catalogue.can_upload_photos`; point Spaces/R2 env at DigitalOcean when going live. Still: Render sync for 2026-09-09 mirror fix; audit remediations.
 
 ---
 
@@ -51,6 +51,20 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-12 — Photo remove + keep full-resolution camera files
+
+- **Source:** Cursor chat (upload photos page follow-ups)
+- **Goal:** Let photo staff delete shots for a looked-up PJ; store large camera originals (not downscaled) for Spaces/R2/DO live use; harden bulk upload.
+- **Done:**
+  - Per-photo remove + Remove all on `/products/photos/?code=…` (deletes DB row + storage object; re-promotes primary).
+  - Default `PRODUCT_PHOTO_MAX_WIDTH=0` keeps originals; per-file cap 100&nbsp;MB; higher `DATA_UPLOAD_MAX_MEMORY_SIZE` for bulk.
+  - Clearer unmatched/oversized reporting; Spaces example in `.env.example`.
+  - Tests for delete and oversized reject.
+- **Follow-ups / open:**
+  - Raise DO/nginx client body size + timeout for big bulk drops.
+  - Optional HEIC support if cameras shoot that by default.
+- **Commits (if any):** (this push)
 
 ### 2026-09-12 — ERP photo upload by PJ / barcode (separate from stock intake)
 
