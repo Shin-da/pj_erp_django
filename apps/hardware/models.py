@@ -86,6 +86,20 @@ class LabelTemplate(TimeStampedModel):
 
     class Meta:
         ordering = ["category", "name"]
+        permissions = [
+            (
+                "can_manage_labels",
+                "Can design label templates",
+            ),
+            (
+                "can_print_label",
+                "Can print tags",
+            ),
+            (
+                "can_reprint_label",
+                "Can re-print tags",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.get_category_display()})"

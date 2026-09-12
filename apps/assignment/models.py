@@ -266,6 +266,20 @@ class AssignmentMaster(SoftDeleteModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            (
+                "can_create_invoice",
+                "Can assign stock to a reseller (create invoice)",
+            ),
+            (
+                "can_stamp_invoice",
+                "Can stamp / finalize an invoice",
+            ),
+            (
+                "can_add_charge",
+                "Can add charges / credits on an invoice",
+            ),
+        ]
 
     def __str__(self):
         return self.invoice_number or f"{'RN' if self.is_reserve else 'RE'}(unsaved)"

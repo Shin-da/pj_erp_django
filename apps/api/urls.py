@@ -23,6 +23,15 @@ from .views import (
     SupplierViewSet,
     TrackerSessionViewSet,
 )
+from .views.auth import ObtainEmployeeTokenView, RevokeEmployeeTokenView
+from .views.write_assignment import InvoiceCreateView, InvoiceStampView
+from .views.write_catalogue import ProductImageDeleteView, ProductPhotoUploadView
+from .views.write_ops import (
+    LabelPrintLogCreateView,
+    TrackerOpeningCreateView,
+    TrackerValidateView,
+)
+from .views.write_returns import ReturnProcessView
 
 app_name = "api"
 
@@ -51,6 +60,28 @@ _schema_auth = {
 }
 
 urlpatterns = [
+    path("auth/token/", ObtainEmployeeTokenView.as_view(), name="auth-token"),
+    path("auth/token/revoke/", RevokeEmployeeTokenView.as_view(), name="auth-token-revoke"),
+    path("returns/process/", ReturnProcessView.as_view(), name="return-process"),
+    path("invoices/create/", InvoiceCreateView.as_view(), name="invoice-create"),
+    path("invoices/<int:pk>/stamp/", InvoiceStampView.as_view(), name="invoice-stamp"),
+    path("products/photos/", ProductPhotoUploadView.as_view(), name="product-photo-upload"),
+    path(
+        "products/<int:product_id>/images/<int:image_id>/",
+        ProductImageDeleteView.as_view(),
+        name="product-image-delete",
+    ),
+    path("tracker/validate/", TrackerValidateView.as_view(), name="tracker-validate"),
+    path(
+        "tracker-sessions/opening/",
+        TrackerOpeningCreateView.as_view(),
+        name="tracker-opening-create",
+    ),
+    path(
+        "label-print-logs/create/",
+        LabelPrintLogCreateView.as_view(),
+        name="label-print-log-create",
+    ),
     path(
         "schema/",
         SpectacularAPIView.as_view(**_schema_auth),

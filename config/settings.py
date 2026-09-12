@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "django_q",
     "storages",
     "rest_framework",
+    "rest_framework.authtoken",
     "drf_spectacular",
     # Perfect Jewel apps — order matters somewhat for migration dependency
     # readability, not for Django itself.

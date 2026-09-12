@@ -309,3 +309,144 @@ class Phase1ReadApiTests(TestCase):
         )
         self.assertEqual(logs.status_code, 200)
         self.assertEqual(logs.json()["count"], 1)
+
+
+@override_settings(REST_FRAMEWORK=API_RF)
+class Phase2WriteApiTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Permission
+        from apps.accounts.models import Employee
+
+        self.category = Category.objects.create(name="Jewellery", code="JWL")
+        self.currency = Currency.objects.create(code="USD", symbol="$")
+        self.location = Location.objects.create(
+            name="Head office", code="HO", location_type=LocationType.HEAD_OFFICE
+        )
+        self.product = ProductMaster.objects.create(
+            name="Write Ring",
+            reference_id="W-REF",
+            category=self.category,
+            currency=self.currency,
+            selling_price=Decimal("50.00"),
+        )
+        self.item = ProductItem.objects.create(
+            barcode="PJWRITE1",
+            product=self.product,
+            location=self.location,
+            status=StockStatus.PENDING,
+        )
+        self.reseller = Reseller.objects.create(name="Write Reseller")
+        self.employee = Employee.objects.create_user(
+            employee_code="9001", password="test-pass", first_name="Vault"
+        )
+        for codename, app in (
+            ("can_create_invoice", "assignment"),
+            ("can_stamp_invoice", "assignment"),
+            ("can_process_return", "returns"),
+            ("can_upload_photos", "catalogue"),
+            ("can_print_label", "hardware"),
+            ("add_trackersession", "tracker"),
+        ):
+            perm = Permission.objects.get(
+                codename=codename, content_type__app_label=app
+            )
+            self.employee.user_permissions.add(perm)
+
+        self.api = APIClient()
+        token_resp = self.api.post(
+            reverse("api:auth-token"),
+            {"employee_code": "9001", "password": "test-pass"},
+            format="json",
+        )
+        self.assertEqual(token_resp.status_code, 200)
+        self.token = token_resp.json()["token"]
+        self.api.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
+
+        _, self.api_key = ApiClient.create_with_key("phase2-readonly")
+
+    def test_api_key_cannot_write(self):
+        key_client = APIClient()
+        key_client.credentials(HTTP_AUTHORIZATION=f"Api-Key {self.api_key}")
+        response = key_client.post(
+            reverse("api:invoice-create"),
+            {"reseller_id": self.reseller.pk, "lines": [{"barcode": "PJWRITE1", "unit_price": "50"}]},
+            format="json",
+        )
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_invoice_create_and_stamp(self):
+        create = self.api.post(
+            reverse("api:invoice-create"),
+            {
+                "reseller_id": self.reseller.pk,
+                "lines": [{"barcode": "PJWRITE1", "unit_price": "50.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(create.status_code, 201, create.content)
+        invoice_id = create.json()["id"]
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, StockStatus.ASSIGNED)
+
+        stamp = self.api.post(reverse("api:invoice-stamp", kwargs={"pk": invoice_id}))
+        self.assertEqual(stamp.status_code, 200)
+        self.assertEqual(stamp.json()["invoice_status"], InvoiceStatus.COMPLETE)
+
+    def test_return_process(self):
+        # Put item on an assignment first.
+        create = self.api.post(
+            reverse("api:invoice-create"),
+            {
+                "reseller_id": self.reseller.pk,
+                "lines": [{"barcode": "PJWRITE1", "unit_price": "50.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(create.status_code, 201)
+
+        ret = self.api.post(
+            reverse("api:return-process"),
+            {"items": [{"barcode": "PJWRITE1", "outcome": "RETURN"}]},
+            format="json",
+        )
+        self.assertEqual(ret.status_code, 201, ret.content)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, StockStatus.PENDING)
+
+    def test_return_forbidden_without_perm(self):
+        from apps.accounts.models import Employee
+
+        weak = Employee.objects.create_user(employee_code="9002", password="test-pass")
+        tok = self.api.post(
+            reverse("api:auth-token"),
+            {"employee_code": "9002", "password": "test-pass"},
+            format="json",
+        ).json()["token"]
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {tok}")
+        response = client.post(
+            reverse("api:return-process"),
+            {"items": [{"barcode": "PJWRITE1", "outcome": "RETURN"}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(weak.employee_code)
+
+    def test_tracker_opening(self):
+        response = self.api.post(
+            reverse("api:tracker-opening-create"),
+            {"location_code": "HO", "barcodes": ["PJWRITE1"]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["session"]["mode"], "OPENING")
+        self.assertEqual(response.json()["session"]["item_count"], 1)
+
+    def test_print_log_create(self):
+        response = self.api.post(
+            reverse("api:label-print-log-create"),
+            {"barcodes": ["PJWRITE1"], "status": "success"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["logged"], 1)

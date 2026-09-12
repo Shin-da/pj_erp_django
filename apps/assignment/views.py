@@ -423,27 +423,16 @@ def item_lookup(request):
 def invoice_create(request):
     """
     "+ New invoice" — redesigned 27 Aug 2026 around how items actually
-    get added on the floor (see module docstring): a barcode is scanned
-    via item_lookup, which resolves it and pulls its price, and only a
-    resolved barcode ever reaches this endpoint as a line. This view
-    re-validates everything server-side regardless — the same
-    eligibility/duplicate checks as item_lookup, run again here, because
-    the client-side scan step is a UX convenience, not the source of
-    truth.
-
-    Kept as plain POST + redirect rather than a JSON API + client-side
-    render, consistent with the rest of this app (no SPA layer exists
-    here). Validation failures go through django.contrib.messages and
-    send the user back to the list — they re-open "+ New invoice" and
-    re-scan, rather than the form re-appearing pre-filled. A real gap
-    versus pj-accounting's in-place error display; acceptable for this
-    pass, worth revisiting once usage shows whether it matters.
+    get added on the floor (see module docstring). Shared create logic
+    lives in ``assignment.services.create_invoice`` (also used by the API).
     """
     reseller = get_object_or_404(Reseller, pk=request.POST.get("reseller"))
     is_reserve = request.POST.get("is_reserve") == "on"
 
     display_slot = None
     slot_id = request.POST.get("display_slot")
+    if slot_id:
+        display_slot = get_object_or_404(DisplaySlot, pk=slot_id)
 
     barcodes = request.POST.getlist("item_barcode")
     unit_prices = request.POST.getlist("unit_price")
@@ -454,77 +443,41 @@ def invoice_create(request):
     def _at(values, i, default=""):
         return values[i] if i < len(values) else default
 
-    rows = []
-    errors = []
-    seen_barcodes = set()
-
-    if slot_id:
-        display_slot = get_object_or_404(DisplaySlot, pk=slot_id)
-        active = display_slot.allotments.filter(released_at__isnull=True).select_related("reseller").first()
-        if active and active.reseller_id != reseller.pk:
-            errors.append(f"{display_slot.name} is currently allotted to {active.reseller.name}.")
-
+    lines = []
     for i, raw_barcode in enumerate(barcodes):
         barcode = raw_barcode.strip()
         if not barcode:
             continue
-        if barcode in seen_barcodes:
-            errors.append(f"{barcode} was scanned twice on this invoice.")
-            continue
-        seen_barcodes.add(barcode)
+        lines.append(
+            {
+                "barcode": barcode,
+                "unit_price": _at(unit_prices, i) or "0",
+                "discount_percent": _at(discounts, i) or "0",
+                "commission_type": _at(commission_types, i),
+                "commission_rate": _at(commission_rates, i) or None,
+            }
+        )
 
-        try:
-            item = ProductItem.objects.select_related("product").get(barcode=barcode)
-        except ProductItem.DoesNotExist:
-            errors.append(f"No item with barcode {barcode!r}.")
-            continue
-        if item.status not in (StockStatus.PENDING, StockStatus.RESERVED):
-            errors.append(f"{barcode} is {item.status}, not eligible for assignment.")
-            continue
+    from django.core.exceptions import ValidationError
+    from .services import create_invoice
 
-        try:
-            unit_price = Decimal(_at(unit_prices, i) or "0")
-            discount_percent = Decimal(_at(discounts, i) or "0")
-            raw_rate = _at(commission_rates, i)
-            commission_rate = Decimal(raw_rate) if raw_rate else None
-        except InvalidOperation:
-            errors.append(f"{barcode}: price, discount, or commission rate isn't a valid number.")
-            continue
-
-        if unit_price <= 0:
-            errors.append(f"{barcode}: unit price must be greater than 0.")
-            continue
-
-        rows.append({
-            "item": item,
-            "unit_price": unit_price,
-            "discount_percent": discount_percent,
-            "commission_type": _at(commission_types, i),
-            "commission_rate": commission_rate,
-        })
-
-    if not rows and not errors:
-        errors.append("Scan at least one item onto this invoice before saving.")
-
-    if errors:
-        for error in errors:
-            messages.error(request, error)
+    try:
+        master = create_invoice(
+            reseller=reseller,
+            lines=lines,
+            actor=request.user,
+            is_reserve=is_reserve,
+            display_slot=display_slot,
+        )
+    except ValidationError as exc:
+        detail = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
+        messages.error(request, detail)
         return redirect("assignment:invoice_list")
 
-    with transaction.atomic():
-        master = AssignmentMaster.objects.create(
-            reseller=reseller, is_reserve=is_reserve, display_slot=display_slot, created_by=request.user,
-        )
-        for row in rows:
-            line = master.add_line(row["item"], unit_price=row["unit_price"], actor=request.user)
-            line.discount_percent = row["discount_percent"]
-            line.commission_type = row["commission_type"]
-            line.commission_rate = row["commission_rate"]
-            line.save()
-        if display_slot and not display_slot.allotments.filter(released_at__isnull=True, reseller=reseller).exists():
-            DisplaySlotAllotment.objects.create(slot=display_slot, reseller=reseller)
-
-    messages.success(request, f"Invoice {master.invoice_number} created with {len(rows)} item(s).")
+    messages.success(
+        request,
+        f"Invoice {master.invoice_number} created with {master.lines.count()} item(s).",
+    )
     return redirect("assignment:invoice_detail", pk=master.pk)
 
 

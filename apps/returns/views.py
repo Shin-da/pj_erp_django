@@ -30,67 +30,27 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.assignment.models import AssignmentLine, InvoiceStatus
-from apps.inventory.models import InvalidStatusTransition, ProductItem, StockStatus
+from apps.assignment.models import InvoiceStatus
+from apps.inventory.models import InvalidStatusTransition, ProductItem
 
-from .models import ReturnOutcome, ReturnRecord
+from .models import ReturnRecord
+from .services import (
+    OFFERED_OUTCOMES,
+    OUTCOMES_BY_STATUS,
+    RETURNABLE_STATUSES,
+    latest_line_for,
+    process_return_batch,
+)
 
-# The outcomes this screen offers. REASSIGN is excluded on purpose — see
-# the module docstring. Keep this list, not `ReturnOutcome.choices`, as
-# the thing the template and the POST handler both validate against.
-OFFERED_OUTCOMES = [
-    (ReturnOutcome.RETURN, "Returned to stock"),
-    (ReturnOutcome.SOLD, "Confirmed sold"),
-    (ReturnOutcome.RESERVE, "Moved to reserve"),
-]
-
-# A piece can only come back if it is currently out. PENDING means it is
-# already in open stock and there is nothing to return; SOLD pieces are
-# settled. Both are reported as a reason rather than silently dropped,
-# because an operator scanning a pile needs to know which ones didn't
-# take and why.
-RETURNABLE_STATUSES = {StockStatus.ASSIGNED, StockStatus.RESERVED}
-
-# Which outcomes are actually reachable from a piece's current status,
-# derived from `inventory.VALID_TRANSITIONS` rather than guessed:
-#
-#   ASSIGNED -> {SOLD, PENDING, RESERVED}   all three outcomes work
-#   RESERVED -> {ASSIGNED, PENDING}         only a plain return works
-#
-# Offering the full list regardless would let an operator pick
-# "Confirmed sold" on a reserved piece and get an InvalidStatusTransition
-# out of a screen that had just told them it was fine. Restricting the
-# dropdown per row is the honest version.
-#
-# NOTE FOR THE BUSINESS: this means a RESERVED piece cannot be marked
-# sold directly — the transition table has no RESERVED -> SOLD edge. If a
-# customer buys something that was on reserve, today that has to go
-# reserve -> back to stock -> assign -> sold. That may well be a real gap
-# in VALID_TRANSITIONS rather than a rule anyone chose; worth confirming
-# before working around it here.
-OUTCOMES_BY_STATUS = {
-    StockStatus.ASSIGNED: {ReturnOutcome.RETURN, ReturnOutcome.SOLD, ReturnOutcome.RESERVE},
-    StockStatus.RESERVED: {ReturnOutcome.RETURN},
-}
+# Re-export names used by templates / helpers (single source: services.py).
 
 
 def _latest_line_for(item):
-    """
-    The assignment this piece most recently went out on — used only to
-    show the operator where it came from. A piece can appear on several
-    historical invoices; the newest is the relevant one.
-    """
-    return (
-        AssignmentLine.objects.filter(item=item)
-        .select_related("master", "master__reseller")
-        .order_by("-master__created_at", "-id")
-        .first()
-    )
+    return latest_line_for(item)
 
 
 def _describe(item):
@@ -193,44 +153,13 @@ def process_returns(request):
         messages.error(request, "Nothing to process — scan at least one barcode.")
         return redirect("returns:return_scan")
 
-    items = {
-        i.barcode.lower(): i
-        for i in ProductItem.objects.filter(barcode__in=[b for b, _ in pairs]).select_related("product")
-    }
-
-    processed = 0
     try:
-        with transaction.atomic():
-            for barcode, outcome in pairs:
-                item = items.get(barcode.lower())
-                if not item:
-                    raise ValidationError(f"{barcode} is not in the system.")
-                if item.status not in RETURNABLE_STATUSES:
-                    raise ValidationError(
-                        f"{barcode} is {item.get_status_display().lower()} — nothing to return. "
-                        "Remove it from the batch and try again."
-                    )
-                # Re-check against the transition table server-side. The
-                # dropdown already restricts this, but the status could
-                # have changed between the lookup and the submit, and a
-                # POST is not obliged to come from our form.
-                if outcome not in OUTCOMES_BY_STATUS.get(item.status, set()):
-                    raise ValidationError(
-                        f"{barcode} is {item.get_status_display().lower()} and cannot be "
-                        f"marked \"{dict(OFFERED_OUTCOMES)[outcome].lower()}\" from that state."
-                    )
-                record = ReturnRecord.objects.create(
-                    item=item,
-                    assignment_line=_latest_line_for(item),
-                    outcome=outcome,
-                    processed_by=request.user,
-                )
-                record.process()
-                processed += 1
+        records = process_return_batch(pairs=pairs, actor=request.user)
     except (ValidationError, InvalidStatusTransition) as exc:
         detail = exc.messages[0] if isinstance(exc, ValidationError) else str(exc)
         messages.error(request, f"Nothing was processed. {detail}")
         return redirect("returns:return_scan")
 
+    processed = len(records)
     messages.success(request, f"Processed {processed} piece{'' if processed == 1 else 's'}.")
     return redirect("returns:return_scan")

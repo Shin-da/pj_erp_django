@@ -55,6 +55,12 @@ class ReturnRecord(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            (
+                "can_process_return",
+                "Can process returns / reserve / confirm-sold",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.get_outcome_display()}: {self.item.barcode}"

@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**API Phase 1 read coverage live** under `/api/v1/` (items, invoices, returns, tracker, hardware, lookups). Next: Phase 2 write API with the same `require_perm` map as HTML. Staff UI unchanged.
+**API Phase 2 writes live:** Employee Token/Session + Django perms for invoice create/stamp, returns process, photos, tracker opening, print logs. Run `migrate` + `setup_permission_groups` on deploy. Next: more tracker modes / label template save / wire HTML `@require_perm` to match API.
 
 ---
 
@@ -52,6 +52,22 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 
 ## Session / phase entries
 
+### 2026-09-12 — API Phase 2: Employee write endpoints
+
+- **Source:** Cursor chat “commit and push then phase 2”
+- **Goal:** Mutating `/api/v1/` surface with Employee auth + same permission codenames as the access map.
+- **Done:**
+  - `POST /api/v1/auth/token/` (+ revoke); DRF `authtoken`; writes reject Api-Key-only.
+  - Writes: returns process, invoice create/stamp, product photo upload/delete, tracker validate + opening session, label print-log create.
+  - Shared services: `returns.services.process_return_batch`, `assignment.services.create_invoice` (HTML returns/invoice create call them).
+  - Model `Meta.permissions` + migrations for assignment/returns/hardware custom perms.
+  - Tests: token auth, Api-Key blocked on writes, invoice/return/tracker/print, 403 without perm (23 API tests).
+- **Follow-ups / open:**
+  - Deploy migrate + `setup_permission_groups`.
+  - Apply `@require_perm` on matching HTML mutators (still login-only in places).
+  - Closing/check tracker modes; label template save API.
+- **Commits (if any):** _(pending)_
+
 ### 2026-09-12 — API Phase 1: domain read coverage
 
 - **Source:** Cursor chat “Phase 1”
@@ -63,7 +79,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - Phase 2: mutating endpoints + Employee session/token auth + `require_perm`.
   - Optional: ApiClient scopes (prices / invoices).
-- **Commits (if any):** _(pending)_
+- **Commits (if any):** `004c86d` — Ship secure /api/v1/ read API (Phase 0-1).
 
 ### 2026-09-12 — API Phase 0: secure mount + products read
 
