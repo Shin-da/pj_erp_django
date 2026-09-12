@@ -34,6 +34,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.accounts.access import require_perm
 from apps.assignment.models import InvoiceStatus
 from apps.inventory.models import InvalidStatusTransition, ProductItem
 
@@ -78,7 +79,7 @@ def _describe(item):
     }
 
 
-@login_required
+@require_perm("returns.can_process_return")
 def return_scan(request):
     recent = (
         ReturnRecord.objects.select_related(
@@ -93,7 +94,7 @@ def return_scan(request):
     })
 
 
-@login_required
+@require_perm("returns.can_process_return")
 def item_lookup(request):
     """
     One barcode in, one JSON answer out, for the live scan table. Mirrors
@@ -116,7 +117,7 @@ def item_lookup(request):
     return JsonResponse(_describe(item))
 
 
-@login_required
+@require_perm("returns.can_process_return")
 @require_POST
 def process_returns(request):
     """

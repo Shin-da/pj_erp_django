@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.accounts.access import require_any_perm, require_perm
 from apps.inventory.models import ProductItem
 
 from .media import DEFAULT_PRINTER_DPI, MEDIA_PROFILES, get_media_profile, irys_jewellery_sample_layout
@@ -95,7 +96,7 @@ def template_list(request):
     })
 
 
-@login_required
+@require_perm("hardware.can_manage_labels")
 @require_POST
 def template_create(request):
     name = request.POST.get("name", "").strip() or "Untitled template"
@@ -110,7 +111,7 @@ def template_create(request):
     return redirect("hardware:template_edit", pk=tpl.pk)
 
 
-@login_required
+@require_perm("hardware.can_manage_labels")
 @require_POST
 def template_duplicate(request, pk):
     src = get_object_or_404(LabelTemplate, pk=pk)
@@ -133,7 +134,7 @@ def template_duplicate(request, pk):
     return redirect("hardware:template_edit", pk=clone.pk)
 
 
-@login_required
+@require_perm("hardware.can_manage_labels")
 @require_POST
 def template_delete(request, pk):
     tpl = get_object_or_404(LabelTemplate, pk=pk)
@@ -143,7 +144,7 @@ def template_delete(request, pk):
     return redirect("hardware:template_list")
 
 
-@login_required
+@require_perm("hardware.can_manage_labels")
 def template_edit(request, pk):
     tpl = get_object_or_404(LabelTemplate, pk=pk)
     fields = list(tpl.fields.order_by("order", "id").values(*FIELD_LIST_VALUES))
@@ -173,7 +174,7 @@ def template_edit(request, pk):
     })
 
 
-@login_required
+@require_perm("hardware.can_manage_labels")
 @require_POST
 def template_save(request, pk):
     tpl = get_object_or_404(LabelTemplate, pk=pk)
@@ -283,7 +284,7 @@ def template_save(request, pk):
     })
 
 
-@login_required
+@require_any_perm("hardware.can_print_label", "hardware.can_reprint_label")
 def print_labels(request):
     templates = LabelTemplate.objects.all()
     selected_template_id = ""
@@ -471,7 +472,7 @@ def print_labels(request):
     return render(request, "hardware/print.html", context)
 
 
-@login_required
+@require_any_perm("hardware.can_print_label", "hardware.can_reprint_label")
 @require_POST
 def print_log(request):
     """Record labels after BrowserPrint reports send success or failure."""
@@ -506,6 +507,35 @@ def print_log(request):
 
     if not barcodes:
         return JsonResponse({"ok": False, "error": "no barcodes"}, status=400)
+
+    # First print vs reprint: prior successful send requires can_reprint_label.
+    user = request.user
+    if not user.is_superuser:
+        prior_ok = set(
+            LabelPrintLog.objects.filter(
+                barcode__in=[b for b, _ in barcodes],
+                status=LabelPrintLog.Status.SUCCESS,
+            ).values_list("barcode", flat=True)
+        )
+        prior_lower = {b.lower() for b in prior_ok}
+        needs_reprint = any(bc.lower() in prior_lower for bc, _ in barcodes)
+        needs_first = any(bc.lower() not in prior_lower for bc, _ in barcodes)
+        if needs_reprint and not user.has_perm("hardware.can_reprint_label"):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Reprint requires hardware.can_reprint_label — ask Owner/Admin.",
+                },
+                status=403,
+            )
+        if needs_first and not user.has_perm("hardware.can_print_label"):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "First print requires hardware.can_print_label — ask Owner/Admin.",
+                },
+                status=403,
+            )
 
     items_by_bc = {
         i.barcode.lower(): i

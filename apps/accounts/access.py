@@ -77,3 +77,31 @@ def require_perm(codename):
         return wrapped
 
     return decorator
+
+
+def require_any_perm(*codenames):
+    """
+    Like require_perm, but any one of the listed codenames is enough.
+    Used where the same screen serves two related privileges (e.g. first
+    print vs reprint on the tag printer page).
+    """
+
+    if not codenames:
+        raise ValueError("require_any_perm needs at least one permission codename")
+
+    def decorator(view):
+        @login_required
+        @wraps(view)
+        def wrapped(request, *args, **kwargs):
+            user = request.user
+            if user.is_superuser or any(user.has_perm(c) for c in codenames):
+                return view(request, *args, **kwargs)
+            listed = ", ".join(codenames)
+            return HttpResponseForbidden(
+                "You don't have permission to do this. Ask Owner/Admin to grant access "
+                f"({listed}) if you think you should."
+            )
+
+        return wrapped
+
+    return decorator

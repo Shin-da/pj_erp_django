@@ -43,6 +43,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
+from apps.accounts.access import require_perm
 from apps.inventory.models import ProductItem, StockStatus
 from apps.locations.models import Location
 
@@ -82,7 +83,7 @@ def _status_result(item):
     }.get(item.status, ScanResult.OTHER)
 
 
-@login_required
+@require_perm("tracker.add_trackersession")
 def scan(request):
     locations = Location.objects.order_by("name")
     opening_sessions = (
@@ -272,7 +273,7 @@ def scan(request):
 
     return render(request, "tracker/scan.html", context)
 
-@login_required
+@require_perm("tracker.add_trackersession")
 @require_POST
 def validate_barcodes(request):
     """
@@ -308,7 +309,7 @@ def validate_barcodes(request):
         "removed_not_found": not_found,
     })
 
-@login_required 
+@require_perm("tracker.add_trackersession")
 def expected_count(request):
     """
     Live "Expected" number for the gauge, before anything is submitted.

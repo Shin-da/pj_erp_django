@@ -82,6 +82,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.accounts.access import require_perm
 from apps.core.models import LegacyDocument
 from apps.inventory.models import ProductItem, StockStatus
 from apps.locations.models import Location
@@ -373,7 +374,7 @@ def invoice_list(request, pk=None):
     })
 
 
-@login_required
+@require_perm("assignment.can_create_invoice")
 def item_lookup(request):
     """
     Backs the scan-to-add barcode field in the "+ New invoice" form.
@@ -418,7 +419,7 @@ def item_lookup(request):
     })
 
 
-@login_required
+@require_perm("assignment.can_create_invoice")
 @require_POST
 def invoice_create(request):
     """
@@ -481,7 +482,7 @@ def invoice_create(request):
     return redirect("assignment:invoice_detail", pk=master.pk)
 
 
-@login_required
+@require_perm("assignment.can_stamp_invoice")
 @require_POST
 def invoice_stamp(request, pk):
     """Mark an invoice COMPLETE — thin wrapper around AssignmentMaster.stamp_invoice()."""

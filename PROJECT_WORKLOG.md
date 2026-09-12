@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**API Phase 2 writes live:** Employee Token/Session + Django perms for invoice create/stamp, returns process, photos, tracker opening, print logs. Run `migrate` + `setup_permission_groups` on deploy. Next: more tracker modes / label template save / wire HTML `@require_perm` to match API.
+**HTML mutators gated with `@require_perm`** (aligned with API). Deploy: migrate (if pending) + `setup_permission_groups`. Next: finish remaining write API (tracker closing, label template save) or OpenAPI polish.
 
 ---
 
@@ -51,6 +51,20 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-12 — HTML mutators require same perms as API
+
+- **Source:** Cursor chat “do what we need to do next”
+- **Goal:** Close C2 gap — staff HTML must not bypass API permission gates via browser.
+- **Done:**
+  - `@require_perm` on assignment create/stamp/item-lookup; returns scan/lookup/process; hardware template design mutators; tracker scan/validate/expected-count.
+  - Print page: `@require_any_perm(can_print_label, can_reprint_label)`; `print_log` enforces reprint vs first-print separately.
+  - Added `require_any_perm` in `accounts/access.py`.
+  - Tests in `apps/accounts/tests_html_perms.py`.
+- **Follow-ups / open:**
+  - Optional: hide nav links for users lacking perms (UX only — server gates are the security).
+  - Label template list still login-only (read); fine for now.
+- **Commits (if any):** none yet — working tree; ask to commit/push when ready.
 
 ### 2026-09-12 — API Phase 2: Employee write endpoints
 
