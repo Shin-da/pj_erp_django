@@ -32,7 +32,7 @@ try:
 except ImportError:  # pragma: no cover
     HAVE_PIL = False
 
-CODE_RE = re.compile(r"(?:\b[A-Z]-)?\b(PJ\d{4,6})\b", re.IGNORECASE)
+CODE_RE = re.compile(r"(?:(?<![A-Za-z])[A-Z]-)?(?<![A-Za-z])(PJ\d{4,6})\b", re.IGNORECASE)  # lookbehind, not \b: real files are "<timestamp>_PJ22171 ..." and "_" is a word char so \b never fires there
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".tif", ".tiff"}
 CERT_HINT = re.compile(r"cert", re.IGNORECASE)
 
