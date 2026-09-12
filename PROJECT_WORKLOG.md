@@ -64,7 +64,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - Optional: hide nav links for users lacking perms (UX only — server gates are the security).
   - Label template list still login-only (read); fine for now.
-- **Commits (if any):** none yet — working tree; ask to commit/push when ready.
+- **Commits (if any):** `2fed3a5` — Gate HTML mutators with the same permissions as the API.
 
 ### 2026-09-12 — API Phase 2: Employee write endpoints
 
