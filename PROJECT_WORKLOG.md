@@ -64,7 +64,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - Raise DO/nginx client body size + timeout for big bulk drops.
   - Optional HEIC support if cameras shoot that by default.
-- **Commits (if any):** (this push)
+- **Commits (if any):** `042a879` — Allow photo remove and keep full-resolution camera uploads.
 
 ### 2026-09-12 — ERP photo upload by PJ / barcode (separate from stock intake)
 
