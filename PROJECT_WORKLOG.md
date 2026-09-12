@@ -63,9 +63,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - Create Spaces bucket + App in DO dashboard; set encrypted secrets.
   - After live: staff access, `create_api_client`, optional `upload_local_media`.
-- **Commits (if any):** _(pending)_
-
-### 2026-09-12 — HTML mutators require same perms as API
+- **Commits (if any):** `8a69999` — Prepare DigitalOcean App Platform deploy with Spaces.
 
 - **Source:** Cursor chat “do what we need to do next”
 - **Goal:** Close C2 gap — staff HTML must not bypass API permission gates via browser.
