@@ -217,7 +217,7 @@ if USE_S3_MEDIA:
     AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="auto")
     AWS_S3_CUSTOM_DOMAIN = config("AWS_S3_CUSTOM_DOMAIN", default="").strip() or None
     AWS_S3_SIGNATURE_VERSION = "s3v4"
-    AWS_DEFAULT_ACL = None
+    AWS_DEFAULT_ACL = config("AWS_DEFAULT_ACL", default="public-read")
     # Public-read bucket / custom domain: False. Private bucket: True (signed URLs).
     AWS_QUERYSTRING_AUTH = config("AWS_QUERYSTRING_AUTH", default=False, cast=bool)
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=86400"}
