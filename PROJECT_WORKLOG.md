@@ -61,7 +61,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - `Location.code` max length raised 20 → 30, plus migration `0002_alter_location_code`.
 - **Follow-ups / open:**
   - None for this fix.
-- **Commits (if any):** _(filled after commit)_
+- **Commits (if any):** `fef42e9` — Widen location codes and fix legacy import flush order.
 
 ### 2026-09-12 — DigitalOcean App Platform deploy prep
 
