@@ -65,7 +65,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - App Platform env must use `perfect-jewel-media` + `nyc3` Spaces keys (regenerated).
   - ~365 Spaces files still unmatched (PJ not in live stock) — can stage as floating later.
-- **Commits (if any):** _(filled after commit)_
+- **Commits (if any):** `a0af93d` — Harden photo uploads with thumbs, floating staging, and Spaces linking.
 
 ### 2026-09-14 — Harden product photo upload (UI + API)
 
@@ -81,9 +81,7 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 - **Follow-ups / open:**
   - After almarphoto folder import finishes: run `backfill_product_image_thumbs`.
   - Optional later: direct-to-Spaces / presigned uploads; create-unverified from the UI.
-- **Commits (if any):** _(pending)_
-
-### 2026-09-14 — Legacy import flush + longer location codes
+- **Commits (if any):** `a0af93d` — Harden photo uploads with thumbs, floating staging, and Spaces linking.
 
 - **Source:** git uncommitted local work / commit + push
 - **Goal:** Unblock legacy stock RFID import when related rows exist; allow longer location codes.
