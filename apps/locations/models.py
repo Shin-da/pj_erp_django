@@ -33,7 +33,7 @@ class LocationType(models.TextChoices):
 
 class Location(SoftDeleteModel):
     name = models.CharField(max_length=150)
-    code = models.CharField(max_length=20, unique=True, db_index=True)
+    code = models.CharField(max_length=30, unique=True, db_index=True)
     location_type = models.CharField(
         max_length=20, choices=LocationType.choices, default=LocationType.BRANCH
     )

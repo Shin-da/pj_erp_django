@@ -52,6 +52,17 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 
 ## Session / phase entries
 
+### 2026-09-14 — Legacy import flush + longer location codes
+
+- **Source:** git uncommitted local work / commit + push
+- **Goal:** Unblock legacy stock RFID import when related rows exist; allow longer location codes.
+- **Done:**
+  - `--flush` now deletes payments, assignments, returns, tracker scans, and transfers before products/suppliers/locations.
+  - `Location.code` max length raised 20 → 30, plus migration `0002_alter_location_code`.
+- **Follow-ups / open:**
+  - None for this fix.
+- **Commits (if any):** _(filled after commit)_
+
 ### 2026-09-12 — DigitalOcean App Platform deploy prep
 
 - **Source:** Cursor chat “going to digital ocean now”

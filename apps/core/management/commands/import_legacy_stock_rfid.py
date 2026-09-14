@@ -74,7 +74,11 @@ from django.db import transaction
 from apps.locations.models import Location, LocationType
 from apps.catalogue.models import Category, Currency, Supplier, ProductMaster
 from apps.inventory.models import ProductItem, StockStatus
-
+from apps.assignment.models import AssignmentMaster
+from apps.returns.models import ReturnRecord
+from apps.tracker.models import TrackerScanItem
+from apps.transfers.models import Transfer
+from apps.payments.models import ResellerPayment, SupplierPayment, InvoiceCancellation
 
 INSERT_RE = re.compile(r"^INSERT \[dbo\]\.\[(\w+)\] \((.*?)\) VALUES \((.*)\)\s*$")
 
@@ -232,13 +236,20 @@ class Command(BaseCommand):
         with transaction.atomic():
             if opts["flush"]:
                 self.stdout.write("Flushing previously-imported data...")
+                ResellerPayment.objects.all().delete()        # NEW — protects AssignmentMaster
+                InvoiceCancellation.objects.all().delete()     # NEW — protects AssignmentMaster
+                AssignmentMaster.all_objects.all().delete()  # cascades to AssignmentLine
+                ReturnRecord.objects.all().delete()
+                TrackerScanItem.objects.all().delete()
+                Transfer.objects.all().delete()  # cascades to TransferLine
                 ProductItem.objects.all().delete()
                 ProductMaster.objects.all().delete()
+                SupplierPayment.objects.all().delete()          # NEW — protects Supplier
                 Supplier.objects.all().delete()
                 Category.objects.all().delete()
                 Currency.objects.filter(code="PHP").delete()
                 Location.objects.all().delete()
-
+            
             # --- Locations -----------------------------------------------------
             location_by_nid = {}
             for row in locs:
