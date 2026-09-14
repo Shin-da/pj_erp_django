@@ -47,6 +47,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.catalogue.models import ProductImage, ProductMaster
+from apps.catalogue.photos import _photo_limits, _thumb_bytes
 from apps.inventory.models import ProductItem
 
 try:
@@ -199,6 +200,10 @@ class Command(BaseCommand):
                     )
                     stem = codes[0]
                     img.image.save(f"{stem}.{ext}", ContentFile(data), save=False)
+                    _, _, _, thumb_w, thumb_q = _photo_limits()
+                    thumb = _thumb_bytes(data, width=thumb_w, quality=thumb_q)
+                    if thumb:
+                        img.thumbnail.save(f"{stem}_t.jpg", ContentFile(thumb), save=False)
                     img.save()
                 images_created += 1
                 products_touched.add(product.pk)

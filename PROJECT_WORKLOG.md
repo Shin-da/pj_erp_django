@@ -38,7 +38,7 @@ Living log of work on this repo (`pj_erp_django` / `pj-erp`).
 
 ## Current focus
 
-**DigitalOcean deploy ready:** `DATABASE_URL`, HTTPS cookies, `.do/app.yaml`, `DEPLOY-DIGITALOCEAN.md`. Create App + Spaces + env, then Manage Employee Access + Api-Key.
+**Photo pipeline live:** Spaces `perfect-jewel-media` (nyc3) linked (~1019 ProductImages). Keep App env on that bucket/keys. Floating uploads + history ready after deploy.
 
 ---
 
@@ -51,6 +51,37 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
 ---
 
 ## Session / phase entries
+
+### 2026-09-14 — Floating photo uploads + full upload history
+
+- **Source:** Cursor chat — upload before PJ exists; history with complete details
+- **Goal:** Photo staff can upload when free even if stock has not created the PJ yet; keep a full audit of every upload.
+- **Done:**
+  - `PhotoUploadBatch` + `StagedProductImage` (WAITING / ATTACHED / SKIPPED / FAILED / DISCARDED).
+  - Unknown PJ / no-code files are **floating** (not rejected); auto-claim when barcode or PJ `reference_id` is created.
+  - Manual assign / discard on the upload page; `/products/photos/history/` (+ batch detail).
+  - API `products/photos/` stages unknown codes too (`staged` in response).
+  - Tests: stage unknown + claim on `ProductItem` create.
+- **Follow-ups / open:**
+  - App Platform env must use `perfect-jewel-media` + `nyc3` Spaces keys (regenerated).
+  - ~365 Spaces files still unmatched (PJ not in live stock) — can stage as floating later.
+- **Commits (if any):** _(filled after commit)_
+
+### 2026-09-14 — Harden product photo upload (UI + API)
+
+- **Source:** Cursor chat “lets enhance it making it solid”
+- **Goal:** Make `/products/photos/` and the write API solid enough for photo-team volume (not just one-off desk uploads).
+- **Done:**
+  - Drag-drop + sequential one-file AJAX uploads (avoids giant multipart timeouts on App Platform).
+  - Gallery: set primary, delete one/all, live refresh without full page reload; bulk unmatched CSV download.
+  - `ProductImage.thumbnail` + `display_url`; list/detail pages prefer thumbs; settings `PRODUCT_PHOTO_THUMB_*`.
+  - API: `match_filename` bulk, set-primary, delete-all; serializer now includes `id` + `thumb_url`.
+  - `backfill_product_image_thumbs` management command for images imported without thumbs.
+  - Tests: AJAX upload, set-primary, bulk_one.
+- **Follow-ups / open:**
+  - After almarphoto folder import finishes: run `backfill_product_image_thumbs`.
+  - Optional later: direct-to-Spaces / presigned uploads; create-unverified from the UI.
+- **Commits (if any):** _(pending)_
 
 ### 2026-09-14 — Legacy import flush + longer location codes
 

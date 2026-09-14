@@ -46,17 +46,36 @@ class SupplierSerializer(serializers.ModelSerializer):
 
 class ProductImageSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductImage
-        fields = ["url", "kind", "is_primary", "caption", "order"]
+        fields = [
+            "id",
+            "url",
+            "thumb_url",
+            "kind",
+            "is_primary",
+            "caption",
+            "source_filename",
+            "order",
+        ]
+
+    def _abs(self, url: str | None) -> str | None:
+        if not url:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
 
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_url(self, obj):
-        request = self.context.get("request")
-        if not obj.image:
-            return None
-        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return self._abs(obj.image.url if obj.image else None)
+
+    @extend_schema_field(serializers.URLField(allow_null=True))
+    def get_thumb_url(self, obj):
+        if obj.thumbnail:
+            return self._abs(obj.thumbnail.url)
+        return self.get_url(obj)
 
 
 class ProductMasterSerializer(serializers.ModelSerializer):

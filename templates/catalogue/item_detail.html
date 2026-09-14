@@ -23,15 +23,15 @@
 <div class="panel pd-photos">
   <div class="kpi-label" style="margin-bottom:12px;">Photos <span class="cell-muted">({{ photos|length }})</span> · same shots as the design</div>
   <div class="pd-photo-main">
-    <img id="idPhotoMain" src="{{ photos.0.image.url }}" alt="{{ item.product.name }}">
+    <img id="idPhotoMain" src="{{ photos.0.display_url }}" alt="{{ item.product.name }}">
   </div>
   {% if photos|length > 1 %}
   <div class="pd-photo-thumbs">
     {% for im in photos %}
-    <button type="button" class="pd-thumb{% if forloop.first %} is-active{% endif %}" data-src="{{ im.image.url }}"
+    <button type="button" class="pd-thumb{% if forloop.first %} is-active{% endif %}" data-src="{{ im.display_url }}"
             title="{{ im.get_kind_display }}{% if im.caption %} — {{ im.caption }}{% endif %}"
             onclick="var m=document.getElementById('idPhotoMain');m.src=this.dataset.src;document.querySelectorAll('.pd-thumb').forEach(function(t){t.classList.remove('is-active');});this.classList.add('is-active');">
-      <img src="{{ im.image.url }}" alt="" loading="lazy">
+      <img src="{{ im.display_url }}" alt="" loading="lazy">
     </button>
     {% endfor %}
   </div>

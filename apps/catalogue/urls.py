@@ -11,6 +11,8 @@ urlpatterns = [
     path("add/history/<int:pk>/", views.intake_batch_detail, name="intake_batch"),
     path("add/history/<int:pk>/file/", views.intake_batch_file, name="intake_batch_file"),
     path("photos/", views.product_photo_upload, name="photo_upload"),
+    path("photos/history/", views.photo_upload_history, name="photo_history"),
+    path("photos/history/<int:pk>/", views.photo_upload_batch_detail, name="photo_batch"),
     path("item/<str:barcode>/", views.item_detail, name="item_detail"),
     path("<int:pk>/", views.product_detail, name="product_detail"),
 ]

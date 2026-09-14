@@ -32,7 +32,7 @@ try:
 except ImportError:  # pragma: no cover
     HAVE_PIL = False
 
-CODE_RE = re.compile(r"(?:(?<![A-Za-z])[A-Z]-)?(?<![A-Za-z])(PJ\d{4,6})\b", re.IGNORECASE)  # lookbehind, not \b: real files are "<timestamp>_PJ22171 ..." and "_" is a word char so \b never fires there
+CODE_RE = re.compile(r"(?:(?<![A-Za-z])[A-Z]-)?(?<![A-Za-z])(PJ\d{4,7})(?!\d)", re.IGNORECASE)  # (?!\d) not \b: filenames are often "PJ22171_xxx.jpg" and "_" is a word char so \b never fires after the digits
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".tif", ".tiff"}
 CERT_HINT = re.compile(r"cert", re.IGNORECASE)
 
@@ -40,6 +40,8 @@ CERT_HINT = re.compile(r"cert", re.IGNORECASE)
 # Set PRODUCT_PHOTO_MAX_WIDTH > 0 only if you want web-sized JPEGs instead.
 DEFAULT_RESIZE_PX = 0
 DEFAULT_JPEG_QUALITY = 88
+DEFAULT_THUMB_WIDTH = 480
+DEFAULT_THUMB_QUALITY = 78
 # Per-file cap for high-res camera JPEGs / PNG / WebP. Spaces/R2 can hold
 # more; this only guards the app host from a runaway upload.
 DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
@@ -86,17 +88,29 @@ def _kind_for_name(filename: str) -> str:
     return ProductImage.Kind.PHOTO
 
 
-def _photo_limits() -> tuple[int, int, int]:
-    """(max_width_px, jpeg_quality, max_upload_bytes) from Django settings when available."""
+def _photo_limits() -> tuple[int, int, int, int, int]:
+    """(max_width_px, jpeg_quality, max_upload_bytes, thumb_width, thumb_quality)."""
     try:
         from django.conf import settings
 
         resize = int(getattr(settings, "PRODUCT_PHOTO_MAX_WIDTH", DEFAULT_RESIZE_PX))
         quality = int(getattr(settings, "PRODUCT_PHOTO_JPEG_QUALITY", DEFAULT_JPEG_QUALITY))
         max_bytes = int(getattr(settings, "PRODUCT_PHOTO_MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES))
+        thumb_w = int(getattr(settings, "PRODUCT_PHOTO_THUMB_WIDTH", DEFAULT_THUMB_WIDTH))
+        thumb_q = int(getattr(settings, "PRODUCT_PHOTO_THUMB_QUALITY", DEFAULT_THUMB_QUALITY))
     except Exception:  # pragma: no cover — settings not configured
-        resize, quality, max_bytes = DEFAULT_RESIZE_PX, DEFAULT_JPEG_QUALITY, DEFAULT_MAX_UPLOAD_BYTES
-    return max(0, resize), max(1, min(quality, 95)), max(1, max_bytes)
+        resize = DEFAULT_RESIZE_PX
+        quality = DEFAULT_JPEG_QUALITY
+        max_bytes = DEFAULT_MAX_UPLOAD_BYTES
+        thumb_w = DEFAULT_THUMB_WIDTH
+        thumb_q = DEFAULT_THUMB_QUALITY
+    return (
+        max(0, resize),
+        max(1, min(quality, 95)),
+        max(1, max_bytes),
+        max(0, thumb_w),
+        max(1, min(thumb_q, 95)),
+    )
 
 
 def _read_upload(upload: UploadedFile, max_bytes: int) -> tuple[bytes | None, str | None]:
@@ -142,10 +156,108 @@ def _resize_bytes(raw: bytes, filename: str, resize: int = DEFAULT_RESIZE_PX, qu
     return buf.getvalue(), "jpg"
 
 
+def _thumb_bytes(raw: bytes, width: int = DEFAULT_THUMB_WIDTH, quality: int = DEFAULT_THUMB_QUALITY) -> bytes | None:
+    """Build a small JPEG for list/gallery display. Returns None if Pillow cannot decode."""
+    if not width or not HAVE_PIL:
+        return None
+    try:
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+    except Exception:
+        return None
+    if im.width > width:
+        im = im.resize((width, max(1, round(im.height * width / im.width))), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
+    return buf.getvalue()
+
+
+def _save_thumbnail(
+    img,
+    raw: bytes,
+    *,
+    thumb_width: int,
+    thumb_quality: int,
+    stem: str | None = None,
+) -> None:
+    data = _thumb_bytes(raw, width=thumb_width, quality=thumb_quality)
+    if not data:
+        return
+    if not stem:
+        product = getattr(img, "product", None)
+        if product is not None:
+            stem = normalize_code(product.reference_id) or f"p{product.pk}"
+        else:
+            stem = normalize_code(getattr(img, "hinted_code", "") or "") or f"s{getattr(img, 'pk', 0) or '0'}"
+    img.thumbnail.save(f"{stem}_t.jpg", ContentFile(data), save=False)
+
+
+def ensure_thumbnail(image: ProductImage) -> bool:
+    """Create a missing thumb from the full file. Returns True if a thumb exists afterward."""
+    if image.thumbnail:
+        return True
+    if not image.image:
+        return False
+    _, _, _, thumb_w, thumb_q = _photo_limits()
+    if not thumb_w or not HAVE_PIL:
+        return False
+    try:
+        image.image.open("rb")
+        raw = image.image.read()
+    except Exception:
+        return False
+    finally:
+        try:
+            image.image.close()
+        except Exception:
+            pass
+    data = _thumb_bytes(raw, width=thumb_w, quality=thumb_q)
+    if not data:
+        return False
+    stem = normalize_code(image.product.reference_id) or f"p{image.product_id}"
+    image.thumbnail.save(f"{stem}_t.jpg", ContentFile(data), save=True)
+    return True
+
+
+def image_public_dict(image: ProductImage, request=None) -> dict:
+    """JSON-friendly image payload for HTML AJAX and the write API."""
+
+    def _abs(url: str) -> str:
+        if request and url:
+            return request.build_absolute_uri(url)
+        return url
+
+    full = image.image.url if image.image else ""
+    thumb = image.thumbnail.url if image.thumbnail else full
+    return {
+        "id": image.pk,
+        "url": _abs(full),
+        "thumb_url": _abs(thumb),
+        "kind": image.kind,
+        "is_primary": image.is_primary,
+        "caption": image.caption,
+        "source_filename": image.source_filename,
+        "order": image.order,
+    }
+
+
+def set_primary_image(image: ProductImage) -> ProductImage:
+    """Make ``image`` the sole primary for its design."""
+    with transaction.atomic():
+        ProductImage.objects.filter(product_id=image.product_id, is_primary=True).exclude(
+            pk=image.pk
+        ).update(is_primary=False)
+        if not image.is_primary:
+            image.is_primary = True
+            image.save(update_fields=["is_primary", "updated_at"])
+    return image
+
+
 def delete_product_image(image: ProductImage) -> None:
-    """Remove the DB row and the file in local/S3/Spaces storage. Promote a new primary if needed."""
+    """Remove the DB row and files in local/S3/Spaces storage. Promote a new primary if needed."""
     product = image.product
     was_primary = image.is_primary
+    if image.thumbnail:
+        image.thumbnail.delete(save=False)
     if image.image:
         image.image.delete(save=False)
     image.delete()
@@ -165,6 +277,52 @@ def delete_all_product_images(product: ProductMaster) -> int:
     return n
 
 
+def _create_image(
+    product: ProductMaster,
+    *,
+    raw: bytes,
+    filename: str,
+    caption: str,
+    resize: int,
+    quality: int,
+    thumb_width: int,
+    thumb_quality: int,
+    stem: str,
+    has_primary_cache: dict[int, bool] | None = None,
+) -> ProductImage | None:
+    """Persist one ProductImage (+ thumb). Returns None when skipped as duplicate."""
+    if ProductImage.objects.filter(product=product, source_filename=filename).exists():
+        return None
+
+    data, ext = _resize_bytes(raw, filename, resize=resize, quality=quality)
+    with transaction.atomic():
+        if has_primary_cache is not None:
+            if product.pk not in has_primary_cache:
+                has_primary_cache[product.pk] = ProductImage.objects.filter(
+                    product=product, is_primary=True
+                ).exists()
+            make_primary = not has_primary_cache[product.pk]
+        else:
+            make_primary = not ProductImage.objects.filter(
+                product=product, is_primary=True
+            ).exists()
+        img = ProductImage(
+            product=product,
+            kind=_kind_for_name(filename),
+            is_primary=make_primary,
+            source_filename=filename,
+            caption=(caption or "")[:200],
+        )
+        img.image.save(f"{stem}.{ext}", ContentFile(data), save=False)
+        # Prefer original camera bytes for the thumb so quality isn't double-compressed
+        # when the stored file was already resized.
+        _save_thumbnail(img, raw if resize == 0 else data, thumb_width=thumb_width, thumb_quality=thumb_quality)
+        img.save()
+        if has_primary_cache is not None and make_primary:
+            has_primary_cache[product.pk] = True
+    return img
+
+
 def attach_uploaded_images(
     product: ProductMaster,
     uploads: Iterable[UploadedFile],
@@ -181,18 +339,18 @@ def attach_uploaded_images(
     on a design with no primary becomes primary. By default the original
     camera file is stored as-is (see PRODUCT_PHOTO_MAX_WIDTH).
     """
-    if resize is None or quality is None or max_bytes is None:
-        d_resize, d_quality, d_max = _photo_limits()
-        if resize is None:
-            resize = d_resize
-        if quality is None:
-            quality = d_quality
-        if max_bytes is None:
-            max_bytes = d_max
+    d_resize, d_quality, d_max, d_thumb_w, d_thumb_q = _photo_limits()
+    if resize is None:
+        resize = d_resize
+    if quality is None:
+        quality = d_quality
+    if max_bytes is None:
+        max_bytes = d_max
 
     created = 0
     skipped = 0
     errors: list[str] = []
+    images: list[ProductImage] = []
 
     for upload in uploads:
         name = (getattr(upload, "name", None) or "upload.jpg").strip()
@@ -208,24 +366,30 @@ def attach_uploaded_images(
             skipped += 1
             continue
 
-        data, ext = _resize_bytes(raw, name, resize=resize, quality=quality)
-        with transaction.atomic():
-            make_primary = not ProductImage.objects.filter(
-                product=product, is_primary=True
-            ).exists()
-            img = ProductImage(
-                product=product,
-                kind=_kind_for_name(name),
-                is_primary=make_primary,
-                source_filename=name,
-                caption=(caption or "")[:200],
-            )
-            safe_stem = normalize_code(product.reference_id) or f"p{product.pk}"
-            img.image.save(f"{safe_stem}.{ext}", ContentFile(data), save=False)
-            img.save()
+        stem = normalize_code(product.reference_id) or f"p{product.pk}"
+        img = _create_image(
+            product,
+            raw=raw,
+            filename=name,
+            caption=caption or name,
+            resize=resize,
+            quality=quality,
+            thumb_width=d_thumb_w,
+            thumb_quality=d_thumb_q,
+            stem=stem,
+        )
+        if img is None:
+            skipped += 1
+            continue
+        images.append(img)
         created += 1
 
-    return {"created": created, "skipped": skipped, "errors": errors}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "images": images,
+    }
 
 
 def attach_bulk_by_filename(
@@ -242,22 +406,21 @@ def attach_bulk_by_filename(
     that do not resolve, are reported as unmatched. Oversized / empty
     files land in unmatched with a reason (not silently dropped).
     """
-    if resize is None or quality is None or max_bytes is None:
-        d_resize, d_quality, d_max = _photo_limits()
-        if resize is None:
-            resize = d_resize
-        if quality is None:
-            quality = d_quality
-        if max_bytes is None:
-            max_bytes = d_max
+    d_resize, d_quality, d_max, d_thumb_w, d_thumb_q = _photo_limits()
+    if resize is None:
+        resize = d_resize
+    if quality is None:
+        quality = d_quality
+    if max_bytes is None:
+        max_bytes = d_max
 
     matched_files = 0
     images_created = 0
     skipped = 0
     unmatched: list[tuple[str, str]] = []
     products_touched: set[int] = set()
+    images: list[ProductImage] = []
     cache: dict[str, ProductMaster | None] = {}
-    # Avoid N+1 primary checks inside a large bulk drop.
     has_primary: dict[int, bool] = {}
 
     for upload in uploads:
@@ -291,30 +454,28 @@ def attach_bulk_by_filename(
             continue
 
         matched_files += 1
-        data, ext = _resize_bytes(raw, name, resize=resize, quality=quality)
-
         for product in products:
             if ProductImage.objects.filter(product=product, source_filename=name).exists():
                 skipped += 1
                 products_touched.add(product.pk)
                 continue
-            with transaction.atomic():
-                if product.pk not in has_primary:
-                    has_primary[product.pk] = ProductImage.objects.filter(
-                        product=product, is_primary=True
-                    ).exists()
-                make_primary = not has_primary[product.pk]
-                img = ProductImage(
-                    product=product,
-                    kind=_kind_for_name(name),
-                    is_primary=make_primary,
-                    source_filename=name,
-                    caption=name[:200],
-                )
-                img.image.save(f"{codes[0]}.{ext}", ContentFile(data), save=False)
-                img.save()
-                if make_primary:
-                    has_primary[product.pk] = True
+            img = _create_image(
+                product,
+                raw=raw,
+                filename=name,
+                caption=name,
+                resize=resize,
+                quality=quality,
+                thumb_width=d_thumb_w,
+                thumb_quality=d_thumb_q,
+                stem=codes[0],
+                has_primary_cache=has_primary,
+            )
+            if img is None:
+                skipped += 1
+                products_touched.add(product.pk)
+                continue
+            images.append(img)
             images_created += 1
             products_touched.add(product.pk)
 
@@ -324,4 +485,5 @@ def attach_bulk_by_filename(
         "skipped": skipped,
         "unmatched": unmatched,
         "products_touched": len(products_touched),
+        "images": images,
     }

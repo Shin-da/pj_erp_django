@@ -25,7 +25,12 @@ from .views import (
 )
 from .views.auth import ObtainEmployeeTokenView, RevokeEmployeeTokenView
 from .views.write_assignment import InvoiceCreateView, InvoiceStampView
-from .views.write_catalogue import ProductImageDeleteView, ProductPhotoUploadView
+from .views.write_catalogue import (
+    ProductImageDeleteView,
+    ProductImagePrimaryView,
+    ProductImagesClearView,
+    ProductPhotoUploadView,
+)
 from .views.write_ops import (
     LabelPrintLogCreateView,
     TrackerOpeningCreateView,
@@ -67,9 +72,19 @@ urlpatterns = [
     path("invoices/<int:pk>/stamp/", InvoiceStampView.as_view(), name="invoice-stamp"),
     path("products/photos/", ProductPhotoUploadView.as_view(), name="product-photo-upload"),
     path(
+        "products/<int:product_id>/images/",
+        ProductImagesClearView.as_view(),
+        name="product-images-clear",
+    ),
+    path(
         "products/<int:product_id>/images/<int:image_id>/",
         ProductImageDeleteView.as_view(),
         name="product-image-delete",
+    ),
+    path(
+        "products/<int:product_id>/images/<int:image_id>/primary/",
+        ProductImagePrimaryView.as_view(),
+        name="product-image-primary",
     ),
     path("tracker/validate/", TrackerValidateView.as_view(), name="tracker-validate"),
     path(

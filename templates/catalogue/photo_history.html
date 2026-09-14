@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Photo upload history — Perfect Jewel ERP{% endblock %}
+{% block crumb %}Photo history{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Photo upload history</h1>
+    <p>Every upload session and file — attached, floating (waiting for PJ), skipped, failed, or discarded.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="{% url 'catalogue:photo_upload' %}" class="btn btn-primary"><i class="fa-solid fa-camera"></i> Upload photos</a>
+    <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost">Products</a>
+  </div>
+</div>
+
+<div class="pd-stats" style="margin-bottom:14px;">
+  <div class="pd-stat"><div class="n">{{ totals.batches }}</div><div class="l">Batches</div></div>
+  <div class="pd-stat"><div class="n">{{ totals.files }}</div><div class="l">Files logged</div></div>
+  <div class="pd-stat ok"><div class="n">{{ totals.attached }}</div><div class="l">Attached</div></div>
+  <div class="pd-stat warn"><div class="n">{{ totals.waiting }}</div><div class="l">Floating / waiting</div></div>
+</div>
+
+<form method="get" class="panel" style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+  <label style="display:grid; gap:4px; font-size:12px; color:var(--text-muted);">
+    <span>Search filename / PJ / note</span>
+    <input class="field" name="q" value="{{ q }}" placeholder="PJ22899 or filename">
+  </label>
+  <label style="display:grid; gap:4px; font-size:12px; color:var(--text-muted);">
+    <span>Status</span>
+    <select class="field" name="status">
+      <option value="">All</option>
+      {% for val, label in status_choices %}
+      <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter"></i> Filter</button>
+</form>
+
+<div class="panel" style="margin-bottom:12px;">
+  <div class="kpi-label" style="margin-bottom:10px;">Recent batches</div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Who</th>
+            <th>Mode</th>
+            <th>Target</th>
+            <th>Source</th>
+            <th>Files</th>
+            <th>Attached</th>
+            <th>Floating</th>
+            <th>Skipped</th>
+            <th>Failed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in batch_page %}
+          <tr>
+            <td class="cell-muted">{{ b.created_at|date:"M j, Y H:i" }}</td>
+            <td>{% if b.uploaded_by %}{{ b.uploaded_by.employee_code }}{% if b.uploaded_by.first_name %} · {{ b.uploaded_by.first_name }}{% endif %}{% else %}—{% endif %}</td>
+            <td>{{ b.get_mode_display }}</td>
+            <td class="mono">{{ b.target_code|default:"—" }}</td>
+            <td class="cell-muted">{{ b.source|default:"—" }}</td>
+            <td class="mono">{{ b.files_total }}</td>
+            <td class="mono">{{ b.attached_count }}</td>
+            <td class="mono">{{ b.staged_count }}</td>
+            <td class="mono">{{ b.skipped_count }}</td>
+            <td class="mono">{{ b.failed_count }}</td>
+            <td><a href="{% url 'catalogue:photo_batch' b.pk %}">Details</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="cell-muted">No batches yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="kpi-label" style="margin-bottom:10px;">Files</div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>When</th>
+            <th>Filename</th>
+            <th>Hinted PJ</th>
+            <th>Extracted</th>
+            <th>Status</th>
+            <th>Detail</th>
+            <th>Size</th>
+            <th>Uploader</th>
+            <th>Batch</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for im in item_page %}
+          <tr>
+            <td>
+              {% if im.display_url %}
+              <a href="{{ im.image.url }}" target="_blank" rel="noopener"><img src="{{ im.display_url }}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;"></a>
+              {% endif %}
+            </td>
+            <td class="cell-muted">{{ im.created_at|date:"M j H:i" }}</td>
+            <td class="mono" style="max-width:220px; overflow:hidden; text-overflow:ellipsis;">{{ im.source_filename }}</td>
+            <td class="mono">{{ im.hinted_code|default:"—" }}</td>
+            <td class="mono cell-muted">{% if im.extracted_codes %}{{ im.extracted_codes|join:", " }}{% else %}—{% endif %}</td>
+            <td>
+              {% if im.status == "waiting" %}<span class="pill pill-warn">Waiting</span>
+              {% elif im.status == "attached" %}<span class="pill pill-ok">Attached</span>
+              {% elif im.status == "skipped" %}<span class="pill pill-neutral">Skipped</span>
+              {% elif im.status == "discarded" %}<span class="pill pill-neutral">Discarded</span>
+              {% else %}<span class="pill pill-danger">Failed</span>{% endif %}
+            </td>
+            <td class="cell-muted" style="max-width:240px;">{{ im.status_detail|default:"—" }}</td>
+            <td class="mono cell-muted">{% if im.file_size %}{{ im.file_size|filesizeformat }}{% else %}—{% endif %}</td>
+            <td class="cell-muted">{% if im.batch.uploaded_by %}{{ im.batch.uploaded_by.employee_code }}{% else %}—{% endif %}</td>
+            <td><a href="{% url 'catalogue:photo_batch' im.batch_id %}">#{{ im.batch_id }}</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="cell-muted">No files match.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if item_page.has_other_pages %}
+  <div style="margin-top:10px; display:flex; gap:8px;">
+    {% if item_page.has_previous %}<a class="btn btn-ghost btn-sm" href="?page={{ item_page.previous_page_number }}&status={{ status }}&q={{ q }}">Prev</a>{% endif %}
+    <span class="cell-muted">Page {{ item_page.number }} / {{ item_page.paginator.num_pages }}</span>
+    {% if item_page.has_next %}<a class="btn btn-ghost btn-sm" href="?page={{ item_page.next_page_number }}&status={{ status }}&q={{ q }}">Next</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

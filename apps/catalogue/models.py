@@ -324,6 +324,12 @@ class ProductImage(TimeStampedModel):
         ProductMaster, on_delete=models.CASCADE, related_name="images"
     )
     image = models.FileField(upload_to="product_images/%Y/%m/")
+    thumbnail = models.FileField(
+        upload_to="product_images/thumbs/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Small JPEG for lists/galleries; full camera file stays on ``image``.",
+    )
     kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.PHOTO)
     is_primary = models.BooleanField(
         default=False,
@@ -351,6 +357,15 @@ class ProductImage(TimeStampedModel):
 
     def __str__(self):
         return f"{self.product} — {self.get_kind_display()}"
+
+    @property
+    def display_url(self) -> str:
+        """Prefer the web thumb when present so list/gallery pages stay light."""
+        if self.thumbnail:
+            return self.thumbnail.url
+        if self.image:
+            return self.image.url
+        return ""
 
 
 class ProductIntakeBatch(TimeStampedModel):
@@ -430,3 +445,189 @@ class ProductIntakeLine(TimeStampedModel):
 
     def __str__(self):
         return f"{self.barcode or 'row'} — {self.action}"
+
+
+class PhotoUploadBatch(TimeStampedModel):
+    """
+    One photo-upload session (UI drop, sequential AJAX, API, or CLI).
+
+    Every file in the session becomes a ``StagedProductImage`` row so history
+    is complete even when the file attaches immediately to a design.
+    """
+
+    class Mode(models.TextChoices):
+        SINGLE = "single", "Attach to PJ"
+        BULK = "bulk", "Bulk by filename"
+        STAGE = "stage", "Stage / floating"
+        ASSIGN = "assign", "Manual assign"
+        CLAIM = "claim", "Auto-claim on stock"
+        CLI = "cli", "Management command"
+        API = "api", "API"
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="photo_upload_batches",
+    )
+    mode = models.CharField(max_length=12, choices=Mode.choices, default=Mode.SINGLE)
+    note = models.CharField(max_length=255, blank=True)
+    source = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Where the upload came from, e.g. photo_upload UI / API / import_product_images.",
+    )
+    target_code = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="PJ / barcode typed for a single-design attach, if any.",
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=400, blank=True)
+
+    files_total = models.PositiveIntegerField(default=0)
+    attached_count = models.PositiveIntegerField(default=0)
+    staged_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Photo batch #{self.pk} ({self.mode})"
+
+    def refresh_counts(self):
+        from django.db.models import Count, Q
+
+        agg = self.items.aggregate(
+            total=Count("id"),
+            attached=Count("id", filter=Q(status=StagedProductImage.Status.ATTACHED)),
+            staged=Count("id", filter=Q(status=StagedProductImage.Status.WAITING)),
+            skipped=Count("id", filter=Q(status=StagedProductImage.Status.SKIPPED)),
+            failed=Count("id", filter=Q(status=StagedProductImage.Status.FAILED)),
+        )
+        self.files_total = agg["total"] or 0
+        self.attached_count = agg["attached"] or 0
+        self.staged_count = agg["staged"] or 0
+        self.skipped_count = agg["skipped"] or 0
+        self.failed_count = agg["failed"] or 0
+        # discarded counted in failed_count? keep separate via failed only for FAILED
+        self.save(
+            update_fields=[
+                "files_total",
+                "attached_count",
+                "staged_count",
+                "skipped_count",
+                "failed_count",
+                "updated_at",
+            ]
+        )
+
+
+class StagedProductImage(TimeStampedModel):
+    """
+    A photo sitting in the upload pipeline.
+
+    ``WAITING`` = floating — no matching PJ in stock yet (or no code in the
+    filename). Photo staff can upload whenever free; when stock people later
+    create the barcode / reference, waiting rows with that code are claimed
+    automatically (or assigned manually).
+    """
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Waiting for PJ"
+        ATTACHED = "attached", "Attached to design"
+        SKIPPED = "skipped", "Skipped (duplicate)"
+        FAILED = "failed", "Failed"
+        DISCARDED = "discarded", "Discarded"
+
+    batch = models.ForeignKey(
+        PhotoUploadBatch,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    image = models.FileField(upload_to="product_images/staged/%Y/%m/")
+    thumbnail = models.FileField(
+        upload_to="product_images/staged/thumbs/%Y/%m/",
+        blank=True,
+        null=True,
+    )
+    source_filename = models.CharField(max_length=255, db_index=True)
+    original_name = models.CharField(max_length=255, blank=True)
+    file_size = models.PositiveBigIntegerField(default=0)
+    content_type = models.CharField(max_length=100, blank=True)
+    kind = models.CharField(
+        max_length=8,
+        choices=ProductImage.Kind.choices,
+        default=ProductImage.Kind.PHOTO,
+    )
+
+    extracted_codes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="PJ tokens parsed from the filename at upload time.",
+    )
+    hinted_code = models.CharField(
+        max_length=40,
+        blank=True,
+        db_index=True,
+        help_text="Primary code to match — first extracted token, or a code typed by the uploader.",
+    )
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.WAITING,
+        db_index=True,
+    )
+    status_detail = models.CharField(max_length=500, blank=True)
+
+    product = models.ForeignKey(
+        ProductMaster,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="staged_photos",
+    )
+    product_image = models.ForeignKey(
+        ProductImage,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="staged_source",
+    )
+    attached_at = models.DateTimeField(null=True, blank=True)
+    attached_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="photo_attachments",
+    )
+    discarded_at = models.DateTimeField(null=True, blank=True)
+    discarded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="photo_discards",
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["status", "hinted_code"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.source_filename} [{self.status}]"
+
+    @property
+    def display_url(self) -> str:
+        if self.thumbnail:
+            return self.thumbnail.url
+        if self.image:
+            return self.image.url
+        return ""

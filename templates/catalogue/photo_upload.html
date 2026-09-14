@@ -6,188 +6,554 @@
 <div class="page-head">
   <div>
     <h1>Upload photos</h1>
-    <p>Photo team only — not stock intake. Scan or type a PJ / barcode, then attach or remove pictures on that design. Pieces that share a design share the same shots.</p>
+    <p>
+      Attach to an existing PJ, or upload early — unknown codes stay
+      <strong>floating</strong> until stock adds that barcode. Full log under History.
+    </p>
   </div>
   <div class="page-head-actions">
+    <a href="{% url 'catalogue:photo_history' %}" class="btn btn-ghost"><i class="fa-solid fa-clock-rotate-left"></i> History{% if waiting_count %} · {{ waiting_count }} waiting{% endif %}</a>
     <a href="{% url 'catalogue:product_list' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Products</a>
   </div>
 </div>
 
 {% if messages %}
-<div class="pu-flash">
+<div class="pu-flash" id="puServerFlash">
   {% for message in messages %}
   <div class="panel pu-msg pu-msg-{{ message.tags|default:'info' }}">{{ message }}</div>
   {% endfor %}
 </div>
 {% endif %}
 {% if lookup_error %}
-<div class="panel pu-msg pu-msg-error">{{ lookup_error }}</div>
+<div class="panel pu-msg {% if can_stage %}pu-msg-warning{% else %}pu-msg-error{% endif %}">{{ lookup_error }}</div>
 {% endif %}
+<div class="pu-flash" id="puLiveFlash" hidden></div>
 
-<form method="post" class="panel pu-lookup">
-  {% csrf_token %}
-  <input type="hidden" name="mode" value="lookup">
+<form method="get" class="panel pu-lookup" action="{% url 'catalogue:photo_upload' %}">
   <div class="kpi-label">Find by PJ / barcode</div>
-  <p>Same codes stock people use. Lookup opens the design’s gallery so you upload or remove the right pictures.</p>
+  <p>Existing design → manage gallery. Unknown PJ → still upload; photos wait floating for that code.</p>
   <label class="pu-code">
     <span>PJ / barcode</span>
-    <input class="field mono" name="code" value="{{ code }}" placeholder="PJ22899" autofocus required>
+    <input class="field mono" name="code" id="puCode" value="{{ code }}" placeholder="PJ22899" autofocus>
   </label>
   <div class="pu-actions">
     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> Look up</button>
   </div>
 </form>
 
-{% if product %}
-<div class="panel pu-target">
-  <div class="kpi-label">Design</div>
+{% if product or can_stage %}
+<div class="panel pu-target" id="puTarget"
+     data-code="{{ code }}"
+     data-url="{% url 'catalogue:photo_upload' %}"
+     data-max-mb="{{ photo_max_mb }}"
+     data-can-stage="{% if can_stage %}1{% else %}0{% endif %}">
+  <div class="kpi-label">{% if product %}Design{% else %}Floating for {{ code }}{% endif %}</div>
   <div class="pu-target-row">
     <div>
-      <div class="mono cell-strong" style="font-size:18px;">{{ sample_barcode|default:product.reference_id|default:product.name }}</div>
+      <div class="mono cell-strong" style="font-size:18px;">{% if product %}{{ sample_barcode|default:product.reference_id|default:product.name }}{% else %}{{ code }}{% endif %}</div>
       <div class="cell-muted" style="margin-top:4px;">
-        {% if product.reference_id %}<span class="mono">{{ product.reference_id }}</span> · {% endif %}
-        {{ product.name }} · {{ piece_count }} piece{{ piece_count|pluralize }}
-        {% if not product.is_verified %} · <span class="pill pill-warn">Unverified</span>{% endif %}
+        {% if product %}
+          {% if product.reference_id %}<span class="mono">{{ product.reference_id }}</span> · {% endif %}
+          {{ product.name }} · {{ piece_count }} piece{{ piece_count|pluralize }}
+          {% if not product.is_verified %} · <span class="pill pill-warn">Unverified</span>{% endif %}
+        {% else %}
+          Not in stock yet — uploads are held until this PJ is created.
+        {% endif %}
       </div>
     </div>
+    {% if product %}
     <div class="pu-actions">
       <a href="{% url 'catalogue:product_detail' product.pk %}" class="btn btn-ghost"><i class="fa-solid fa-gem"></i> View design</a>
       {% if sample_barcode %}
       <a href="{% url 'catalogue:item_detail' sample_barcode %}" class="btn btn-ghost"><i class="fa-solid fa-barcode"></i> Piece</a>
       {% endif %}
     </div>
+    {% endif %}
   </div>
 
-  {% if photos %}
-  <div class="pu-existing">
+  {% if product %}
+  <div class="pu-existing" id="puGallery">
     <div class="pu-existing-head">
-      <div class="kpi-label" style="margin:0;">Current photos <span class="cell-muted">({{ photos|length }})</span></div>
-      <form method="post" class="pu-delete-all" onsubmit="return confirm('Remove all {{ photos|length }} photo(s) from {{ code }}?');">
-        {% csrf_token %}
-        <input type="hidden" name="mode" value="delete_all">
-        <input type="hidden" name="code" value="{{ code }}">
-        <button type="submit" class="btn btn-ghost btn-sm pu-danger"><i class="fa-solid fa-trash"></i> Remove all</button>
-      </form>
+      <div class="kpi-label" style="margin:0;">Current photos <span class="cell-muted" id="puCount">({{ photos|length }})</span></div>
+      <button type="button" class="btn btn-ghost btn-sm pu-danger" id="puDeleteAll"
+              {% if not photos %}hidden{% endif %}
+              data-confirm="Remove all photos from {{ code }}?">
+        <i class="fa-solid fa-trash"></i> Remove all
+      </button>
     </div>
-    <div class="pu-thumbs">
+    <div class="pu-thumbs" id="puThumbs">
       {% for im in photos %}
-      <div class="pu-thumb-wrap">
-        <a href="{{ im.image.url }}" target="_blank" rel="noopener" class="pu-thumb" title="{{ im.source_filename|default:im.get_kind_display }}{% if im.is_primary %} · primary{% endif %}">
-          <img src="{{ im.image.url }}" alt="" loading="lazy">
+      <div class="pu-thumb-wrap{% if im.is_primary %} is-primary{% endif %}" data-id="{{ im.pk }}">
+        <a href="{{ im.image.url }}" target="_blank" rel="noopener" class="pu-thumb"
+           title="{{ im.source_filename|default:im.get_kind_display }}{% if im.is_primary %} · primary{% endif %}">
+          <img src="{{ im.display_url }}" alt="" loading="lazy">
         </a>
-        <form method="post" class="pu-delete-one" onsubmit="return confirm('Remove this photo?');">
-          {% csrf_token %}
-          <input type="hidden" name="mode" value="delete">
-          <input type="hidden" name="code" value="{{ code }}">
-          <input type="hidden" name="image_id" value="{{ im.pk }}">
-          <button type="submit" class="pu-del-btn" title="Remove photo"><i class="fa-solid fa-xmark"></i></button>
-        </form>
+        {% if im.is_primary %}<span class="pu-primary-badge">Primary</span>{% endif %}
+        <div class="pu-thumb-actions">
+          <button type="button" class="pu-icon-btn" data-action="primary" title="Set as primary" {% if im.is_primary %}disabled{% endif %}>
+            <i class="fa-solid fa-star"></i>
+          </button>
+          <button type="button" class="pu-icon-btn pu-danger" data-action="delete" title="Remove photo">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
+      {% empty %}
+      <p class="cell-muted pu-empty" id="puEmpty">No photos on this design yet.</p>
       {% endfor %}
     </div>
   </div>
-  {% else %}
-  <p class="cell-muted" style="margin:10px 0 0;">No photos on this design yet.</p>
   {% endif %}
 </div>
 
-<form method="post" enctype="multipart/form-data" class="panel pu-upload">
-  {% csrf_token %}
-  <input type="hidden" name="mode" value="upload">
-  <input type="hidden" name="code" value="{{ code }}">
-  <div class="kpi-label">Attach photos to {{ code }}</div>
+<div class="panel pu-upload" id="puAttachPanel"
+     data-code="{{ code }}"
+     data-url="{% url 'catalogue:photo_upload' %}"
+     data-max-mb="{{ photo_max_mb }}">
+  <div class="kpi-label">{% if product %}Attach photos to {{ code }}{% else %}Upload floating photos for {{ code }}{% endif %}</div>
   <p>
-    Select several files if needed. Full-resolution camera files are stored as uploaded
-    (JPEG/PNG/WebP, up to {{ photo_max_mb }}&nbsp;MB each){% if photo_max_width %}
-    and downscaled to about {{ photo_max_width }}px wide{% endif %}.
-    Re-uploading the same filename for this design is skipped.
+    Drop files here or browse. One file at a time (safer for large camera JPEGs).
+    Up to {{ photo_max_mb }}&nbsp;MB each{% if photo_keeps_original %} at full resolution{% endif %}.
+    {% if not product %}They stay floating until stock adds {{ code }}.{% endif %}
   </p>
-  <label class="pu-file">
-    <span>Image files</span>
-    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple required>
-  </label>
-  <div class="pu-actions">
-    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-camera"></i> Upload photos</button>
+  <div class="pu-drop" id="puAttachDrop" tabindex="0">
+    <i class="fa-solid fa-cloud-arrow-up"></i>
+    <div><strong>Drop images here</strong> or click to choose</div>
+    <div class="cell-muted" style="font-size:12px; margin-top:4px;">JPEG, PNG, WebP · multiple files OK</div>
+    <input type="file" id="puAttachInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff" multiple hidden>
   </div>
-</form>
+  <div class="pu-progress" id="puAttachProgress" hidden>
+    <div class="pu-progress-bar"><span id="puAttachBar"></span></div>
+    <div class="pu-progress-label" id="puAttachLabel">Uploading…</div>
+  </div>
+  <ul class="pu-queue" id="puAttachQueue" hidden></ul>
+</div>
 {% endif %}
 
-<details class="panel pu-bulk"{% if bulk_report %} open{% endif %}>
+<details class="panel pu-bulk"{% if bulk_report %} open{% endif %} id="puBulkPanel"
+         data-url="{% url 'catalogue:photo_upload' %}"
+         data-max-mb="{{ photo_max_mb }}">
   <summary>Bulk upload by filename</summary>
   <p>
-    Drop many shots named with PJ codes (e.g. <span class="mono">PJ22899 18K WG…JPG</span>).
-    Matching is barcode first, then reference ID — same as single upload.
-    Prefer JPEG/PNG/WebP; each file may be up to {{ photo_max_mb }}&nbsp;MB
-    {% if photo_keeps_original %}and is stored at full resolution{% else %}(stored width ~{{ photo_max_width }}px){% endif %}.
-    For hundreds of large files, upload in batches so the request does not time out.
+    Drop shots named with PJ codes. Matching designs get the photo immediately;
+    unknown PJ codes (or no code) are kept <strong>floating</strong> for later.
   </p>
-  <form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <input type="hidden" name="mode" value="bulk">
-    <label class="pu-file">
-      <span>Image files</span>
-      <input type="file" name="photos" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple required>
-    </label>
-    <div class="pu-actions">
-      <button type="submit" class="btn btn-ghost"><i class="fa-solid fa-images"></i> Match and upload</button>
-    </div>
-  </form>
-  {% if bulk_report %}
-  <div class="pu-bulk-report">
-    <p>
-      Matched files: {{ bulk_report.matched_files }} ·
-      Photos created: {{ bulk_report.created }} ·
-      Designs touched: {{ bulk_report.products_touched }} ·
-      Skipped: {{ bulk_report.skipped }}
-    </p>
-    {% if bulk_report.unmatched %}
-    <div class="kpi-label" style="margin:10px 0 6px;">Unmatched</div>
-    <ul>
-      {% for name, reason in bulk_report.unmatched|slice:":20" %}
-      <li><span class="mono">{{ name }}</span> — {{ reason }}</li>
-      {% endfor %}
-      {% if bulk_report.unmatched|length > 20 %}
-      <li class="cell-muted">… and more</li>
-      {% endif %}
-    </ul>
-    {% endif %}
+  <div class="pu-drop" id="puBulkDrop" tabindex="0">
+    <i class="fa-solid fa-images"></i>
+    <div><strong>Drop a batch here</strong> or click to choose</div>
+    <div class="cell-muted" style="font-size:12px; margin-top:4px;">Unknown PJs are held, not rejected</div>
+    <input type="file" id="puBulkInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff" multiple hidden>
   </div>
-  {% endif %}
+  <div class="pu-progress" id="puBulkProgress" hidden>
+    <div class="pu-progress-bar"><span id="puBulkBar"></span></div>
+    <div class="pu-progress-label" id="puBulkLabel">Uploading…</div>
+  </div>
+  <div class="pu-bulk-report" id="puBulkReport" {% if not bulk_report %}hidden{% endif %}>
+    <p id="puBulkSummary">
+      {% if bulk_report %}
+      Attached: {{ bulk_report.created }} · Floating: {{ bulk_report.staged }} ·
+      Skipped: {{ bulk_report.skipped }} · Failed: {{ bulk_report.failed }}
+      {% endif %}
+    </p>
+    <div id="puBulkUnmatchedWrap" {% if not bulk_report.unmatched %}hidden{% endif %}>
+      <div class="pu-unmatched-head">
+        <div class="kpi-label" style="margin:0;">Not attached yet / notes</div>
+        <button type="button" class="btn btn-ghost btn-sm" id="puBulkCsv" hidden>Download CSV</button>
+      </div>
+      <ul id="puBulkUnmatched">
+        {% if bulk_report.unmatched %}
+        {% for name, reason in bulk_report.unmatched %}
+        <li><span class="mono">{{ name }}</span> — {{ reason }}</li>
+        {% endfor %}
+        {% endif %}
+      </ul>
+    </div>
+  </div>
 </details>
 
+<div class="panel pu-float" id="puFloatPanel" data-url="{% url 'catalogue:photo_upload' %}">
+  <div class="pu-existing-head">
+    <div class="kpi-label" style="margin:0;">Floating photos <span class="cell-muted">({{ waiting_count }} waiting)</span></div>
+    <a href="{% url 'catalogue:photo_history' %}?status=waiting" class="btn btn-ghost btn-sm">View all</a>
+  </div>
+  <p class="cell-muted" style="margin:6px 0 12px; font-size:13px;">
+    Uploaded before the PJ existed. Assign a code here, or wait — creating the barcode in stock auto-claims matches.
+  </p>
+  <div class="pu-float-list" id="puFloatList">
+    {% for s in waiting_photos %}
+    <div class="pu-float-row" data-id="{{ s.pk }}">
+      <a href="{{ s.image.url }}" target="_blank" rel="noopener" class="pu-float-thumb">
+        <img src="{{ s.display_url }}" alt="" loading="lazy">
+      </a>
+      <div class="pu-float-meta">
+        <div class="mono" style="font-size:13px;">{{ s.source_filename }}</div>
+        <div class="cell-muted" style="font-size:12px;">
+          {% if s.hinted_code %}Waiting for <span class="mono">{{ s.hinted_code }}</span>{% else %}No PJ yet — assign manually{% endif %}
+          · {{ s.created_at|date:"M j H:i" }}
+          {% if s.batch.uploaded_by %} · {{ s.batch.uploaded_by.employee_code }}{% endif %}
+        </div>
+        <div class="pu-float-assign">
+          <input class="field mono" data-role="assign-code" placeholder="PJ / barcode" value="{{ s.hinted_code }}">
+          <button type="button" class="btn btn-primary btn-sm" data-action="assign">Assign</button>
+          <button type="button" class="btn btn-ghost btn-sm pu-danger" data-action="discard">Discard</button>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <p class="cell-muted" id="puFloatEmpty">No floating photos right now.</p>
+    {% endfor %}
+  </div>
+</div>
+
 <style>
-  .pu-lookup, .pu-target, .pu-upload, .pu-bulk { margin-bottom: 12px; max-width: 640px; }
-  .pu-flash { max-width: 640px; margin-bottom: 12px; display: grid; gap: 8px; }
-  .pu-msg { margin-bottom: 12px; max-width: 640px; font-size: 13px; }
+  .pu-lookup, .pu-target, .pu-upload, .pu-bulk, .pu-float { margin-bottom: 12px; max-width: 720px; }
+  .pu-flash { max-width: 720px; margin-bottom: 12px; display: grid; gap: 8px; }
+  .pu-msg { margin-bottom: 12px; max-width: 720px; font-size: 13px; }
   .pu-msg-error { border-color: var(--danger, #c0392b); }
   .pu-msg-success { border-color: var(--ok, #16803c); }
   .pu-msg-warning { border-color: var(--warn, #b8860b); }
-  .pu-lookup p, .pu-upload p, .pu-bulk > p, .pu-bulk form + .pu-bulk-report p {
+  .pu-lookup p, .pu-upload p, .pu-bulk > p, .pu-float > p {
     margin: 6px 0 12px; font-size: 13px; color: var(--text-muted);
   }
-  .pu-code, .pu-file { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
+  .pu-code { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
   .pu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
   .pu-target-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
   .pu-existing { margin-top: 14px; }
   .pu-existing-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-  .pu-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
-  .pu-thumb-wrap { position: relative; width: 72px; height: 72px; }
-  .pu-thumb {
-    display: block; width: 72px; height: 72px; border-radius: 6px; overflow: hidden;
-    border: 1px solid var(--border, #ddd); background: var(--surface-2, #f5f5f5);
+  .pu-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+  .pu-thumb-wrap {
+    position: relative; width: 104px; height: 104px;
+    border-radius: 8px; border: 1px solid var(--border, #ddd);
+    background: var(--surface-2, #f5f5f5); overflow: hidden;
   }
+  .pu-thumb-wrap.is-primary { border-color: var(--ok, #16803c); box-shadow: 0 0 0 1px var(--ok, #16803c); }
+  .pu-thumb { display: block; width: 100%; height: 100%; }
   .pu-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .pu-del-btn {
-    position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0;
-    border-radius: 50%; border: 1px solid var(--border, #ccc); background: var(--surface, #fff);
-    color: var(--danger, #c0392b); cursor: pointer; font-size: 11px; line-height: 1;
-    display: grid; place-items: center;
+  .pu-primary-badge {
+    position: absolute; left: 6px; top: 6px; font-size: 10px; font-weight: 700;
+    background: var(--ok, #16803c); color: #fff; padding: 2px 6px; border-radius: 999px;
   }
-  .pu-del-btn:hover { background: var(--danger, #c0392b); color: #fff; }
+  .pu-thumb-actions { position: absolute; right: 4px; bottom: 4px; display: flex; gap: 4px; }
+  .pu-icon-btn {
+    width: 26px; height: 26px; padding: 0; border-radius: 6px;
+    border: 1px solid var(--border, #ccc); background: rgba(255,255,255,.92);
+    cursor: pointer; font-size: 11px; display: grid; place-items: center;
+  }
+  .pu-icon-btn:disabled { opacity: .45; cursor: default; }
   .pu-danger { color: var(--danger, #c0392b); }
+  .pu-drop {
+    border: 1.5px dashed var(--border, #ccc); border-radius: 10px; padding: 28px 16px;
+    text-align: center; cursor: pointer; background: var(--surface-2, #fafafa);
+  }
+  .pu-drop:hover, .pu-drop.is-drag { border-color: var(--accent, #2c6e49); background: #fff; }
+  .pu-drop i { font-size: 22px; margin-bottom: 8px; display: block; color: var(--text-muted); }
+  .pu-progress { margin-top: 12px; }
+  .pu-progress-bar { height: 8px; border-radius: 999px; background: var(--surface-2, #eee); overflow: hidden; }
+  .pu-progress-bar span { display: block; height: 100%; width: 0; background: var(--accent, #2c6e49); transition: width .2s ease; }
+  .pu-progress-label { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+  .pu-queue { margin: 10px 0 0; padding-left: 18px; font-size: 12px; max-height: 140px; overflow: auto; }
+  .pu-queue .ok { color: var(--ok, #16803c); }
+  .pu-queue .err { color: var(--danger, #c0392b); }
+  .pu-queue .skip { color: var(--warn, #b8860b); }
   .pu-bulk summary { cursor: pointer; font-weight: 650; }
-  .pu-bulk form { margin-top: 10px; display: grid; gap: 10px; }
-  .pu-bulk-report ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .pu-bulk-report { margin-top: 12px; }
+  .pu-bulk-report ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; max-height: 220px; overflow: auto; }
+  .pu-unmatched-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+  .pu-float-list { display: grid; gap: 10px; }
+  .pu-float-row { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border, #eee); }
+  .pu-float-row:first-child { border-top: 0; }
+  .pu-float-thumb { width: 64px; height: 64px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border, #ddd); flex: 0 0 auto; }
+  .pu-float-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pu-float-meta { flex: 1; min-width: 0; }
+  .pu-float-assign { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+  .pu-float-assign .field { max-width: 160px; }
 </style>
+
+<script>
+(function () {
+  const csrf = "{{ csrf_token }}";
+
+  function flash(text, kind) {
+    const box = document.getElementById("puLiveFlash");
+    if (!box) return;
+    box.hidden = false;
+    const el = document.createElement("div");
+    el.className = "panel pu-msg pu-msg-" + (kind || "info");
+    el.textContent = text;
+    box.prepend(el);
+    setTimeout(function () { el.remove(); if (!box.children.length) box.hidden = true; }, 6000);
+  }
+
+  function postForm(url, fields, fileField, file) {
+    const fd = new FormData();
+    Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+    if (fileField && file) fd.append(fileField, file, file.name);
+    return fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrf,
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json",
+      },
+      body: fd,
+      credentials: "same-origin",
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        data._status = r.status;
+        return data;
+      });
+    });
+  }
+
+  function renderGallery(images) {
+    const thumbs = document.getElementById("puThumbs");
+    const count = document.getElementById("puCount");
+    const delAll = document.getElementById("puDeleteAll");
+    if (!thumbs) return;
+    thumbs.innerHTML = "";
+    if (count) count.textContent = "(" + images.length + ")";
+    if (delAll) delAll.hidden = !images.length;
+    if (!images.length) {
+      const p = document.createElement("p");
+      p.className = "cell-muted pu-empty";
+      p.textContent = "No photos on this design yet.";
+      thumbs.appendChild(p);
+      return;
+    }
+    images.forEach(function (im) {
+      const wrap = document.createElement("div");
+      wrap.className = "pu-thumb-wrap" + (im.is_primary ? " is-primary" : "");
+      wrap.dataset.id = im.id;
+      const href = im.url || im.thumb_url;
+      const src = im.thumb_url || im.url;
+      wrap.innerHTML =
+        '<a href="' + href + '" target="_blank" rel="noopener" class="pu-thumb">' +
+        '<img src="' + src + '" alt="" loading="lazy"></a>' +
+        (im.is_primary ? '<span class="pu-primary-badge">Primary</span>' : "") +
+        '<div class="pu-thumb-actions">' +
+        '<button type="button" class="pu-icon-btn" data-action="primary" title="Set as primary"' +
+        (im.is_primary ? " disabled" : "") + '><i class="fa-solid fa-star"></i></button>' +
+        '<button type="button" class="pu-icon-btn pu-danger" data-action="delete" title="Remove">' +
+        '<i class="fa-solid fa-xmark"></i></button></div>';
+      thumbs.appendChild(wrap);
+    });
+  }
+
+  function bindDrop(dropEl, inputEl, onFiles) {
+    if (!dropEl || !inputEl) return;
+    dropEl.addEventListener("click", function () { inputEl.click(); });
+    inputEl.addEventListener("change", function () {
+      if (inputEl.files && inputEl.files.length) onFiles(Array.from(inputEl.files));
+      inputEl.value = "";
+    });
+    ["dragenter", "dragover"].forEach(function (ev) {
+      dropEl.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation(); dropEl.classList.add("is-drag");
+      });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      dropEl.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation(); dropEl.classList.remove("is-drag");
+      });
+    });
+    dropEl.addEventListener("drop", function (e) {
+      const files = Array.from(e.dataTransfer.files || []).filter(function (f) {
+        return /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|tiff?)$/i.test(f.name);
+      });
+      if (files.length) onFiles(files);
+    });
+  }
+
+  async function uploadSequential(files, opts) {
+    const maxMb = Number(opts.maxMb || 100);
+    const progress = document.getElementById(opts.progressId);
+    const bar = document.getElementById(opts.barId);
+    const label = document.getElementById(opts.labelId);
+    const queue = opts.queueId ? document.getElementById(opts.queueId) : null;
+    if (progress) progress.hidden = false;
+    if (queue) { queue.hidden = false; queue.innerHTML = ""; }
+    let done = 0, created = 0, staged = 0, skipped = 0, failed = 0;
+    const unmatched = [];
+    for (const file of files) {
+      if (file.size > maxMb * 1024 * 1024) {
+        failed += 1;
+        unmatched.push({ name: file.name, reason: "larger than " + maxMb + " MB limit" });
+        done += 1;
+        if (bar) bar.style.width = Math.round((done / files.length) * 100) + "%";
+        continue;
+      }
+      if (label) label.textContent = "Uploading " + (done + 1) + " / " + files.length + " — " + file.name;
+      try {
+        const data = await postForm(opts.url, opts.fields(file), opts.fileField, file);
+        if (data.images && opts.onImages) opts.onImages(data.images);
+        if (data.created) created += data.created;
+        if (data.staged) staged += data.staged;
+        if (data.skipped) skipped += data.skipped;
+        if (data.unmatched && data.unmatched.length) {
+          data.unmatched.forEach(function (u) { unmatched.push(u); });
+        }
+        if (queue) {
+          const li = document.createElement("li");
+          if (data.created) { li.className = "ok"; li.textContent = file.name + " — attached"; }
+          else if (data.staged) { li.className = "skip"; li.textContent = file.name + " — floating / waiting"; }
+          else if (data.skipped) { li.className = "skip"; li.textContent = file.name + " — already stored"; }
+          else { li.className = "err"; li.textContent = file.name + " — " + (data.detail || "failed"); failed += 1; }
+          queue.appendChild(li);
+        }
+      } catch (err) {
+        failed += 1;
+        unmatched.push({ name: file.name, reason: String(err) });
+      }
+      done += 1;
+      if (bar) bar.style.width = Math.round((done / files.length) * 100) + "%";
+    }
+    if (label) {
+      label.textContent = "Done — attached " + created + ", floating " + staged +
+        ", skipped " + skipped + (failed ? ", failed " + failed : "");
+    }
+    return { created: created, staged: staged, skipped: skipped, failed: failed, unmatched: unmatched };
+  }
+
+  const target = document.getElementById("puTarget");
+  if (target) {
+    const url = target.dataset.url;
+    const code = target.dataset.code;
+    const maxMb = target.dataset.maxMb;
+
+    document.getElementById("puThumbs")?.addEventListener("click", async function (e) {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const wrap = btn.closest(".pu-thumb-wrap");
+      if (!wrap) return;
+      const imageId = wrap.dataset.id;
+      const action = btn.dataset.action;
+      if (action === "delete") {
+        if (!confirm("Remove this photo?")) return;
+        const data = await postForm(url, { mode: "delete", code: code, image_id: imageId });
+        if (data.ok && data.images) { renderGallery(data.images); flash("Photo removed.", "success"); }
+        else flash(data.detail || "Could not remove photo.", "error");
+      }
+      if (action === "primary") {
+        const data = await postForm(url, { mode: "set_primary", code: code, image_id: imageId });
+        if (data.ok && data.images) { renderGallery(data.images); flash("Primary photo updated.", "success"); }
+        else flash(data.detail || "Could not set primary.", "error");
+      }
+    });
+
+    document.getElementById("puDeleteAll")?.addEventListener("click", async function () {
+      if (!confirm(this.dataset.confirm || "Remove all photos?")) return;
+      const data = await postForm(url, { mode: "delete_all", code: code });
+      if (data.ok) { renderGallery(data.images || []); flash("Removed " + (data.removed || 0) + " photo(s).", "success"); }
+      else flash(data.detail || "Could not clear photos.", "error");
+    });
+
+    bindDrop(document.getElementById("puAttachDrop"), document.getElementById("puAttachInput"), async function (files) {
+      const result = await uploadSequential(files, {
+        url: url,
+        maxMb: maxMb,
+        progressId: "puAttachProgress",
+        barId: "puAttachBar",
+        labelId: "puAttachLabel",
+        queueId: "puAttachQueue",
+        fileField: "photos",
+        fields: function () { return { mode: "upload", code: code }; },
+        onImages: renderGallery,
+      });
+      if (result.created) flash("Attached " + result.created + " photo(s).", "success");
+      if (result.staged) flash("Held " + result.staged + " floating photo(s) for " + code + ".", "warning");
+      if (result.staged) setTimeout(function () { location.reload(); }, 800);
+    });
+  }
+
+  const bulk = document.getElementById("puBulkPanel");
+  if (bulk) {
+    let lastUnmatched = [];
+    bindDrop(document.getElementById("puBulkDrop"), document.getElementById("puBulkInput"), async function (files) {
+      const report = document.getElementById("puBulkReport");
+      const summary = document.getElementById("puBulkSummary");
+      const unmatchedUl = document.getElementById("puBulkUnmatched");
+      const unmatchedWrap = document.getElementById("puBulkUnmatchedWrap");
+      const csvBtn = document.getElementById("puBulkCsv");
+      if (report) report.hidden = false;
+      const result = await uploadSequential(files, {
+        url: bulk.dataset.url,
+        maxMb: bulk.dataset.maxMb,
+        progressId: "puBulkProgress",
+        barId: "puBulkBar",
+        labelId: "puBulkLabel",
+        fileField: "photos",
+        fields: function () { return { mode: "bulk_one" }; },
+      });
+      lastUnmatched = result.unmatched || [];
+      if (summary) {
+        summary.textContent =
+          "Attached: " + result.created +
+          " · Floating: " + result.staged +
+          " · Skipped: " + result.skipped +
+          " · Failed: " + result.failed;
+      }
+      if (unmatchedUl && unmatchedWrap) {
+        unmatchedUl.innerHTML = "";
+        lastUnmatched.forEach(function (u) {
+          const li = document.createElement("li");
+          li.innerHTML = '<span class="mono"></span> — ';
+          li.querySelector("span").textContent = u.name;
+          li.appendChild(document.createTextNode(u.reason));
+          unmatchedUl.appendChild(li);
+        });
+        unmatchedWrap.hidden = !lastUnmatched.length;
+      }
+      if (csvBtn) {
+        csvBtn.hidden = !lastUnmatched.length;
+        csvBtn.onclick = function () {
+          const rows = [["filename", "reason"]].concat(lastUnmatched.map(function (u) {
+            return [u.name, u.reason];
+          }));
+          const csv = rows.map(function (r) {
+            return r.map(function (c) {
+              const s = String(c).replace(/"/g, '""');
+              return /[",\n]/.test(s) ? '"' + s + '"' : s;
+            }).join(",");
+          }).join("\n");
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "photo_upload_notes.csv";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        };
+      }
+      if (result.created || result.staged) flash("Bulk done — attached " + result.created + ", floating " + result.staged + ".", "success");
+      if (result.staged) setTimeout(function () { location.reload(); }, 900);
+    });
+  }
+
+  const floatPanel = document.getElementById("puFloatPanel");
+  if (floatPanel) {
+    floatPanel.addEventListener("click", async function (e) {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const row = btn.closest(".pu-float-row");
+      if (!row) return;
+      const id = row.dataset.id;
+      const url = floatPanel.dataset.url;
+      if (btn.dataset.action === "discard") {
+        if (!confirm("Discard this floating photo?")) return;
+        const data = await postForm(url, { mode: "discard_staged", staged_id: id });
+        if (data.ok) { row.remove(); flash("Discarded.", "success"); }
+        else flash(data.detail || "Could not discard.", "error");
+      }
+      if (btn.dataset.action === "assign") {
+        const code = row.querySelector("[data-role=assign-code]")?.value || "";
+        const data = await postForm(url, { mode: "assign_staged", staged_id: id, code: code });
+        if (data.ok) {
+          flash(data.detail || (data.attached ? "Attached." : "Updated."), "success");
+          if (data.attached || data.staged) row.remove();
+        } else flash(data.detail || "Could not assign.", "error");
+      }
+    });
+  }
+})();
+</script>
 
 {% endblock %}

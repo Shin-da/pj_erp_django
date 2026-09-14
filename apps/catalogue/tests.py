@@ -467,9 +467,42 @@ class ProductPhotoUploadTests(TestCase):
         with self._static():
             page = self.client.get("/products/photos/?code=PJ99999")
             self.assertEqual(page.status_code, 200)
-            self.assertContains(page, "No design found")
+            self.assertContains(page, "floating")
         self.assertEqual(ProductMaster.objects.count(), before)
         self.assertEqual(ProductImage.objects.count(), 0)
+
+    def test_stage_unknown_code_then_claim_on_barcode(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.catalogue.models import ProductImage, StagedProductImage
+        from apps.inventory.models import ProductItem
+        from apps.locations.models import Location
+
+        self.client.force_login(self.user)
+        ghost = SimpleUploadedFile(
+            "PJ99988 studio.JPG", b"\xff\xd8\xff\xd9", content_type="image/jpeg",
+        )
+        with self._static():
+            posted = self.client.post(
+                "/products/photos/",
+                {"mode": "bulk_one", "photos": ghost},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(posted.status_code, 200)
+            body = posted.json()
+            self.assertEqual(body["staged"], 1)
+            self.assertEqual(body["created"], 0)
+            staged = StagedProductImage.objects.get()
+            self.assertEqual(staged.status, StagedProductImage.Status.WAITING)
+            self.assertEqual(staged.hinted_code, "PJ99988")
+
+            # Creating the barcode auto-claims floating photos
+            loc = Location.objects.get(code="HO")
+            ProductItem.objects.create(barcode="PJ99988", product=self.product, location=loc)
+            staged.refresh_from_db()
+            self.assertEqual(staged.status, StagedProductImage.Status.ATTACHED)
+            self.assertEqual(ProductImage.objects.filter(product=self.product, source_filename=ghost.name).count(), 1)
 
     def test_can_remove_one_photo_and_all(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -524,4 +557,65 @@ class ProductPhotoUploadTests(TestCase):
         self.assertEqual(posted.status_code, 200)
         self.assertEqual(ProductImage.objects.filter(product=self.product).count(), 0)
         self.assertContains(posted, "MB limit")
+
+    def test_ajax_upload_and_set_primary(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.catalogue.models import ProductImage
+
+        self.client.force_login(self.user)
+        with self._static():
+            a = SimpleUploadedFile("a.jpg", b"\xff\xd8\xff\xd9", content_type="image/jpeg")
+            b = SimpleUploadedFile("b.jpg", b"\xff\xd8\xff\xd9", content_type="image/jpeg")
+            first = self.client.post(
+                "/products/photos/",
+                {"mode": "upload", "code": "PJ99001", "photos": a},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(first.status_code, 200)
+            body = first.json()
+            self.assertTrue(body["ok"])
+            self.assertEqual(body["created"], 1)
+            self.assertEqual(len(body["images"]), 1)
+            self.assertTrue(body["images"][0]["is_primary"])
+
+            second = self.client.post(
+                "/products/photos/",
+                {"mode": "upload", "code": "PJ99001", "photos": b},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(second.json()["created"], 1)
+            imgs = list(ProductImage.objects.filter(product=self.product).order_by("id"))
+            self.assertEqual(len(imgs), 2)
+            self.assertTrue(imgs[0].is_primary)
+
+            primed = self.client.post(
+                "/products/photos/",
+                {"mode": "set_primary", "code": "PJ99001", "image_id": str(imgs[1].pk)},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                HTTP_ACCEPT="application/json",
+            )
+            self.assertEqual(primed.status_code, 200)
+            imgs[0].refresh_from_db()
+            imgs[1].refresh_from_db()
+            self.assertFalse(imgs[0].is_primary)
+            self.assertTrue(imgs[1].is_primary)
+
+    def test_ajax_bulk_one_matches_filename(self):
+        from apps.catalogue.models import ProductImage
+
+        self.client.force_login(self.user)
+        with self._static():
+            posted = self.client.post(
+                "/products/photos/",
+                {"mode": "bulk_one", "photos": self.named},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                HTTP_ACCEPT="application/json",
+            )
+        self.assertEqual(posted.status_code, 200)
+        body = posted.json()
+        self.assertEqual(body["created"], 1)
+        self.assertEqual(ProductImage.objects.filter(product=self.product).count(), 1)
 

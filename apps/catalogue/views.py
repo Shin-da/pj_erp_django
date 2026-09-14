@@ -37,7 +37,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Q, Subquery, Sum
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
@@ -59,16 +59,25 @@ from apps.catalogue.models import (
     ProductImage,
     ProductIntakeBatch,
     ProductMaster,
+    PhotoUploadBatch,
     PurchaseType,
+    StagedProductImage,
     Supplier,
 )
+from apps.catalogue.photo_staging import (
+    assign_staged_photo,
+    discard_staged_photo,
+    process_uploads,
+    staged_public_dict,
+    start_batch,
+)
 from apps.catalogue.photos import (
-    attach_bulk_by_filename,
-    attach_uploaded_images,
     delete_all_product_images,
     delete_product_image,
+    image_public_dict,
     normalize_code,
     resolve_product_by_code,
+    set_primary_image,
 )
 from apps.core.models import AuditLogEntry
 from apps.core.search import _exact_item
@@ -672,7 +681,7 @@ def intake_batch_file(request, pk):
     )
 
 
-def _photo_upload_context(request, *, code="", product=None, bulk_report=None, lookup_error=""):
+def _photo_upload_context(request, *, code="", product=None, bulk_report=None, lookup_error="", can_stage=False):
     from apps.catalogue.photos import _photo_limits
 
     sample_barcode = ""
@@ -688,7 +697,15 @@ def _photo_upload_context(request, *, code="", product=None, bulk_report=None, l
         sample_barcode = sample or ""
         piece_count = ProductItem.objects.filter(product=product).count()
         photos = list(product.images.all())
-    resize, quality, max_bytes = _photo_limits()
+    waiting = list(
+        StagedProductImage.objects.filter(status=StagedProductImage.Status.WAITING)
+        .select_related("batch", "batch__uploaded_by")
+        .order_by("-created_at")[:40]
+    )
+    waiting_count = StagedProductImage.objects.filter(
+        status=StagedProductImage.Status.WAITING
+    ).count()
+    resize, quality, max_bytes, thumb_w, _thumb_q = _photo_limits()
     return {
         "code": code,
         "product": product,
@@ -697,73 +714,251 @@ def _photo_upload_context(request, *, code="", product=None, bulk_report=None, l
         "photos": photos,
         "bulk_report": bulk_report,
         "lookup_error": lookup_error,
+        "can_stage": can_stage,
+        "waiting_photos": waiting,
+        "waiting_count": waiting_count,
         "photo_max_width": resize,
         "photo_max_mb": max(1, max_bytes // (1024 * 1024)),
         "photo_keeps_original": resize <= 0,
+        "photo_thumb_width": thumb_w,
     }
+
+
+def _wants_json(request) -> bool:
+    accept = (request.headers.get("Accept") or "").lower()
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in accept
+    )
+
+
+def _upload_json(report, request, *, product=None):
+    payload = {
+        "ok": True,
+        "batch_id": report.get("batch_id"),
+        "created": report.get("created", 0),
+        "attached": report.get("attached", 0),
+        "staged": report.get("staged", 0),
+        "skipped": report.get("skipped", 0),
+        "failed": report.get("failed", 0),
+        "matched_files": report.get("matched_files", 0),
+        "products_touched": report.get("products_touched", 0),
+        "unmatched": [{"name": n, "reason": r} for n, r in report.get("unmatched", [])],
+        "waiting": [staged_public_dict(s, request) for s in report.get("waiting", [])],
+        "images": (
+            [image_public_dict(im, request) for im in product.images.all()]
+            if product is not None
+            else [image_public_dict(im, request) for im in report.get("images", [])]
+        ),
+        "new_images": [image_public_dict(im, request) for im in report.get("images", [])],
+    }
+    return JsonResponse(payload)
 
 
 @require_perm("catalogue.can_upload_photos")
 def product_photo_upload(request):
     """
-    Photo-team flow: look up a PJ / barcode, attach or remove files on that design.
+    Photo-team flow: look up a PJ / barcode, attach or stage files.
 
-    Separate from stock intake (`product_intake`). Does not create stock.
-    Uses the same ProductImage rows the CLI imports and catalogue pages show.
+    Unknown / future PJ codes are kept as floating (WAITING) staged photos
+    and auto-claim when stock later creates that barcode / reference_id.
     """
     if request.method == "POST":
         mode = (request.POST.get("mode") or "lookup").strip()
 
-        if mode == "bulk":
-            uploads = request.FILES.getlist("photos")
+        if mode in ("bulk", "bulk_one"):
+            uploads = request.FILES.getlist("photos") or request.FILES.getlist("photo")
+            if mode == "bulk_one":
+                uploads = uploads[:1]
             if not uploads:
-                messages.error(request, "Choose one or more image files named with a PJ code.")
+                if _wants_json(request):
+                    return JsonResponse({"ok": False, "detail": "No file uploaded."}, status=400)
+                messages.error(request, "Choose one or more image files.")
                 return render(request, "catalogue/photo_upload.html", _photo_upload_context(request))
-            report = attach_bulk_by_filename(uploads)
+            batch = start_batch(
+                user=request.user,
+                mode=PhotoUploadBatch.Mode.BULK,
+                source="photo_upload UI",
+                request=request,
+            )
+            report = process_uploads(
+                uploads, batch=batch, user=request.user, stage_unmatched=True, allow_no_code=True
+            )
+            if _wants_json(request):
+                return _upload_json(report, request)
             if report["created"]:
                 messages.success(
                     request,
                     f"Attached {report['created']} photo(s) across "
                     f"{report['products_touched']} design(s).",
                 )
+            if report["staged"]:
+                messages.info(
+                    request,
+                    f"Held {report['staged']} photo(s) as floating — waiting for PJ / manual assign.",
+                )
             if report["skipped"]:
                 messages.info(request, f"Skipped {report['skipped']} already-stored file(s).")
-            if report["unmatched"]:
-                messages.warning(
-                    request,
-                    f"{len(report['unmatched'])} file(s) could not be matched "
-                    f"(missing PJ, unknown code, or over size limit).",
-                )
-            if not report["created"] and not report["skipped"] and report["unmatched"]:
-                messages.error(
-                    request,
-                    "Nothing was attached — check filenames include a PJ code "
-                    "and each file is under the size limit.",
-                )
+            if report["failed"]:
+                messages.warning(request, f"{report['failed']} file(s) failed.")
             return render(
                 request,
                 "catalogue/photo_upload.html",
                 _photo_upload_context(request, bulk_report=report),
             )
 
+        if mode == "assign_staged":
+            try:
+                staged_id = int(request.POST.get("staged_id") or "0")
+            except ValueError:
+                staged_id = 0
+            code = normalize_code(request.POST.get("code") or "")
+            staged = StagedProductImage.objects.filter(pk=staged_id).first()
+            if staged is None:
+                if _wants_json(request):
+                    return JsonResponse({"ok": False, "detail": "Staged photo not found."}, status=404)
+                messages.error(request, "Staged photo not found.")
+                return redirect("catalogue:photo_upload")
+            result = assign_staged_photo(staged, code, user=request.user)
+            if _wants_json(request):
+                return JsonResponse(
+                    {
+                        "ok": result.get("ok", False),
+                        "detail": result.get("detail", ""),
+                        "staged": result.get("staged", False),
+                        "attached": result.get("attached", False),
+                        "item": staged_public_dict(staged, request),
+                        "waiting_count": StagedProductImage.objects.filter(
+                            status=StagedProductImage.Status.WAITING
+                        ).count(),
+                    },
+                    status=200 if result.get("ok") else 400,
+                )
+            if result.get("ok"):
+                messages.success(request, result.get("detail") or "Updated.")
+            else:
+                messages.error(request, result.get("detail") or "Could not assign.")
+            return redirect("catalogue:photo_upload")
+
+        if mode == "discard_staged":
+            try:
+                staged_id = int(request.POST.get("staged_id") or "0")
+            except ValueError:
+                staged_id = 0
+            staged = StagedProductImage.objects.filter(pk=staged_id).first()
+            if staged is None:
+                if _wants_json(request):
+                    return JsonResponse({"ok": False, "detail": "Not found."}, status=404)
+                messages.error(request, "Staged photo not found.")
+            else:
+                discard_staged_photo(staged, user=request.user)
+                if _wants_json(request):
+                    return JsonResponse({"ok": True, "removed_id": staged_id})
+                messages.success(request, "Floating photo discarded.")
+            return redirect("catalogue:photo_upload")
+
         code = normalize_code(request.POST.get("code") or request.POST.get("pj") or "")
+
+        # Upload / stage without requiring the product to exist yet
+        if mode == "upload":
+            uploads = request.FILES.getlist("photos") or request.FILES.getlist("photo")
+            if not uploads:
+                if _wants_json(request):
+                    return JsonResponse({"ok": False, "detail": "Choose at least one photo."}, status=400)
+                messages.error(request, "Choose at least one photo to upload.")
+                return render(request, "catalogue/photo_upload.html", _photo_upload_context(request, code=code))
+            if not code:
+                # Allow staging files with no code (manual assign later) via bulk-style
+                batch = start_batch(
+                    user=request.user,
+                    mode=PhotoUploadBatch.Mode.STAGE,
+                    source="photo_upload UI",
+                    request=request,
+                )
+                report = process_uploads(
+                    uploads, batch=batch, user=request.user, stage_unmatched=True, allow_no_code=True
+                )
+            else:
+                product = resolve_product_by_code(code)
+                batch = start_batch(
+                    user=request.user,
+                    mode=PhotoUploadBatch.Mode.SINGLE if product else PhotoUploadBatch.Mode.STAGE,
+                    source="photo_upload UI",
+                    target_code=code,
+                    request=request,
+                )
+                report = process_uploads(
+                    uploads,
+                    batch=batch,
+                    user=request.user,
+                    force_code=code,
+                    stage_unmatched=True,
+                    allow_no_code=True,
+                )
+                if _wants_json(request):
+                    return _upload_json(report, request, product=product)
+                if report["created"]:
+                    messages.success(request, f"Attached {report['created']} photo(s) to {code}.")
+                if report["staged"]:
+                    messages.info(
+                        request,
+                        f"Held {report['staged']} photo(s) floating for {code} "
+                        f"(will attach when that PJ is added to stock).",
+                    )
+                if report["skipped"]:
+                    messages.info(request, f"Skipped {report['skipped']} already-stored file(s).")
+                for _n, reason in report.get("unmatched", [])[:5]:
+                    if "MB limit" in reason or "empty" in reason:
+                        messages.warning(request, reason)
+                return redirect(f"{request.path}?code={code}")
+
+            if _wants_json(request):
+                return _upload_json(report, request)
+            if report["staged"]:
+                messages.info(request, f"Held {report['staged']} floating photo(s).")
+            if report["created"]:
+                messages.success(request, f"Attached {report['created']} photo(s).")
+            return redirect("catalogue:photo_upload")
+
         if not code:
+            if _wants_json(request):
+                return JsonResponse({"ok": False, "detail": "Enter a PJ / barcode first."}, status=400)
             messages.error(request, "Enter a PJ / barcode first.")
             return render(request, "catalogue/photo_upload.html", _photo_upload_context(request))
 
         product = resolve_product_by_code(code)
+        if mode == "lookup":
+            return redirect(f"{request.path}?code={code}")
+
         if product is None:
             err = (
-                f"No design found for {code}. Stock people add the piece first; "
-                "photos attach to an existing PJ."
+                f"No design for {code} yet — you can still upload photos below. "
+                f"They stay floating until stock adds this PJ."
             )
+            if _wants_json(request):
+                return JsonResponse({"ok": False, "detail": err, "can_stage": True}, status=404)
             return render(
                 request,
                 "catalogue/photo_upload.html",
-                _photo_upload_context(request, code=code, lookup_error=err),
+                _photo_upload_context(request, code=code, lookup_error=err, can_stage=True),
             )
 
-        if mode == "lookup":
+        if mode == "set_primary":
+            try:
+                image_id = int(request.POST.get("image_id") or "0")
+            except ValueError:
+                image_id = 0
+            image = ProductImage.objects.filter(pk=image_id, product=product).first()
+            if image is None:
+                if _wants_json(request):
+                    return JsonResponse({"ok": False, "detail": "Photo not on this design."}, status=404)
+                messages.error(request, "That photo is not on this design.")
+            else:
+                set_primary_image(image)
+                if _wants_json(request):
+                    photos = [image_public_dict(im, request) for im in product.images.all()]
+                    return JsonResponse({"ok": True, "images": photos, "primary_id": image.pk})
+                messages.success(request, "Primary photo updated.")
             return redirect(f"{request.path}?code={code}")
 
         if mode == "delete":
@@ -773,53 +968,121 @@ def product_photo_upload(request):
                 image_id = 0
             image = ProductImage.objects.filter(pk=image_id, product=product).first()
             if image is None:
+                if _wants_json(request):
+                    return JsonResponse({"ok": False, "detail": "Photo not on this design."}, status=404)
                 messages.error(request, "That photo is not on this design.")
             else:
                 delete_product_image(image)
+                if _wants_json(request):
+                    photos = [image_public_dict(im, request) for im in product.images.all()]
+                    return JsonResponse({"ok": True, "images": photos, "removed_id": image_id})
                 messages.success(request, "Photo removed.")
             return redirect(f"{request.path}?code={code}")
 
         if mode == "delete_all":
             removed = delete_all_product_images(product)
+            if _wants_json(request):
+                return JsonResponse({"ok": True, "removed": removed, "images": []})
             if removed:
                 messages.success(request, f"Removed {removed} photo(s) from {code}.")
             else:
                 messages.info(request, "No photos to remove.")
             return redirect(f"{request.path}?code={code}")
 
-        # mode == "upload"
-        uploads = request.FILES.getlist("photos")
-        if not uploads:
-            messages.error(request, "Choose at least one photo to upload.")
-            return render(
-                request,
-                "catalogue/photo_upload.html",
-                _photo_upload_context(request, code=code, product=product),
-            )
-
-        result = attach_uploaded_images(product, uploads, caption=code)
-        if result["created"]:
-            messages.success(request, f"Attached {result['created']} photo(s) to {code}.")
-        if result["skipped"]:
-            messages.info(request, f"Skipped {result['skipped']} already-stored file(s).")
-        for err in result["errors"]:
-            messages.warning(request, err)
-        if not result["created"] and not result["skipped"]:
-            messages.error(request, "Nothing was attached.")
-        return redirect(f"{request.path}?code={code}")
+        messages.error(request, "Unknown action.")
+        return redirect("catalogue:photo_upload")
 
     code = normalize_code(request.GET.get("code") or "")
     product = resolve_product_by_code(code) if code else None
     lookup_error = ""
+    can_stage = False
     if code and product is None:
         lookup_error = (
-            f"No design found for {code}. Stock people add the piece first; "
-            "photos attach to an existing PJ."
+            f"No design for {code} yet — upload below to hold photos as floating. "
+            f"They attach automatically when stock adds this PJ."
         )
+        can_stage = True
     return render(
         request,
         "catalogue/photo_upload.html",
         _photo_upload_context(
-            request, code=code, product=product, lookup_error=lookup_error,
+            request,
+            code=code,
+            product=product,
+            lookup_error=lookup_error,
+            can_stage=can_stage,
         ),
+    )
+
+
+@require_perm("catalogue.can_upload_photos")
+def photo_upload_history(request):
+    """Full history of photo upload batches and every file outcome."""
+    status = (request.GET.get("status") or "").strip()
+    q = (request.GET.get("q") or "").strip()
+    batches = (
+        PhotoUploadBatch.objects.select_related("uploaded_by")
+        .order_by("-created_at")
+    )
+    items = (
+        StagedProductImage.objects.select_related(
+            "batch", "batch__uploaded_by", "product", "attached_by", "discarded_by"
+        )
+        .order_by("-created_at")
+    )
+    if status:
+        items = items.filter(status=status)
+    if q:
+        items = items.filter(
+            Q(source_filename__icontains=q)
+            | Q(hinted_code__icontains=q)
+            | Q(status_detail__icontains=q)
+            | Q(original_name__icontains=q)
+        )
+        batches = batches.filter(
+            Q(target_code__icontains=q)
+            | Q(note__icontains=q)
+            | Q(source__icontains=q)
+            | Q(items__source_filename__icontains=q)
+        ).distinct()
+
+    batch_page = Paginator(batches, 25).get_page(request.GET.get("bpage") or 1)
+    item_page = Paginator(items, 50).get_page(request.GET.get("page") or 1)
+    waiting_count = StagedProductImage.objects.filter(
+        status=StagedProductImage.Status.WAITING
+    ).count()
+    return render(
+        request,
+        "catalogue/photo_history.html",
+        {
+            "batch_page": batch_page,
+            "item_page": item_page,
+            "status": status,
+            "q": q,
+            "status_choices": StagedProductImage.Status.choices,
+            "waiting_count": waiting_count,
+            "totals": {
+                "batches": PhotoUploadBatch.objects.count(),
+                "files": StagedProductImage.objects.count(),
+                "waiting": waiting_count,
+                "attached": StagedProductImage.objects.filter(
+                    status=StagedProductImage.Status.ATTACHED
+                ).count(),
+            },
+        },
+    )
+
+
+@require_perm("catalogue.can_upload_photos")
+def photo_upload_batch_detail(request, pk):
+    batch = get_object_or_404(
+        PhotoUploadBatch.objects.select_related("uploaded_by"), pk=pk
+    )
+    items = batch.items.select_related(
+        "product", "product_image", "attached_by", "discarded_by"
+    ).order_by("id")
+    return render(
+        request,
+        "catalogue/photo_batch_detail.html",
+        {"batch": batch, "items": items},
     )

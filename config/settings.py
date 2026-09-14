@@ -285,6 +285,9 @@ PRODUCT_PHOTO_MAX_UPLOAD_BYTES = config(
     default=100 * 1024 * 1024,  # 100 MB per file
     cast=int,
 )
+# Web/list thumbs (full camera file stays on ProductImage.image).
+PRODUCT_PHOTO_THUMB_WIDTH = config("PRODUCT_PHOTO_THUMB_WIDTH", default=480, cast=int)
+PRODUCT_PHOTO_THUMB_QUALITY = config("PRODUCT_PHOTO_THUMB_QUALITY", default=78, cast=int)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

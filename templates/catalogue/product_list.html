@@ -15,6 +15,7 @@
     {% endif %}
     {% if perms.catalogue.can_upload_photos %}
     <a href="{% url 'catalogue:photo_upload' %}" class="btn {% if perms.catalogue.can_intake_stock %}btn-ghost{% else %}btn-primary{% endif %}"><i class="fa-solid fa-camera"></i> Upload photos</a>
+    <a href="{% url 'catalogue:photo_history' %}" class="btn btn-ghost"><i class="fa-solid fa-clock-rotate-left"></i> Photo history</a>
     {% endif %}
     <a href="{% url 'inventory:location_list' %}" class="btn btn-ghost"><i class="fa-solid fa-boxes-stacked"></i> By location</a>
   </div>
@@ -158,7 +159,7 @@
       <div class="pl-card-media">
         {% with im=p.images.all.0 %}
         {% if im %}
-        <img src="{{ im.image.url }}" alt="" loading="lazy">
+        <img src="{{ im.display_url }}" alt="" loading="lazy">
         {% else %}
         <div class="pl-card-placeholder"><i class="fa-solid fa-gem"></i></div>
         {% endif %}
@@ -214,7 +215,7 @@
           <tr class="pl-row" onclick="window.location='{% url 'catalogue:item_detail' it.barcode %}'">
             <td class="pl-td-img">
               {% with im=it.product.images.all.0 %}
-              {% if im %}<img src="{{ im.image.url }}" alt="" loading="lazy" class="pl-thumb">
+              {% if im %}<img src="{{ im.display_url }}" alt="" loading="lazy" class="pl-thumb">
               {% else %}<span class="pl-thumb pl-thumb-empty"><i class="fa-solid fa-gem"></i></span>{% endif %}
               {% endwith %}
             </td>
@@ -265,7 +266,7 @@
           <tr class="pl-row" onclick="window.location='{% url 'catalogue:product_detail' p.pk %}'">
             <td class="pl-td-img">
               {% with im=p.images.all.0 %}
-              {% if im %}<img src="{{ im.image.url }}" alt="" loading="lazy" class="pl-thumb">
+              {% if im %}<img src="{{ im.display_url }}" alt="" loading="lazy" class="pl-thumb">
               {% else %}<span class="pl-thumb pl-thumb-empty"><i class="fa-solid fa-gem"></i></span>{% endif %}
               {% endwith %}
             </td>

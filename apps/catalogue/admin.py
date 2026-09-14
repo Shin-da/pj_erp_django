@@ -9,6 +9,8 @@ from .models import (
     Supplier,
     ProductMaster,
     ProductImage,
+    PhotoUploadBatch,
+    StagedProductImage,
 )
 
 
@@ -46,15 +48,20 @@ class SupplierAdmin(admin.ModelAdmin):
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 0
-    fields = ("preview", "image", "kind", "is_primary", "caption", "order", "source_filename")
+    fields = ("preview", "image", "thumbnail", "kind", "is_primary", "caption", "order", "source_filename")
     readonly_fields = ("preview", "source_filename")
 
     @admin.display(description="Preview")
     def preview(self, obj):
-        if obj and obj.image:
+        src = ""
+        if obj and obj.thumbnail:
+            src = obj.thumbnail.url
+        elif obj and obj.image:
+            src = obj.image.url
+        if src:
             return format_html(
                 '<img src="{}" style="max-height:90px;max-width:120px;border-radius:4px" />',
-                obj.image.url,
+                src,
             )
         return "—"
 
@@ -91,3 +98,25 @@ class ProductImageAdmin(admin.ModelAdmin):
                 obj.image.url,
             )
         return "—"
+
+
+@admin.register(PhotoUploadBatch)
+class PhotoUploadBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "created_at", "mode", "uploaded_by", "target_code",
+        "files_total", "attached_count", "staged_count", "source",
+    )
+    list_filter = ("mode",)
+    search_fields = ("target_code", "note", "source", "uploaded_by__employee_code")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(StagedProductImage)
+class StagedProductImageAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "source_filename", "hinted_code", "status", "batch", "product", "created_at",
+    )
+    list_filter = ("status", "kind")
+    search_fields = ("source_filename", "hinted_code", "status_detail")
+    autocomplete_fields = ("product", "product_image")
+    readonly_fields = ("created_at", "updated_at", "attached_at", "discarded_at")
