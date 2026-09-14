@@ -61,7 +61,8 @@ Major modules touched in commits so far: core, accounts, locations, catalogue, i
   - `Location.code` max length raised 20 → 30, plus migration `0002_alter_location_code`.
 - **Follow-ups / open:**
   - None for this fix.
-- **Commits (if any):** `fef42e9` — Widen location codes and fix legacy import flush order.
+- **Commits (if any):** `c9bbe3a` — Widen location codes and fix legacy import flush order.
+  - Note: hash was `fef42e9` pre-rebase onto `a256e48` (AWS_DEFAULT_ACL); rewritten to `c9bbe3a` / work-log record `6cf9650`.
 
 ### 2026-09-12 — DigitalOcean App Platform deploy prep
 
