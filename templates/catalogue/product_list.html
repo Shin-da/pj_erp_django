@@ -48,7 +48,7 @@
 </div>
 
 <form method="get" class="pl-filters" id="plFilters">
-  {% if view == 'list' %}<input type="hidden" name="view" value="list">{% endif %}
+  {% if view != 'grid' %}<input type="hidden" name="view" value="{{ view }}">{% endif %}
   <div class="pl-search">
     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
     <input type="search" name="q" value="{{ q }}" class="field" placeholder="Search reference, style, or PJ / barcode…" autocomplete="off">
@@ -98,12 +98,18 @@
       <option value="none" {% if media == "none" %}selected{% endif %}>No photos</option>
     </select>
     <select name="sort" class="field fbar-select" aria-label="Sort by">
+      {% if view == 'piece' %}
+      <option value="barcode" {% if sort == "barcode" %}selected{% endif %}>PJ / barcode A–Z</option>
+      <option value="-barcode" {% if sort == "-barcode" %}selected{% endif %}>PJ / barcode Z–A</option>
+      {% endif %}
       <option value="reference" {% if sort == "reference" %}selected{% endif %}>Reference A–Z</option>
       <option value="-reference" {% if sort == "-reference" %}selected{% endif %}>Reference Z–A</option>
       <option value="name" {% if sort == "name" %}selected{% endif %}>Style name A–Z</option>
       <option value="-name" {% if sort == "-name" %}selected{% endif %}>Style name Z–A</option>
+      {% if view != 'piece' %}
       <option value="-stock" {% if sort == "-stock" %}selected{% endif %}>Most pieces</option>
       <option value="-available" {% if sort == "-available" %}selected{% endif %}>Most available</option>
+      {% endif %}
       <option value="-price" {% if sort == "-price" %}selected{% endif %}>Highest price</option>
       <option value="price" {% if sort == "price" %}selected{% endif %}>Lowest price</option>
       <option value="due" {% if sort == "due" %}selected{% endif %}>Due date soonest</option>
@@ -131,15 +137,16 @@
 <div class="pl-toolbar">
   <div class="pl-toolbar-meta">
     {% if total_count %}
-    Showing <b>{{ page_obj.start_index }}–{{ page_obj.end_index }}</b> of <b>{{ total_count|intcomma }}</b>
+    Showing <b>{{ page_obj.start_index }}–{{ page_obj.end_index }}</b> of <b>{{ total_count|intcomma }}</b> {% if view == 'piece' %}pieces{% else %}designs{% endif %}
     {% if page_obj.paginator.num_pages > 1 %}· page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}
     {% else %}
-    <b>0</b> products match
+    <b>0</b> {% if view == 'piece' %}pieces{% else %}products{% endif %} match
     {% endif %}
   </div>
   <div class="seg pl-view-seg" role="group" aria-label="View mode">
     <a href="{% url 'catalogue:product_list' %}{% if qs_grid %}?{{ qs_grid }}{% endif %}" class="{% if view == 'grid' %}active{% endif %}" title="Grid view"><i class="fa-solid fa-border-all"></i></a>
     <a href="{% url 'catalogue:product_list' %}{% if qs_list %}?{{ qs_list }}{% endif %}" class="{% if view == 'list' %}active{% endif %}" title="List view"><i class="fa-solid fa-list"></i></a>
+    <a href="{% url 'catalogue:product_list' %}{% if qs_piece %}?{{ qs_piece }}{% endif %}" class="{% if view == 'piece' %}active{% endif %}" title="By piece (PJ / barcode)"><i class="fa-solid fa-barcode"></i></a>
   </div>
 </div>
 
@@ -184,6 +191,56 @@
       </div>
     </a>
     {% endfor %}
+  </div>
+  {% elif view == 'piece' %}
+  <div class="table-wrap pl-table">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="pl-th-img"></th>
+            <th>PJ / barcode</th>
+            <th>Reference</th>
+            <th>Style</th>
+            <th>Category</th>
+            <th>Location</th>
+            <th>Selling price</th>
+            <th>Due</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in page_obj %}
+          <tr class="pl-row" onclick="window.location='{% url 'catalogue:item_detail' it.barcode %}'">
+            <td class="pl-td-img">
+              {% with im=it.product.images.all.0 %}
+              {% if im %}<img src="{{ im.image.url }}" alt="" loading="lazy" class="pl-thumb">
+              {% else %}<span class="pl-thumb pl-thumb-empty"><i class="fa-solid fa-gem"></i></span>{% endif %}
+              {% endwith %}
+            </td>
+            <td class="mono cell-strong"><a href="{% url 'catalogue:item_detail' it.barcode %}" onclick="event.stopPropagation()">{{ it.barcode }}</a></td>
+            <td class="mono"><a href="{% url 'catalogue:product_detail' it.product_id %}" onclick="event.stopPropagation()">{{ it.product.reference_id|default:"—" }}</a></td>
+            <td class="cell-muted">{{ it.product.name }}</td>
+            <td class="cell-muted">{{ it.product.category.name }}{% if it.product.subcategory %} · {{ it.product.subcategory }}{% endif %}</td>
+            <td class="cell-muted">{{ it.location.code }}</td>
+            <td class="mono">{% if it.product.selling_price %}{{ it.product.currency.symbol|default:it.product.currency.code }}{{ it.product.selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td>{% if it.product.product_type == "consignment" and it.product.due_label %}{% if it.product.is_overdue %}<span class="pill pill-danger">{{ it.product.due_label }}</span>{% elif it.product.is_due_today %}<span class="pill pill-warn">{{ it.product.due_label }}</span>{% else %}<span class="cell-muted">{{ it.product.due_label }}</span>{% endif %}{% elif it.product.due_date %}<span class="cell-muted">{{ it.product.due_date|date:"M j" }}</span>{% else %}<span class="cell-muted">—</span>{% endif %}</td>
+            <td>
+              {% if it.status == "PENDING" %}<span class="pill pill-ok">Available</span>
+              {% elif it.status == "ASSIGNED" %}<span class="pill pill-info">Assigned</span>
+              {% elif it.status == "SOLD" %}<span class="pill pill-neutral">Sold</span>
+              {% elif it.status == "RESERVED" %}<span class="pill pill-warn">Reserved</span>
+              {% elif it.status == "IN_TRANSIT" %}<span class="pill pill-violet">In transit</span>
+              {% else %}<span class="pill pill-neutral">{{ it.get_status_display }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="cell-muted">No pieces match.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
   {% else %}
   <div class="table-wrap pl-table">

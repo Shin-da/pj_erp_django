@@ -210,35 +210,119 @@ def product_list(request):
         else:
             products = products.filter(due_date__lte=horizon)
 
+    view = request.GET.get("view", "grid").strip()
+    if view not in ("grid", "list", "piece"):
+        view = "grid"
+
     # Default by reference_id: many legacy designs share a style name
     # (e.g. ANICH1) while the reference is what actually distinguishes them.
-    sort = request.GET.get("sort", "reference").strip() or "reference"
-    if due and sort == "reference":
+    # Piece view defaults to barcode instead — that's the one field that's
+    # actually unique per row there.
+    default_sort = "barcode" if view == "piece" else "reference"
+    sort = request.GET.get("sort", default_sort).strip() or default_sort
+    if due and sort in ("reference", "barcode"):
         sort = "due"
-    sort_map = {
-        "reference": ("reference_id", "name"),
-        "-reference": ("-reference_id", "-name"),
-        "name": ("name", "reference_id"),
-        "-name": ("-name", "-reference_id"),
-        "stock": ("item_count", "reference_id"),
-        "-stock": ("-item_count", "reference_id"),
-        "available": ("available_count", "reference_id"),
-        "-available": ("-available_count", "reference_id"),
-        "price": ("selling_price", "reference_id"),
-        "-price": ("-selling_price", "reference_id"),
-        "due": ("due_date", "name"),
-        "-due": ("-due_date", "name"),
-    }
-    products = products.order_by(*sort_map.get(sort, sort_map["reference"]))
 
-    view = request.GET.get("view", "grid").strip()
-    if view not in ("grid", "list"):
-        view = "grid"
-    per_page = 24 if view == "grid" else 50
+    if view == "piece":
+        # One row per physical piece (inventory.ProductItem) instead of per
+        # design. Same filters as the design query above, re-applied one
+        # level down through `product__` — except "stock", which is
+        # deliberately reinterpreted: at design level AVAILABLE means "has
+        # at least one available piece"; here it means "this piece is
+        # available", i.e. a real per-item status rather than a rollup.
+        items = (
+            ProductItem.objects.select_related(
+                "product", "product__category", "product__currency", "location"
+            )
+            .prefetch_related("product__images")
+        )
+        if q:
+            items = items.filter(
+                Q(barcode__icontains=q)
+                | Q(product__name__icontains=q)
+                | Q(product__reference_id__icontains=q)
+                | Q(product__subcategory__icontains=q)
+            )
+        if category:
+            items = items.filter(product__category__code=category)
+        if supplier:
+            items = items.filter(product__supplier_id=supplier)
+        if subcategory:
+            items = items.filter(product__subcategory=subcategory)
+        if purchase in {PurchaseType.PURCHASED, PurchaseType.CONSIGNMENT}:
+            items = items.filter(product__product_type=purchase)
+        if media == "photos":
+            items = items.filter(Exists(ProductImage.objects.filter(product_id=OuterRef("product_id"))))
+        elif media == "none":
+            items = items.filter(~Exists(ProductImage.objects.filter(product_id=OuterRef("product_id"))))
+        if due in {"overdue", "today", "soon", "open"}:
+            items = items.filter(
+                product__product_type=PurchaseType.CONSIGNMENT,
+                product__due_date__isnull=False,
+            )
+            if due == "overdue":
+                items = items.filter(product__due_date__lt=today)
+            elif due == "today":
+                items = items.filter(product__due_date=today)
+            elif due == "soon":
+                items = items.filter(product__due_date__gt=today, product__due_date__lte=horizon)
+            else:
+                items = items.filter(product__due_date__lte=horizon)
+        if stock == "AVAILABLE":
+            items = items.filter(status=StockStatus.PENDING)
+        elif stock == "SOLD":
+            items = items.filter(status=StockStatus.SOLD)
+        elif stock == "ASSIGNED":
+            items = items.filter(status=StockStatus.ASSIGNED)
+        elif stock == "OUT":
+            # Design-level "nothing available" has no single-piece meaning
+            # of its own — the nearest honest equivalent is "this piece
+            # isn't the available one".
+            items = items.exclude(status=StockStatus.PENDING)
+        elif stock == "NONE":
+            # "No pieces at all" describes designs with zero items — by
+            # definition there is no piece row to show for them.
+            items = items.none()
 
-    paginator = Paginator(products, per_page)
-    page_obj = paginator.get_page(request.GET.get("page"))
-    decorate_due_rows(page_obj.object_list, today=today)
+        piece_sort_map = {
+            "reference": ("product__reference_id", "barcode"),
+            "-reference": ("-product__reference_id", "-barcode"),
+            "name": ("product__name", "barcode"),
+            "-name": ("-product__name", "-barcode"),
+            "barcode": ("barcode",),
+            "-barcode": ("-barcode",),
+            "price": ("product__selling_price", "barcode"),
+            "-price": ("-product__selling_price", "barcode"),
+            "due": ("product__due_date", "barcode"),
+            "-due": ("-product__due_date", "barcode"),
+        }
+        items = items.order_by(*piece_sort_map.get(sort, piece_sort_map["barcode"]))
+
+        per_page = 50
+        paginator = Paginator(items, per_page)
+        page_obj = paginator.get_page(request.GET.get("page"))
+        decorate_due_rows([it.product for it in page_obj], today=today)
+    else:
+        sort_map = {
+            "reference": ("reference_id", "name"),
+            "-reference": ("-reference_id", "-name"),
+            "name": ("name", "reference_id"),
+            "-name": ("-name", "-reference_id"),
+            "stock": ("item_count", "reference_id"),
+            "-stock": ("-item_count", "reference_id"),
+            "available": ("available_count", "reference_id"),
+            "-available": ("-available_count", "reference_id"),
+            "price": ("selling_price", "reference_id"),
+            "-price": ("-selling_price", "reference_id"),
+            "due": ("due_date", "name"),
+            "-due": ("-due_date", "name"),
+        }
+        products = products.order_by(*sort_map.get(sort, sort_map["reference"]))
+
+        per_page = 24 if view == "grid" else 50
+        paginator = Paginator(products, per_page)
+        page_obj = paginator.get_page(request.GET.get("page"))
+        decorate_due_rows(page_obj.object_list, today=today)
 
     subcategory_choices = [
         (code, subcategory_label(code))
@@ -302,6 +386,7 @@ def product_list(request):
         "query_base": _product_list_query(request, page=None),
         "qs_grid": _product_list_query(request, view="grid", page=None),
         "qs_list": _product_list_query(request, view="list", page=None),
+        "qs_piece": _product_list_query(request, view="piece", page=None),
         "qs_stock_all": _product_list_query(request, stock="", page=None),
         "qs_stock_available": _product_list_query(request, stock="AVAILABLE", page=None),
         "qs_stock_out": _product_list_query(request, stock="OUT", page=None),
