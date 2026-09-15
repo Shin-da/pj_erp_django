@@ -49,6 +49,24 @@ class ProductApiPhase0Tests(TestCase):
         self.api.credentials(HTTP_AUTHORIZATION="Api-Key not-a-real-key")
         response = self.api.get(self.list_url)
         self.assertEqual(response.status_code, 401)
+        
+
+    def test_available_count_reflects_pending_items(self):
+        location = Location.objects.create(
+            name="Vault", code="VLT", location_type=LocationType.HEAD_OFFICE
+        )
+        product = ProductMaster.objects.create(
+            name="Ring C", reference_id="REF-C",
+            category=self.category, currency=self.currency, is_active=True,
+        )
+        ProductItem.objects.create(barcode="AC-1", product=product, location=location, status=StockStatus.PENDING)
+        ProductItem.objects.create(barcode="AC-2", product=product, location=location, status=StockStatus.PENDING)
+        ProductItem.objects.create(barcode="AC-3", product=product, location=location, status=StockStatus.ASSIGNED)
+
+        self._auth()
+        response = self.api.get(reverse("api:product-detail", kwargs={"pk": product.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["available_count"], 2)
 
     def test_list_ok_with_valid_key(self):
         ProductMaster.objects.create(

@@ -1,3 +1,5 @@
+from django.db.models import Count, Q
+from apps.inventory.models import StockStatus
 from django.db.models import Q
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets
@@ -40,6 +42,11 @@ class ProductViewSet(ApiClientReadMixin, viewsets.ReadOnlyModelViewSet):
             ProductMaster.objects.select_related(
                 "category", "currency", "supplier", "metal", "purity"
             )
+            .annotate(
+    available_count=Count(
+        "items", filter=Q(items__status=StockStatus.PENDING)
+    )
+)
             .prefetch_related("images")
             .filter(is_active=True)
             .order_by("id")

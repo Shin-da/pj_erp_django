@@ -85,6 +85,7 @@ class ProductMasterSerializer(serializers.ModelSerializer):
     purity = serializers.CharField(source="display_purity", default="")
     supplier = serializers.CharField(source="supplier.name", default="")
     images = ProductImageSerializer(many=True, read_only=True)
+    available_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = ProductMaster
@@ -103,6 +104,7 @@ class ProductMasterSerializer(serializers.ModelSerializer):
             "net_weight",
             "gross_weight",
             "selling_price",
+            "available_count",
             "currency",
             "supplier",
             "is_active",
